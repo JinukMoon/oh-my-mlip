@@ -22,7 +22,7 @@ The comparison is tier-aware (see ``docs/equiv_protocol.md``):
     when both provenance gpu_name values are equal AND non-null. Otherwise the
     time check is SKIPPED (printed) and never fails the run.
 
-GPU-free: stdlib + numpy only. Never imports torch/ase/catbench.
+GPU-free: pure stdlib only (no numpy). Never imports torch/ase/catbench.
 
 Usage:
     python scripts/compare_equiv.py OURS.json REF.json \\
@@ -32,11 +32,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 # Provenance fields that, when mismatched, make two runs not comparable at all.
 # weights_sha256 is compared only when BOTH sides recorded a (non-null) value.
@@ -162,19 +161,26 @@ def check_single_point(
 
 
 def coord_rmsd(a: Any, b: Any) -> float | None:
-    """Coordinate RMSD between two position arrays. None if shapes mismatch or
-    either is absent/unparseable. NEVER a hash comparison."""
+    """Coordinate RMSD between two Nx3 position lists. None if shapes mismatch or
+    either is absent/unparseable. Pure stdlib (no numpy) so the CI gate stays
+    dependency-minimal. NEVER a hash comparison."""
     if a is None or b is None:
         return None
     try:
-        pa = np.asarray(a, dtype=float)
-        pb = np.asarray(b, dtype=float)
+        rows_a = [[float(x) for x in row] for row in a]
+        rows_b = [[float(x) for x in row] for row in b]
     except (ValueError, TypeError):
         return None
-    if pa.shape != pb.shape or pa.size == 0:
+    if not rows_a or len(rows_a) != len(rows_b):
         return None
-    diff = pa - pb
-    return float(np.sqrt(np.mean(np.sum(diff * diff, axis=-1))))
+    n_atoms = len(rows_a)
+    sq_sum = 0.0
+    for ra, rb in zip(rows_a, rows_b):
+        if len(ra) != len(rb) or not ra:
+            return None
+        sq_sum += sum((xa - xb) ** 2 for xa, xb in zip(ra, rb))
+    # RMSD = sqrt(mean over atoms of the per-atom squared displacement)
+    return math.sqrt(sq_sum / n_atoms)
 
 
 def check_relax(
