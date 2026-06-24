@@ -158,7 +158,7 @@ def test_lint_catches_bare_no_deps_in_recipe(tmp_path: Path):
 
 
 def test_lint_catches_missing_catbench_post_step_in_install_sh(tmp_path: Path):
-    """An install.sh without the 'pip install --no-deps catbench==...' post-step
+    """An install.sh without the 'pip install catbench==...' post-step
     is caught by check 7."""
     mod = _load_lint_module()
     envs, models, expected = _stage_tree(tmp_path)
@@ -179,8 +179,10 @@ def test_lint_accepts_present_catbench_post_step_in_install_sh(tmp_path: Path):
     envs, models, expected = _stage_tree(tmp_path)
 
     fake_install = tmp_path / "install.sh"
+    # catbench is installed WITH deps (NOT --no-deps): the real build showed
+    # --no-deps drops requests/xlsxwriter and breaks catbench.adsorption.
     fake_install.write_text(
-        '#!/usr/bin/env bash\n"$prefix/bin/pip" install --no-deps catbench==1.1.2\n',
+        '#!/usr/bin/env bash\n"$prefix/bin/pip" install catbench==1.1.2\n',
         encoding="utf-8",
     )
 

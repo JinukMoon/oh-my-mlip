@@ -234,7 +234,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     recipe="$ENVS_DIR/$env_name.yml"
     if [ -e "$recipe" ]; then
       echo "  would create env '$env_name' from $recipe -> $ENVS_DIR/$env_name"
-      echo "    then: $ENVS_DIR/$env_name/bin/pip install --no-deps catbench==1.1.2"
+      echo "    then: $ENVS_DIR/$env_name/bin/pip install catbench==1.1.2"
     else
       echo "  SKIP '$env_name': no recipe at $recipe"
     fi
@@ -271,13 +271,15 @@ install_one() {
   echo "  creating env '$env_name' from $recipe ..."
   "$CONDA_BIN" env create --prefix "$prefix" --file "$recipe"
 
-  # Install catbench as a post-create step, WITHOUT its deps. catbench is
+  # Install catbench as a post-create step (WITH its deps). catbench is
   # deliberately NOT in the recipe pip block: a bare '--no-deps' line inside a
-  # conda pip block is an invalid requirement and breaks 'conda env create'. Run
-  # here as a real pip command, where '--no-deps' is a valid flag, so catbench's
-  # pins cannot downgrade torch's CUDA libraries.
-  echo "  installing catbench (--no-deps) into '$env_name' ..."
-  "$prefix/bin/pip" install --no-deps catbench==1.1.2
+  # conda pip block is an invalid requirement and breaks 'conda env create'.
+  # Installing it here (after torch is already pinned by the recipe) is safe: a
+  # real-build test confirmed catbench 1.1.2 does NOT downgrade the pinned
+  # torch+cuXXX wheel, while '--no-deps' would drop catbench's real runtime deps
+  # (requests, xlsxwriter, ...) and break 'from catbench.adsorption import ...'.
+  echo "  installing catbench into '$env_name' ..."
+  "$prefix/bin/pip" install catbench==1.1.2
 
   # Trigger first-run D3 compile so the user does not pay the cost mid-workflow.
   if [ "$NVCC_OK" -eq 1 ]; then

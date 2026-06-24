@@ -12,10 +12,10 @@ Structural checks (any failure -> non-zero exit):
   6. No recipe pip block contains a bare `- --no-deps` line. (Regression guard:
      a standalone `--no-deps` is an invalid requirement to conda's pip-block
      parser and silently breaks `conda env create -f`.) catbench is NOT in any
-     recipe; install.sh installs it post-create as `pip install --no-deps
-     catbench==...`.
+     recipe; install.sh installs it post-create as `pip install
+     catbench==...` (WITH deps).
   7. install.sh installs catbench as a post-create step (a real
-     `pip install --no-deps catbench==...` line is present), since it was
+     `pip install catbench==...` line is present), since it was
      removed from the recipe pip blocks.
 
 Informational (never a failure):
@@ -54,8 +54,11 @@ _STATUS_RE = re.compile(r"^#\s*build_status:\s*(\w+)", re.IGNORECASE)
 _REASON_RE = re.compile(r"^#\s*candidate-reason:\s*(.+)$", re.IGNORECASE)
 # A bare `- --no-deps` list item inside the pip block (the build-breaking bug).
 _BARE_NODEPS_RE = re.compile(r"^-\s+--no-deps\s*$")
-# install.sh's catbench post-create step: `pip install --no-deps catbench==...`.
-_INSTALL_CATBENCH_RE = re.compile(r"--no-deps\s+catbench==")
+# install.sh's catbench post-create step: a real `pip install catbench==...` line.
+# Installed WITH deps (NOT --no-deps): the real build showed `--no-deps` drops
+# requests/xlsxwriter and breaks `from catbench.adsorption import ...`, while
+# catbench 1.1.2 with deps does not downgrade the pinned torch+cuXXX wheel.
+_INSTALL_CATBENCH_RE = re.compile(r"pip\S*\s+install\s+catbench==")
 
 
 def _load_json(path: Path) -> dict:
@@ -205,7 +208,7 @@ def lint(
             )
 
     # Check 7: install.sh installs catbench post-create (a real
-    # `pip install --no-deps catbench==...` line), since catbench was removed
+    # `pip install catbench==...` line, WITH deps), since catbench was removed
     # from the recipe pip blocks.
     if not install_sh.is_file():
         errors.append(f"install.sh not found at {install_sh}")
@@ -214,7 +217,7 @@ def lint(
         if not _INSTALL_CATBENCH_RE.search(install_text):
             errors.append(
                 "install.sh: missing catbench post-create step "
-                "(expected a 'pip install --no-deps catbench==...' line)"
+                "(expected a 'pip install catbench==...' line)"
             )
 
     return errors, status_split

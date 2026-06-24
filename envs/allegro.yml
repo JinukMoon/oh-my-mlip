@@ -19,9 +19,11 @@
 #     The source is public but there is NO pip path — it must be compiled per host
 #     /GPU, which is why this recipe stays a candidate until that build is verified.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
-#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
-#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
-#     a conda pip block is an invalid requirement and breaks `conda env create`.)
+#     post-create step (`pip install catbench==1.1.2`, WITH deps). A real build
+#     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
+#     breaks `catbench.adsorption`, while catbench 1.1.2 with deps does NOT
+#     downgrade the pinned torch+cuXXX wheel. (A bare `--no-deps` line inside a
+#     conda pip block is also an invalid requirement that breaks `conda env create`.)
 # LAMMPS note (not an install line): clone lammps + mir-group/pair_nequip_allegro,
 #   run patch_lammps.sh, then cmake build with -DNEQUIP_AOT_COMPILE=ON -DPKG_KOKKOS=ON
 #   (needs the 10 Sep 2025 LAMMPS release or newer). No pip wheel exists for this.
