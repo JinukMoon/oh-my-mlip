@@ -1,0 +1,39 @@
+# build_status: candidate
+# candidate-reason: tensorpotential is a local file:// build (no pip source) — upstream unknown, owner input needed
+# oh-my-mlip env recipe: GRACE (tensorpotential)
+#
+# Pins mirror the validated internal setup:
+#   python 3.11.11 / torch 2.5.1+cu121.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 12.1 build (cu121) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu121 min-driver floor.
+#   - cuda-nvcc 12.1.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - GRACE runs on TensorFlow; tensorflow 2.16.2 is its top-level runtime dep.
+#   - The framework package, tensorpotential, is installed in the validated env
+#     from a LOCAL file:// path (`/home/jumoon/pretrained_models/grace-tensorpotential`)
+#     with no public index. Its upstream is unknown, so it is omitted and flagged.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+# TODO-owner: real tensorpotential source URL (pip name or git+https) — the
+#   recorded install is a local file:// artifact with no public source.
+name: grace
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.11
+  - pip
+  # CUDA 12.1 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.1.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.5.1+cu121
+      - tensorflow==2.16.2
+      # tensorpotential (GRACE framework) is a local build; see TODO-owner.
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

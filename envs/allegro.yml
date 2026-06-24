@@ -1,0 +1,43 @@
+# build_status: candidate
+# candidate-reason: LAMMPS-MLIAP is a local build (no pip source); must be built locally
+# oh-my-mlip env recipe: Allegro (nequip-allegro)
+#
+# Pins mirror the validated internal setup:
+#   python 3.11.13 / torch 2.8.0+cu128.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 12.8 build (cu128) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu128 min-driver floor.
+#   - cuda-nvcc 12.8.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - nequip / nequip-allegro are the Allegro framework packages; both are
+#     pip-resolvable and pinned to the validated versions.
+#   - The validated internal env also carries a LAMMPS-MLIAP wheel built locally
+#     (the LAMMPS+MLIAP coupling for Allegro deployment). That artifact is NOT
+#     pip-installable from any index, so it is intentionally omitted here.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+# TODO-owner: LAMMPS-MLIAP build is a local artifact; provide a build script or
+#   wheel source before this recipe can deploy Allegro models into LAMMPS.
+name: allegro
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.8.0+cu128
+      - nequip==0.15.0
+      - nequip-allegro==0.7.1
+      - cuequivariance
+      - cuequivariance-torch
+      - e3nn
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

@@ -58,7 +58,7 @@ def test_resolve_mace_codegen_dict():
     ):
         assert key in spec
     assert spec["gated"] is False
-    assert spec["weights"] == "bundled"
+    assert spec["weights"] == "auto-download"
     assert spec["validation"].startswith("validated")
     assert spec["env_run"] == {}
 

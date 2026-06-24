@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install.sh — oh-my-mlip build-from-recipe FALLBACK orchestrator.
+# install.sh — oh-my-mlip build-from-recipe orchestrator (PRIMARY install path).
 #
-# PRIMARY distribution is the relocatable conda-pack tarball resolved by
-# oh_my_mlip/fetch.py (see dist_manifest.json). This script is the FALLBACK: it
-# rebuilds a model's env from envs/<env>.yml on the current host (host-correct by
-# construction), installs catbench, and triggers the first-run D3 compile. It
-# writes the same on-disk layout the tarball path produces:
+# Build-from-recipe is the PRIMARY install path today: this script rebuilds a
+# model's env from envs/<env>.yml on the current host (host-correct by
+# construction), installs catbench, and triggers the first-run D3 compile.
+# (Relocatable conda-pack tarballs are planned but NOT yet published — nothing is
+# hosted — so do not rely on a tarball path.) It writes the on-disk layout:
 #   $OH_MY_MLIP_HOME/envs/<env>/bin/python   (+ a .omm_ready sentinel)
 #
 # Usage:
@@ -84,8 +84,12 @@ resolve_to_env() {
   # 2) Treat the arg as a registered MODEL name; map model -> env via models.json
   #    (case-insensitive on the model key). Python is used only to read JSON; if
   #    it (or the file) is unavailable we fall through to returning the arg as-is.
-  if [ -e "$MODELS_JSON" ] && command -v python3 >/dev/null 2>&1; then
-    env_match="$(MODELS_JSON="$MODELS_JSON" ARG="$arg" python3 - <<'PYEOF' 2>/dev/null || true
+  #    Prefer python3, but fall back to python so a host that only ships `python`
+  #    still resolves a registered model instead of silently skipping it.
+  local py_bin
+  py_bin="$(command -v python3 || command -v python || true)"
+  if [ -e "$MODELS_JSON" ] && [ -n "$py_bin" ]; then
+    env_match="$(MODELS_JSON="$MODELS_JSON" ARG="$arg" "$py_bin" - <<'PYEOF' 2>/dev/null || true
 import json
 import os
 

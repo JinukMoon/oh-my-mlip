@@ -61,8 +61,8 @@
   "definitions": {
     "version_entry": {
       "type": "object",
-      "description": "Per-version data. The three honesty fields (gated, weights, validation) are always required. At least one of 'inference' (plain) or both 'inference_sm86'+'inference_sm89' (arch-pinned) must be present.",
-      "required": ["gated", "weights", "validation"],
+      "description": "Per-version data. The honesty fields (gated, weights, validation) plus the weights-provenance fields (weights_fetch, weights_source) are always required. At least one of 'inference' (plain) or both 'inference_sm86'+'inference_sm89' (arch-pinned) must be present.",
+      "required": ["gated", "weights", "validation", "weights_fetch", "weights_source"],
       "additionalProperties": true,
       "oneOf": [
         {
@@ -73,6 +73,18 @@
         {
           "description": "Arch-pinned version: both inference_sm86 and inference_sm89 required.",
           "required": ["inference_sm86", "inference_sm89"]
+        }
+      ],
+      "allOf": [
+        {
+          "description": "gated-hf weights_source must be a Hugging Face repo id (owner/name).",
+          "if": {"properties": {"weights_fetch": {"const": "gated-hf"}}},
+          "then": {"properties": {"weights_source": {"pattern": "^[\\w.-]+/[\\w.-]+$"}}}
+        },
+        {
+          "description": "url weights_source must be an http(s) URL or the placeholder 'TODO-owner-review' (allowed this increment).",
+          "if": {"properties": {"weights_fetch": {"const": "url"}}},
+          "then": {"properties": {"weights_source": {"pattern": "^(https?://.+|TODO-owner-review)$"}}}
         }
       ],
       "properties": {
@@ -93,6 +105,16 @@
           "type": "string",
           "enum": ["bundled", "auto-download", "on-demand-hf"],
           "description": "how weights are obtained"
+        },
+        "weights_fetch": {
+          "type": "string",
+          "enum": ["by-name", "url", "gated-hf"],
+          "description": "mechanism by which weights are fetched: 'by-name' (resolved by model name/cache), 'url' (downloaded from an explicit URL), 'gated-hf' (gated Hugging Face repo requiring license acceptance + HF_TOKEN)"
+        },
+        "weights_source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the source value matching weights_fetch: an HF repo id (owner/name) for gated-hf, an http(s) URL (or the 'TODO-owner-review' placeholder this increment) for url, a resolver name/placeholder for by-name"
         },
         "validation": {
           "type": "string",

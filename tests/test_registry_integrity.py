@@ -36,6 +36,8 @@ def _good_version() -> dict:
         "gated": False,
         "license_url": None,
         "weights": "bundled",
+        "weights_fetch": "by-name",
+        "weights_source": "TODO-owner-review",
         "validation": "validated_sm89",
         "inference": ["calc = SomeCalc()"],
     }
@@ -93,6 +95,16 @@ def test_valid_fragment_passes_schema():
             lambda v: v.update({"weights": "by-magic"}),
             "invalid weights enum value",
         ),
+        # missing 'weights_source'
+        (
+            lambda v: v.pop("weights_source"),
+            "missing required field 'weights_source'",
+        ),
+        # bad weights_fetch enum value
+        (
+            lambda v: v.update({"weights_fetch": "nope"}),
+            "invalid weights_fetch enum value",
+        ),
         # missing top-level 'env'
         (
             None,  # handled specially below
@@ -111,6 +123,8 @@ def test_valid_fragment_passes_schema():
         "missing_inference",
         "bad_validation_enum",
         "bad_weights_enum",
+        "missing_weights_source",
+        "bad_weights_fetch_enum",
         "missing_top_env",
         "missing_top_versions",
     ],

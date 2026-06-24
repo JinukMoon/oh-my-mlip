@@ -70,14 +70,15 @@ def test_models_json_has_mace_and_sevennet(models_data):
 
 
 def test_models_json_honesty_fields_all_versions(models_data):
-    """Every version entry must carry gated, weights, validation.
+    """Every version entry must carry gated, weights, validation, plus the
+    weights-provenance fields weights_fetch + weights_source.
     This is an explicit belt-and-suspenders check beyond the schema."""
     missing: list[str] = []
     for fw, info in models_data.items():
         if fw.startswith("_"):
             continue
         for ver, vinfo in info.get("versions", {}).items():
-            for field in ("gated", "weights", "validation"):
+            for field in ("gated", "weights", "validation", "weights_fetch", "weights_source"):
                 if field not in vinfo:
                     missing.append(f"{fw}/{ver}: missing '{field}'")
     assert not missing, "Honesty fields missing:\n" + "\n".join(missing)

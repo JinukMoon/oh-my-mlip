@@ -1,0 +1,47 @@
+# build_status: candidate
+# candidate-reason: fairchem-core fork is an editable local path with no public VCS URL — upstream unknown, owner input needed
+# oh-my-mlip env recipe: Equiformer V3 (fairchem-core fork)
+#
+# Pins mirror the validated internal setup:
+#   python 3.11.15 / torch 2.7.1+cu128.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 12.8 build (cu128) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu128 min-driver floor.
+#   - cuda-nvcc 12.8.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - torch-geometric and the matching torch_scatter / torch_sparse / torch_cluster
+#     / torch_spline_conv (pt27cu128) wheels are the resolvable parts of the stack.
+#   - The framework here is a FORK of fairchem-core installed EDITABLE from a local
+#     path (`-e /home/khshin/.../packages/fairchem-core`, version 0.1.dev1+ga7300c58d)
+#     with NO version-control remote. Its upstream is unknown, so it is omitted and
+#     flagged for the owner.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+# TODO-owner: real fairchem-core fork URL — the recorded install is an editable
+#   local path with no public VCS remote.
+name: equiformer_v3
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.15
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.7.1+cu128
+      - torch-geometric==2.7.0
+      - torch_scatter==2.1.2+pt27cu128
+      - torch_sparse==0.6.18+pt27cu128
+      - torch_cluster==1.6.3+pt27cu128
+      - torch_spline_conv==1.2.2+pt27cu128
+      - e3nn
+      # fairchem-core fork is a local editable checkout with no public remote;
+      # see TODO-owner above.
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

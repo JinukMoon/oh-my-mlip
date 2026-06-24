@@ -1,34 +1,39 @@
+# build_status: clean
 # oh-my-mlip env recipe: SevenNet (sevenn)
 #
-# Build-from-recipe FALLBACK for the SevenNet env. PRIMARY distribution is the
-# relocatable conda-pack tarball (see dist_manifest.json); this recipe is what
-# install.sh uses when the tarball path is unavailable or the host needs a
-# host-correct rebuild.
+# Validated, buildable recipe. Pins mirror the validated internal setup:
+#   python 3.11.13 / torch 2.7.1+cu126.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
 #
-# Pins mirror the validated internal setup (SevenNet: python 3.10, torch cu121).
-#   - torch is pinned to a CUDA 12.1 build (cu121) so the bundled CUDA runtime
-#     matches the validated D3 kernel; the host NVIDIA driver must satisfy the
-#     min-driver floor recorded in dist_manifest.json.
+#   - torch is pinned to the CUDA 12.6 build (cu126) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu126 min-driver floor.
+#   - cuda-nvcc 12.6.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - sevenn is pinned to the validated git sha.
+#   - cuequivariance / e3nn are top-level deps SevenNet needs; small transitive
+#     deps are left to float.
 #   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
 #     downgrading torch's CUDA libraries.
 #   - SevenNet checkpoints (7net-mf-ompa, 7net-omni) ship inside the sevenn
 #     package; no weights are bundled separately in this recipe.
 name: sevennet
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
+  - nvidia
 dependencies:
-  - python=3.10
+  - python=3.11.13
   - pip
-  # CUDA 12.1 toolchain (provides nvcc for the first-run D3 compile)
-  - pytorch-cuda=12.1
-  - pytorch=2.4.*
-  - cuda-nvcc=12.1.*
-  - numpy<2
-  - ase>=3.23
+  # CUDA 12.6 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.6.*
+  - ase
   - pip:
-      - sevenn
+      - --extra-index-url https://download.pytorch.org/whl/cu126
+      - torch==2.7.1+cu126
+      - sevenn @ git+https://github.com/MDIL-SNU/SevenNet.git@e72eb2c9ebf6895a9d6fa3318f0ae4409d0f9f73
+      - cuequivariance
+      - cuequivariance-torch
+      - e3nn
       # catbench LAST and isolated; see header note.
       - --no-deps
-      - catbench
+      - catbench==1.1.2

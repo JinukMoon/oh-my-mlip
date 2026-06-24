@@ -1,0 +1,38 @@
+# build_status: clean
+# oh-my-mlip env recipe: FairChem v1 (fairchem-core 1.x)
+#
+# Validated, buildable recipe. Pins mirror the validated internal setup:
+#   python 3.11.13 / torch 2.4.1+cu121.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 12.1 build (cu121) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu121 min-driver floor.
+#   - cuda-nvcc 12.1.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - fairchem-core is pinned to the validated 1.x version; torch-geometric and
+#     the matching torch_scatter / torch_sparse (pt24cu121) wheels are top-level
+#     deps it needs.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+name: fairchemv1
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.1 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.1.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.4.1+cu121
+      - fairchem-core==1.10.0
+      - torch-geometric==2.6.1
+      - torch_scatter==2.1.2+pt24cu121
+      - torch_sparse==0.6.18+pt24cu121
+      - e3nn
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

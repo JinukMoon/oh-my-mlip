@@ -21,245 +21,254 @@
       "gated": "bool. if true, weights require accepting an upstream license and using the user's own HF_TOKEN; gated weights are NEVER redistributed by this repo",
       "license_url": "string|null. URL of the upstream weights license to accept before download (set for gated models)",
       "weights": "how weights are obtained: 'bundled' (inside the conda-pack tarball) | 'auto-download' (fetched by name to a shared cache on first run) | 'on-demand-hf' (fetched from Hugging Face Hub, may be gated)",
+      "weights_fetch": "fetch mechanism: 'by-name' (resolved by model name/cache) | 'url' (explicit download URL) | 'gated-hf' (gated HF repo requiring license acceptance + HF_TOKEN)",
+      "weights_source": "the source value matching weights_fetch: an HF repo id (owner/name) for gated-hf, an http(s) URL (or the 'TODO-owner-review' placeholder, filled with the real official link by a later goal) for url, a resolver name/placeholder for by-name",
       "validation": "host-GPU validation state: 'validated_sm86' | 'validated_sm89' (single-point + D3 verified on that arch) | 'gpu_pending' (env/load OK but GPU single-point and/or D3 not yet verified) | 'cpu_only'"
     },
     "gpu_arch": {
-      "sm86": {"gpu": ["A5000", "A6000"]},
-      "sm89": {"gpu": ["L40S"]}
+      "sm86": {
+        "gpu": [
+          "A5000",
+          "A6000"
+        ]
+      },
+      "sm89": {
+        "gpu": [
+          "L40S"
+        ]
+      }
     },
     "catbench": "All envs ship catbench. D3: from catbench.dispersion import DispersionCorrection; calc = DispersionCorrection().apply(calc). The arch-specific pair_d3.so is NOT baked into distributed tarballs; it recompiles on the user GPU on first run (needs nvcc; see env.sh).",
-    "shipped_v1": ["MACE", "SevenNet"],
+    "shipped_v1": [
+      "MACE",
+      "SevenNet"
+    ],
     "note": "v1 authors the MACE + SevenNet distribution pipeline; their tarballs are upload-pending the compute checkpoint (build+publish + foreign-host end-to-end not yet run). All other rows are carried at their TRUE validation state; rows marked validation='gpu_pending' are env/load-verified only and are Phase-2 packaging targets."
   },
-
   "SevenNet": {
-    "env": "sevennet", "python": "${OH_MY_MLIP_HOME}/envs/sevennet/bin/python",
+    "env": "sevennet",
+    "python": "${OH_MY_MLIP_HOME}/envs/sevennet/bin/python",
     "default_version": "SevenNet-MF-OMPA",
     "model_source": "bundled in package (sevenn/pretrained_potentials)",
     "import": ["from sevenn.calculator import SevenNetCalculator"],
     "versions": {
-      "SevenNet-MF-OMPA": {"mlip_name": "SevenNet-MF-OMPA", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
+      "SevenNet-MF-OMPA": {"mlip_name": "SevenNet-MF-OMPA", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-mf-ompa", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
         "inference": ["calc = SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=True)"]},
-      "SevenNet-Omni": {"mlip_name": "SevenNet-Omni", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
+      "SevenNet-Omni": {"mlip_name": "SevenNet-Omni", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-omni", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
         "inference": ["calc = SevenNetCalculator('7net-omni', modal='mpa', enable_oeq=True)"]}
     }
   },
-
   "MACE": {
-    "env": "mace", "python": "${OH_MY_MLIP_HOME}/envs/mace/bin/python",
+    "env": "mace",
+    "python": "${OH_MY_MLIP_HOME}/envs/mace/bin/python",
     "default_version": "MACE-MPA-0",
-    "model_source": "${OH_MY_MLIP_HOME}/models/mace/ (explicit path)",
+    "model_source": "mace-foundations (downloaded by name via mace_mp)",
     "import": ["from mace.calculators import mace_mp"],
     "versions": {
-      "MACE-MPA-0": {"mlip_name": "MACE-MPA-0", "training_set": ["MPtrj","sAlex"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
-        "inference": ["calc = mace_mp(model='${OH_MY_MLIP_HOME}/models/mace/mace-mpa-0.model', dispersion=False, default_dtype='float64', device='cuda')"]},
-      "MACE-MH-1-OMAT": {"mlip_name": "MACE-MH-1-OMAT", "training_set": ["OMAT24","MPtrj","SPICE","OC20","OMOL","RGD1","MATPES"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
-        "inference": ["calc = mace_mp(model='${OH_MY_MLIP_HOME}/models/mace/mace-mh-1.model', default_dtype='float64', device='cuda', head='omat_pbe')"]},
-      "MACE-MH-1-OC20": {"mlip_name": "MACE-MH-1-OC20", "training_set": ["OMAT24","MPtrj","SPICE","OC20","OMOL","RGD1","MATPES"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
-        "note": "verify head name (OMAT uses head='omat_pbe'; confirm OC20 head with jumoon)",
-        "inference": ["calc = mace_mp(model='${OH_MY_MLIP_HOME}/models/mace/mace-mh-1.model', default_dtype='float64', device='cuda', head='oc20')"]}
+      "MACE-MPA-0": {"mlip_name": "MACE-MPA-0", "training_set": ["MPtrj", "sAlex"],
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "medium-mpa-0", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mpa_0", "validation": "validated_sm89",
+        "inference": ["calc = mace_mp(model='medium-mpa-0', dispersion=False, default_dtype='float64', device='cuda')"]},
+      "MACE-MH-1-OMAT": {"mlip_name": "MACE-MH-1-OMAT", "training_set": ["OMAT24", "MPtrj", "SPICE", "OC20", "OMOL", "RGD1", "MATPES"],
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89",
+        "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='omat_pbe')"]},
+      "MACE-MH-1-OC20": {"mlip_name": "MACE-MH-1-OC20", "training_set": ["OMAT24", "MPtrj", "SPICE", "OC20", "OMOL", "RGD1", "MATPES"],
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89", "note": "verify head name (OMAT uses head='omat_pbe'; confirm OC20 head with jumoon)",
+        "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='oc20')"]}
     }
   },
-
   "NequIP": {
-    "env": "nequip", "python": "${OH_MY_MLIP_HOME}/envs/nequip/bin/python",
+    "env": "nequip",
+    "python": "${OH_MY_MLIP_HOME}/envs/nequip/bin/python",
     "default_version": "NequIP-OAM-XL",
     "model_source": "${OH_MY_MLIP_HOME}/models/compiled/{sm86,sm89}/ (compiled .pt2, recompiled/reselected on user GPU)",
     "note": "arch-pinned. Pick sm86/sm89 by host GPU. sm89 (L40S) verified single-point. NequIPCalculator ASE path is from_compiled_model ONLY (no uncompiled load) -> the per-arch .pt2 is required, not optional; it is reselected/recompiled on the user GPU, never baked into a distributed tarball.",
     "import": ["import openequivariance", "from nequip.ase import NequIPCalculator"],
     "versions": {
-      "NequIP-OAM-XL": {"mlip_name": "NequIP-OAM-XL", "arch_pinned": true, "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
-        "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/NequIP-OAM-XL_sm86.nequip.pt2', device='cuda')"],
-        "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/NequIP-OAM-XL_sm89.nequip.pt2', device='cuda')"]},
-      "NequIP-OAM-L": {"mlip_name": "NequIP-OAM-L", "arch_pinned": true, "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
-        "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/NequIP-OAM-L_sm86.nequip.pt2', device='cuda')"],
-        "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/NequIP-OAM-L_sm89.nequip.pt2', device='cuda')"]}
+      "NequIP-OAM-XL": {"mlip_name": "NequIP-OAM-XL", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/NequIP-OAM-XL:0.1", "weights_source_url": "https://zenodo.org/api/records/18775904/files/NequIP-OAM-XL-0.1.nequip.zip/content", "validation": "validated_sm89",
+        "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/NequIP-OAM-XL_sm86.nequip.pt2', device='cuda')"], "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/NequIP-OAM-XL_sm89.nequip.pt2', device='cuda')"]},
+      "NequIP-OAM-L": {"mlip_name": "NequIP-OAM-L", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/NequIP-OAM-L:0.1", "weights_source_url": "https://zenodo.org/api/records/18775904/files/NequIP-OAM-L-0.1.nequip.zip/content", "validation": "validated_sm89",
+        "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/NequIP-OAM-L_sm86.nequip.pt2', device='cuda')"], "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/NequIP-OAM-L_sm89.nequip.pt2', device='cuda')"]}
     }
   },
-
   "Allegro": {
-    "env": "allegro", "python": "${OH_MY_MLIP_HOME}/envs/allegro/bin/python",
+    "env": "allegro",
+    "python": "${OH_MY_MLIP_HOME}/envs/allegro/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/compiled/{sm86,sm89}/ (compiled .pt2, recompiled/reselected on user GPU)",
     "note": "arch-pinned. Verify whether import is cuequivariance_torch or openequivariance (jumoon). GPU single-point not yet re-verified for this public edition -> validation=gpu_pending.",
     "import": ["import cuequivariance_torch", "from nequip.ase import NequIPCalculator"],
     "versions": {
-      "Allegro-OAM-L": {"mlip_name": "Allegro-OAM-L", "arch_pinned": true, "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "gpu_pending",
-        "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/Allegro-OAM-L_sm86.nequip.pt2', device='cuda')"],
-        "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/Allegro-OAM-L_sm89.nequip.pt2', device='cuda')"]}
+      "Allegro-OAM-L": {"mlip_name": "Allegro-OAM-L", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/Allegro-OAM-L:0.1", "weights_source_url": "https://zenodo.org/api/records/16980200/files/Allegro-OAM-L-0.1.nequip.zip/content", "validation": "gpu_pending",
+        "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/Allegro-OAM-L_sm86.nequip.pt2', device='cuda')"], "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/Allegro-OAM-L_sm89.nequip.pt2', device='cuda')"]}
     }
   },
-
   "Nequix": {
-    "env": "nequix", "python": "${OH_MY_MLIP_HOME}/envs/nequix/bin/python",
+    "env": "nequix",
+    "python": "${OH_MY_MLIP_HOME}/envs/nequix/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/nequix/",
     "note": "Default backend=jax can fail on constrained hosts (thread ulimit) -> use backend='torch' + .pt.",
     "import": ["from nequix.calculator import NequixCalculator"],
     "versions": {
       "Nequix-MP-1": {"mlip_name": "Nequix-MP-1", "training_set": ["MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://github.com/atomicarchitects/nequix/raw/7c2854de8e754b1a60274c7d9d2e014989ed632e/models/nequix-mp-1.nqx", "validation": "validated_sm89",
         "inference": ["calc = NequixCalculator(model_path='${OH_MY_MLIP_HOME}/models/nequix/nequix-mp-1.pt', backend='torch')"]}
     }
   },
-
   "DeePMD": {
-    "env": "deepmd", "python": "${OH_MY_MLIP_HOME}/envs/deepmd/bin/python",
+    "env": "deepmd",
+    "python": "${OH_MY_MLIP_HOME}/envs/deepmd/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/deepmd/",
     "import": ["from deepmd.calculator import DP"],
     "versions": {
       "DPA-3.1-3M-FT": {"mlip_name": "DPA-3.1-3M-FT", "training_set": ["OpenLAM"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/deepmodelingcommunity/DPA", "weights_source_url": "https://huggingface.co/deepmodelingcommunity/DPA/resolve/main/DPA-3.1-3M.pt", "validation": "validated_sm89",
         "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/deepmd/dpa-3.1-3m-ft.pth')"]}
     }
   },
-
   "ORB": {
-    "env": "orb", "python": "${OH_MY_MLIP_HOME}/envs/orb/bin/python",
+    "env": "orb",
+    "python": "${OH_MY_MLIP_HOME}/envs/orb/bin/python",
     "model_source": "name-based auto-download (shared HF_HOME cache)",
     "note": "Confirmed: orb_v3_conservative_inf_omat + precision='float32-high' (matches jumoon reference exactly). conservative+inf is CPU-neighbor-list heavy; speed varies with host CPU load.",
     "import": ["from orb_models.forcefield import pretrained", "from orb_models.forcefield.calculator import ORBCalculator"],
     "versions": {
       "ORB-v3": {"mlip_name": "ORB-v3", "training_set": ["OMat24"],
-        "gated": false, "license_url": null, "weights": "auto-download", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "orb_v3_conservative_inf_omat", "weights_source_url": "https://github.com/orbital-materials/orb-models/blob/main/MODELS.md", "validation": "validated_sm89",
         "inference": ["orbff = pretrained.orb_v3_conservative_inf_omat(device='cuda', precision='float32-high')", "calc = ORBCalculator(orbff, device='cuda')"]}
     }
   },
-
   "GRACE": {
-    "env": "grace", "python": "${OH_MY_MLIP_HOME}/envs/grace/bin/python",
+    "env": "grace",
+    "python": "${OH_MY_MLIP_HOME}/envs/grace/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/grace/GRACE-2L-OAM/",
     "import": ["from tensorpotential.calculator import TPCalculator"],
     "versions": {
-      "GRACE-2L-OAM": {"mlip_name": "GRACE-2L-OAM", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
+      "GRACE-2L-OAM": {"mlip_name": "GRACE-2L-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "GRACE-2L-OAM", "weights_source_url": "https://gracemaker.readthedocs.io/en/latest/gracemaker/foundation", "validation": "validated_sm89",
         "inference": ["calc = TPCalculator('${OH_MY_MLIP_HOME}/models/grace/GRACE-2L-OAM')"]}
     }
   },
-
   "MatterSim": {
-    "env": "mattersim", "python": "${OH_MY_MLIP_HOME}/envs/mattersim/bin/python",
+    "env": "mattersim",
+    "python": "${OH_MY_MLIP_HOME}/envs/mattersim/bin/python",
     "model_source": "bundled in package",
     "import": ["from mattersim.forcefield import MatterSimCalculator"],
     "versions": {
       "MatterSim-v1-5M": {"mlip_name": "MatterSim-v1-5M", "training_set": ["MatterSim"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "MatterSim-v1.0.0-5M.pth", "weights_source_url": "https://github.com/microsoft/mattersim", "validation": "validated_sm89",
         "inference": ["calc = MatterSimCalculator(load_path='MatterSim-v1.0.0-5M.pth', device='cuda')"]}
     }
   },
-
   "CHGNet": {
-    "env": "chgnet", "python": "${OH_MY_MLIP_HOME}/envs/chgnet/bin/python",
+    "env": "chgnet",
+    "python": "${OH_MY_MLIP_HOME}/envs/chgnet/bin/python",
     "model_source": "bundled in package",
     "import": ["from chgnet.model import CHGNet, CHGNetCalculator"],
     "versions": {
       "CHGNet-v0.3.0": {"mlip_name": "CHGNet-v0.3.0", "training_set": ["MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "0.3.0", "weights_source_url": "https://github.com/CederGroupHub/chgnet", "validation": "validated_sm89",
         "inference": ["model = CHGNet.load(model_name='0.3.0')", "calc = CHGNetCalculator(model=model)"]}
     }
   },
-
   "AlphaNet": {
-    "env": "alphanet", "python": "${OH_MY_MLIP_HOME}/envs/alphanet/bin/python",
+    "env": "alphanet",
+    "python": "${OH_MY_MLIP_HOME}/envs/alphanet/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/alphanet/ (ckpt + config)",
     "note": "verify ckpt_path and config json filename (jumoon pretrained alex_0410.ckpt + oma.json). GPU single-point not yet re-verified for this public edition -> validation=gpu_pending.",
     "import": ["from alphanet.infer.calc import AlphaNetCalculator", "from alphanet.config import All_Config"],
     "versions": {
-      "AlphaNet-v1-OMA": {"mlip_name": "AlphaNet-v1-OMA", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "gpu_pending",
+      "AlphaNet-v1-OMA": {"mlip_name": "AlphaNet-v1-OMA", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://ndownloader.figshare.com/files/53851139", "weights_source_url": "https://github.com/zmyybc/AlphaNet", "validation": "gpu_pending",
         "inference": ["calc = AlphaNetCalculator(ckpt_path='${OH_MY_MLIP_HOME}/models/alphanet/alex_0410.ckpt', device='cuda', precision='32', config=All_Config().from_json('${OH_MY_MLIP_HOME}/models/alphanet/oma.json'))"]}
     }
   },
-
   "Eqnorm": {
-    "env": "eqnorm", "python": "${OH_MY_MLIP_HOME}/envs/eqnorm/bin/python",
+    "env": "eqnorm",
+    "python": "${OH_MY_MLIP_HOME}/envs/eqnorm/bin/python",
     "model_source": "name-based (eqnorm-mptrj)",
     "import": ["from eqnorm.calculator import EqnormCalculator"],
     "versions": {
       "Eqnorm-MPtrj": {"mlip_name": "Eqnorm-MPtrj", "training_set": ["MPtrj"],
-        "gated": false, "license_url": null, "weights": "auto-download", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "eqnorm-mptrj", "weights_source_url": "https://matbench-discovery.materialsproject.org/models/eqnorm-mptrj", "validation": "validated_sm89",
         "inference": ["calc = EqnormCalculator(model_name='eqnorm', model_variant='eqnorm-mptrj', device='cuda')"]}
     }
   },
-
   "fairchemv1": {
-    "env": "fairchemv1", "python": "${OH_MY_MLIP_HOME}/envs/fairchemv1/bin/python",
+    "env": "fairchemv1",
+    "python": "${OH_MY_MLIP_HOME}/envs/fairchemv1/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/fairchem/ (OCP checkpoint)",
     "note": "eSEN-30M-OAM works only via fairchem v1 OCPCalculator. Checkpoint esen_30m_oam.pt.",
     "import": ["from fairchem.core import OCPCalculator"],
     "versions": {
-      "eSEN-30M-OAM": {"mlip_name": "eSEN-30M-OAM", "training_set": ["OMat24","MPtrj","sAlex"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
+      "eSEN-30M-OAM": {"mlip_name": "eSEN-30M-OAM", "training_set": ["OMat24", "MPtrj", "sAlex"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/fairchem/OMAT24", "weights_source_url": "https://huggingface.co/fairchem/OMAT24/resolve/main/esen_30m_oam.pt", "validation": "validated_sm89",
         "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/fairchem/esen_30m_oam.pt', cpu=False)"]}
     }
   },
-
   "EquiformerV3": {
-    "env": "equiformer_v3", "python": "${OH_MY_MLIP_HOME}/envs/equiformer_v3/bin/python",
+    "env": "equiformer_v3",
+    "python": "${OH_MY_MLIP_HOME}/envs/equiformer_v3/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/equiformer_v3/ (HF mirror-physics/equiformer_v3, 4 checkpoints)",
     "repo": "https://github.com/atomicarchitects/equiformer_v3",
     "note": "OCPCalculator + checkpoint_path. MUST pass cpu=False — OCPCalculator defaults cpu=True so without it the model runs on CPU (no GPU, extremely slow). fairchem-core dev6 is an editable install; install.sh recreates it (no baked editable .pth in distributed tarballs). No OC20-trained checkpoint on HF yet (4 available). GPU single-point not yet re-verified for this public edition -> validation=gpu_pending.",
     "import": ["from fairchem.core import OCPCalculator"],
     "versions": {
-      "EqV3-OMatMPtrjSalex": {"mlip_name": "EqV3-OMatMPtrjSalex", "training_set": ["OMat24","MPtrj","sAlex"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "gpu_pending",
+      "EqV3-OMatMPtrjSalex": {"mlip_name": "EqV3-OMatMPtrjSalex", "training_set": ["OMat24", "MPtrj", "sAlex"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/mirror-physics/equiformer_v3", "validation": "gpu_pending", "note": "weights_source_url removed: exact HF filename unconfirmed (owner to confirm in mirror-physics/equiformer_v3).",
         "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equiformer_v3/omat24-mptrj-salex_gradient.pt', cpu=False)"]}
     }
   },
-
   "UMA": {
-    "env": "uma", "python": "${OH_MY_MLIP_HOME}/envs/uma/bin/python",
+    "env": "uma",
+    "python": "${OH_MY_MLIP_HOME}/envs/uma/bin/python",
     "default_version": "UMA-s-1p2-OMAT",
     "model_source": "name-based auto-download from Hugging Face (gated; requires accepting the Meta FAIR UMA license and using the user's own HF_TOKEN)",
     "note": "get_predict_unit + FAIRChemCalculator(task_name). task_name = oc20/omat/oc22/oc25 per variant. GATED: weights are NOT redistributed by this repo; the user must accept the upstream license and provide HF_TOKEN. Verify validity of oc22/oc25 task names (jumoon).",
     "import": ["from fairchem.core import FAIRChemCalculator, pretrained_mlip"],
     "versions": {
-      "UMA-m-1p1-OC20": {"mlip_name": "UMA-m-1p1-OC20", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
+      "UMA-m-1p1-OC20": {"mlip_name": "UMA-m-1p1-OC20", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-m-1p1', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='oc20')"]},
-      "UMA-m-1p1-OMAT": {"mlip_name": "UMA-m-1p1-OMAT", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
+      "UMA-m-1p1-OMAT": {"mlip_name": "UMA-m-1p1-OMAT", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-m-1p1', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='omat')"]},
-      "UMA-s-1p1-OC20": {"mlip_name": "UMA-s-1p1-OC20", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
+      "UMA-s-1p1-OC20": {"mlip_name": "UMA-s-1p1-OC20", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p1', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='oc20')"]},
-      "UMA-s-1p1-OMAT": {"mlip_name": "UMA-s-1p1-OMAT", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
+      "UMA-s-1p1-OMAT": {"mlip_name": "UMA-s-1p1-OMAT", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p1', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='omat')"]},
-      "UMA-s-1p2-OC20": {"mlip_name": "UMA-s-1p2-OC20", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
+      "UMA-s-1p2-OC20": {"mlip_name": "UMA-s-1p2-OC20", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='oc20')"]},
-      "UMA-s-1p2-OC22": {"mlip_name": "UMA-s-1p2-OC22", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
-        "note": "verify task_name='oc22'",
+      "UMA-s-1p2-OC22": {"mlip_name": "UMA-s-1p2-OC22", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89", "note": "verify task_name='oc22'",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='oc22')"]},
-      "UMA-s-1p2-OMAT": {"mlip_name": "UMA-s-1p2-OMAT", "training_set": ["OMol25","OMat24","OC20","OpenDAC25","OMC25"],
-        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "validation": "validated_sm89",
+      "UMA-s-1p2-OMAT": {"mlip_name": "UMA-s-1p2-OMAT", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='omat')"]}
     }
   },
-
   "PET": {
-    "env": "pet", "python": "${OH_MY_MLIP_HOME}/envs/pet/bin/python",
+    "env": "pet",
+    "python": "${OH_MY_MLIP_HOME}/envs/pet/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt (HF lab-cosmo/upet, TorchScript export)",
     "status": "clone + D3(.so) + load verified (CPU, MetatomicCalculator). GPU single-point/speed pending.",
     "note": "Calculator moved metatensor.torch.atomistic -> metatomic.torch.ase_calculator. MetatomicCalculator takes the exported .pt path directly.",
     "import": ["from metatomic.torch.ase_calculator import MetatomicCalculator"],
     "versions": {
-      "PET-OAM-XL": {"mlip_name": "PET-OAM-XL", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "gpu_pending",
+      "PET-OAM-XL": {"mlip_name": "PET-OAM-XL", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/lab-cosmo/upet", "weights_source_url": "https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt", "validation": "gpu_pending",
         "inference": ["calc = MetatomicCalculator('${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt')"]}
     }
   },
-
   "EquFlash": {
-    "env": "equflash", "python": "${OH_MY_MLIP_HOME}/envs/equflash/bin/python",
+    "env": "equflash",
+    "python": "${OH_MY_MLIP_HOME}/envs/equflash/bin/python",
     "default_version": "EquFlashV2",
     "model_source": "${OH_MY_MLIP_HOME}/models/equflash/ (figshare)",
     "torch": "2.9.1+cu126",
@@ -269,29 +278,29 @@
     "import": ["from GGNN.common.calculator import UCalculator"],
     "versions": {
       "EquFlashV2": {"mlip_name": "EquFlashV2", "training_set": ["OMat24"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://figshare.com/ndownloader/files/65435007", "weights_source_url": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
         "inference": ["calc = UCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equflash/EquFlashV2.pt', cpu=False)"]},
       "EquFlash": {"mlip_name": "EquFlash", "training_set": ["OMat24"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
         "inference": ["calc = UCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equflash/EquFlash.pt', cpu=False)"]}
     }
   },
-
   "MatRIS": {
-    "env": "matris", "python": "${OH_MY_MLIP_HOME}/envs/matris/bin/python",
+    "env": "matris",
+    "python": "${OH_MY_MLIP_HOME}/envs/matris/bin/python",
     "model_source": "name-based auto-download to ~/.cache/matris (pre-fetched MatRIS_10M_OAM.pth.tar via figshare)",
     "torch": "2.12.1+cu130",
     "status": "env+ckpt+import OK (CPU). GPU single-point + D3 PENDING.",
     "import": ["from matris.applications.base import MatRISCalculator"],
     "versions": {
-      "MatRIS-10M-OAM": {"mlip_name": "MatRIS-10M-OAM", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "auto-download", "validation": "gpu_pending",
+      "MatRIS-10M-OAM": {"mlip_name": "MatRIS-10M-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "matris_10m_oam", "weights_source_url": "https://github.com/HPC-AI-Team/MatRIS", "validation": "gpu_pending",
         "inference": ["calc = MatRISCalculator(model='matris_10m_oam', task='efsm', device='cuda')"]}
     }
   },
-
   "DPA4": {
-    "env": "dpa4", "python": "${OH_MY_MLIP_HOME}/envs/dpa4/bin/python",
+    "env": "dpa4",
+    "python": "${OH_MY_MLIP_HOME}/envs/dpa4/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/dpa4/dpa-4.0.1-pro-mptrj.pt (matbench-discovery dpa-4.0.1-pro-mptrj)",
     "torch": "2.11.0+cu130",
     "status": "env+ckpt+load OK (CPU). GPU single-point + D3 PENDING.",
@@ -300,20 +309,20 @@
     "import": ["from deepmd.calculator import DP"],
     "versions": {
       "DPA-4.0.1-pro-MPtrj": {"mlip_name": "DPA-4.0.1-pro-MPtrj", "training_set": ["MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "validation": "gpu_pending",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj", "weights_source_url": "https://figshare.com/files/65469204", "validation": "gpu_pending",
         "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/dpa4/dpa-4.0.1-pro-mptrj.pt')"]}
     }
   },
-
   "TACE": {
-    "env": "tace", "python": "${OH_MY_MLIP_HOME}/envs/tace/bin/python",
+    "env": "tace",
+    "python": "${OH_MY_MLIP_HOME}/envs/tace/bin/python",
     "model_source": "HF xvzemin/tace-foundations auto-download to ~/.cache/tace (TACE-OAM-L.pt pre-fetched)",
     "torch": "2.11.0+cu130",
     "status": "env+ckpt+import OK (CPU). GPU single-point + D3 PENDING.",
     "import": ["from tace.foundations import tace_foundations", "from tace.interface.ase import TACEAseCalc"],
     "versions": {
-      "TACE-OAM-L": {"mlip_name": "TACE-OAM-L", "training_set": ["OMat24","sAlex","MPtrj"],
-        "gated": false, "license_url": null, "weights": "auto-download", "validation": "gpu_pending",
+      "TACE-OAM-L": {"mlip_name": "TACE-OAM-L", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "TACE-OAM-L", "weights_source_url": "https://huggingface.co/xvzemin/tace-foundations", "validation": "gpu_pending",
         "inference": ["model = tace_foundations['TACE-OAM-L']", "calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])"]}
     }
   }

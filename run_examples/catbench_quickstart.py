@@ -96,6 +96,20 @@ def _build_script(spec: dict, mlip_name: str, benchmark: str, calc_num: int, d3:
     )
 
 
+def _env_ready(spec: dict) -> bool:
+    """True if the model's env interpreter is materialized.
+
+    Build-from-recipe writes ``$OH_MY_MLIP_HOME/envs/<env>/bin/python`` plus a
+    ``.omm_ready`` sentinel (see install.sh). We accept either the sentinel or
+    the interpreter itself so a fresh clone (no envs built) is detected BEFORE we
+    dispatch a subprocess — otherwise launching a non-existent interpreter raises
+    a raw FileNotFoundError that kills the whole roster on the first unbuilt env.
+    """
+    python = Path(spec["python"])
+    sentinel = python.parent.parent / ".omm_ready"
+    return sentinel.exists() or python.exists()
+
+
 def _run_one_model(model: str, spec: dict, benchmark: str, calc_num: int, d3: bool) -> int:
     """Run catbench for one model in its OWN env interpreter (subprocess).
 
@@ -201,13 +215,34 @@ def main() -> int:
     # aggregates.
     rc = 0
     dispatched = 0
+    skipped = 0
     for model in models:
         for spec in _resolve_versions_for(model, version_pins):
+            # Check the env interpreter exists BEFORE dispatching: a fresh clone
+            # has no envs built, and launching a missing interpreter would raise a
+            # raw FileNotFoundError that crashes the whole roster on the first
+            # unbuilt env. Skip loudly + actionably and keep going instead.
+            if not _env_ready(spec):
+                env = spec.get("env", "?")
+                print(
+                    f"  [skip] env {env!r} for {model} not installed "
+                    f"— run: install.sh {model}",
+                    file=sys.stderr,
+                )
+                skipped += 1
+                continue
             rc |= _run_one_model(model, spec, tag, args.calc_num, args.d3)
             dispatched += 1
 
     if dispatched == 0:
-        print("[stop] no model+version resolved to a runnable spec.", file=sys.stderr)
+        if skipped:
+            print(
+                f"[stop] no env materialized for the {skipped} selected "
+                f"model run(s); build them first (see the install.sh hints above).",
+                file=sys.stderr,
+            )
+        else:
+            print("[stop] no model+version resolved to a runnable spec.", file=sys.stderr)
         return rc or 2
 
     print(f"\nAll {dispatched} model runs dispatched. Aggregate with catbench when they finish:")

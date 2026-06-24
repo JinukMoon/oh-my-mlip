@@ -1,0 +1,40 @@
+# build_status: candidate
+# candidate-reason: TACE is a local file:// build (no pip source) — upstream unknown, owner input needed
+# oh-my-mlip env recipe: TACE (tace)
+#
+# Pins mirror the validated internal setup:
+#   python 3.11.15 / torch 2.11.0+cu130.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 13.0 build (cu130) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu130 min-driver floor.
+#   - cuda-nvcc 13.0.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - torch-geometric and e3nn are resolvable top-level deps of the stack.
+#   - The framework package, TACE, is installed in the validated env from a LOCAL
+#     file:// path (`/home/jumoon/pretrained_models/external_mlip/tace`) with no
+#     public index. Its upstream is unknown, so it is omitted and flagged.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+# TODO-owner: real TACE source URL (pip name or git+https) — the recorded install
+#   is a local file:// artifact with no public source.
+name: tace
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.15
+  - pip
+  # CUDA 13.0 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=13.0.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu130
+      - torch==2.11.0+cu130
+      - torch-geometric==2.8.0
+      - e3nn
+      # TACE framework is a local build; see TODO-owner.
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

@@ -1,0 +1,36 @@
+# build_status: clean
+# oh-my-mlip env recipe: UMA (fairchem-core 2.x)
+#
+# Validated, buildable recipe. Pins mirror the validated internal setup:
+#   python 3.11.13 / torch 2.8.0+cu128.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 12.8 build (cu128) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu128 min-driver floor.
+#   - cuda-nvcc 12.8.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - fairchem-core is pinned to the validated 2.x version (the UMA model family
+#     ships through it); e3nn is its top-level dep.
+#   - UMA checkpoints are gated open-weight downloads fetched on first run; no
+#     weights are bundled in this recipe.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+name: uma
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.8.0+cu128
+      - fairchem-core==2.16.0
+      - e3nn
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

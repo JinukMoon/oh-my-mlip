@@ -1,0 +1,35 @@
+# build_status: candidate
+# candidate-reason: git-sha install; not yet build-verified
+# oh-my-mlip env recipe: MatRIS (matris)
+#
+# Pins mirror the validated internal setup:
+#   python 3.11.15 / torch 2.12.1+cu130.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 13.0 build (cu130) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu130 min-driver floor.
+#   - cuda-nvcc 13.0.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - matris is installed from its public git sha (resolvable). The recipe is
+#     marked candidate only because this exact pin set has not yet been
+#     build-verified end to end; there is no owner-blocked dependency.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+name: matris
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.15
+  - pip
+  # CUDA 13.0 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=13.0.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu130
+      - torch==2.12.1+cu130
+      - matris @ git+https://github.com/HPC-AI-Team/MatRIS@c16f569ca08e6905e91b64e2ee68614303e46f7f
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

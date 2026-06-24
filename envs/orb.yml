@@ -1,5 +1,5 @@
 # build_status: clean
-# oh-my-mlip env recipe: MACE (mace-torch)
+# oh-my-mlip env recipe: Orb (orb-models)
 #
 # Validated, buildable recipe. Pins mirror the validated internal setup:
 #   python 3.11.13 / torch 2.7.1+cu126.
@@ -10,14 +10,11 @@
 #     wheel index; the host NVIDIA driver must satisfy the cu126 min-driver floor.
 #   - cuda-nvcc 12.6.* is included so the D3 dispersion kernel can compile on
 #     first run (matching the torch CUDA minor).
-#   - mace-torch is pinned to the validated git sha.
-#   - cuequivariance / e3nn are top-level deps MACE needs; small transitive deps
-#     are left to float.
+#   - orb-models is pinned to the validated version; torch-dftd is its top-level
+#     dispersion dep.
 #   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
 #     downgrading torch's CUDA libraries.
-#   - MACE checkpoints (mace-mpa-0, mace-mh-1) are open-weight and fetched on
-#     first run; no weights are bundled in this recipe.
-name: mace
+name: orb
 channels:
   - conda-forge
   - nvidia
@@ -30,10 +27,8 @@ dependencies:
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu126
       - torch==2.7.1+cu126
-      - mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363
-      - cuequivariance
-      - cuequivariance-torch
-      - e3nn
+      - orb-models==0.5.4
+      - torch-dftd==0.5.1
       # catbench LAST and isolated; see header note.
       - --no-deps
       - catbench==1.1.2

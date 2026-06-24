@@ -1,0 +1,38 @@
+# build_status: candidate
+# candidate-reason: deepmd-kit cu13x wheel + mpich; install-test required
+# oh-my-mlip env recipe: DPA-4 (deepmd-kit 3.2 line)
+#
+# Pins mirror the validated internal setup:
+#   python 3.11.15 / torch 2.11.0+cu130.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 13.0 build (cu130) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu130 min-driver floor.
+#   - cuda-nvcc 13.0.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - deepmd-kit is pinned to the 3.2.0b0 pre-release used for DPA-4. It needs an
+#     MPI runtime (mpich) and pulls a large nvidia-cu13 stack; neither has been
+#     smoke-tested in this recipe form, so the build is marked candidate.
+#   - models.json sets env_run: LD_LIBRARY_PATH="" for this env to avoid host MPI
+#     library clashes at inference time.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+name: dpa4
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11.15
+  - pip
+  # CUDA 13.0 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=13.0.*
+  - mpich
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu130
+      - torch==2.11.0+cu130
+      - deepmd-kit==3.2.0b0
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

@@ -1,0 +1,35 @@
+# build_status: candidate
+# candidate-reason: deepmd-kit cu13x-adjacent wheel + nvidia-cu12 stack; install-test required
+# oh-my-mlip env recipe: DeePMD-kit (deepmd-kit)
+#
+# Pins mirror the validated internal setup:
+#   python 3.10.19 / torch 2.8.0+cu128.
+# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
+# tarballs are planned but not yet published; do not assume any are hosted.)
+#
+#   - torch is pinned to the CUDA 12.8 build (cu128) from the official PyTorch
+#     wheel index; the host NVIDIA driver must satisfy the cu128 min-driver floor.
+#   - cuda-nvcc 12.8.* is included so the D3 dispersion kernel can compile on
+#     first run (matching the torch CUDA minor).
+#   - deepmd-kit is pinned to the validated version. Its CUDA-backed wheel pulls
+#     a large nvidia-cu12 runtime stack and has not been smoke-tested in this
+#     recipe form, so the build is marked candidate pending an install test.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+name: deepmd
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.10.19
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  - ase
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.8.0+cu128
+      - deepmd-kit==3.1.2
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench==1.1.2

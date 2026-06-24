@@ -33,9 +33,9 @@ How to read the columns:
 |---|---|---|---|---|---|
 | SevenNet-MF-OMPA | SevenNet | bundled | validated (sm89) | no | upload-pending |
 | SevenNet-Omni | SevenNet | bundled | validated (sm89) | no | upload-pending |
-| MACE-MPA-0 | MACE | bundled | validated (sm89) | no | upload-pending |
-| MACE-MH-1-OMAT | MACE | bundled | validated (sm89) | no | upload-pending |
-| MACE-MH-1-OC20 | MACE | bundled | validated (sm89) | no | upload-pending |
+| MACE-MPA-0 | MACE | auto-download | validated (sm89) | no | upload-pending |
+| MACE-MH-1-OMAT | MACE | auto-download | validated (sm89) | no | upload-pending |
+| MACE-MH-1-OC20 | MACE | auto-download | validated (sm89) | no | upload-pending |
 | NequIP-OAM-XL | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
 | NequIP-OAM-L | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
 | Allegro-OAM-L | Allegro | on-demand-hf | gpu pending | no | Phase 2 |
