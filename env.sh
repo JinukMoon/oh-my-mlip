@@ -56,9 +56,18 @@ fi
 #   MatRIS.load -> ~/.cache/matris, TACE -> ~/.cache/tace are hardcoded upstream. Symlink the
 #   shared weights into the user cache only when the user does not already have their own.
 for _m in matris tace eqnorm; do
-  [ -e "$HOME/.cache/$_m" ] || { mkdir -p "$HOME/.cache" 2>/dev/null; ln -s "${OH_MY_MLIP_HOME}/models/$_m" "$HOME/.cache/$_m" 2>/dev/null; }
+  # Skip if anything already occupies the path — a real dir/file ([ -e ]) OR an
+  # existing symlink even when its target is missing ([ -L ], i.e. a broken link
+  # from a prior run whose models/<m> isn't built yet). Using only [ -e ] would
+  # miss a broken symlink and then `ln -s` (no -f) would fail "File exists" and,
+  # under the caller's `set -e`, abort install.sh. `|| true` is a final guard so
+  # sourcing env.sh can never abort the install on a benign cache-symlink hiccup.
+  if [ ! -e "$HOME/.cache/$_m" ] && [ ! -L "$HOME/.cache/$_m" ]; then
+    mkdir -p "$HOME/.cache" 2>/dev/null || true
+    ln -s "${OH_MY_MLIP_HOME}/models/$_m" "$HOME/.cache/$_m" 2>/dev/null || true
+  fi
 done
-unset _m
+unset _m || true
 
 # ── 5) JIT fast-kernel seed (OpenEquivariance libtorch_tp_jit etc.) ──
 #   Some envs JIT-compile fast kernels at runtime; a clean HOME recompiles from scratch
