@@ -1,0 +1,115 @@
+name: CI (GPU-free)
+
+# Runs on every push and pull request. No GPU, no conda env, no multi-GB
+# model downloads required. All steps complete on a standard GitHub-hosted
+# ubuntu runner in under 5 minutes.
+#
+# Steps:
+#   1. Checkout repository
+#   2. Set up Python 3.11
+#   3. Install dev dependencies (pytest, jsonschema)
+#   4. JSON-schema validate models.json + dist_manifest.json
+#   5. shellcheck install.sh + scripts/*.sh
+#   6. ast.parse every inference/import string in models.json (no exec)
+#   7. Status-table sync: gen_status_table.py --check
+#   8. pytest tests/ (all unit tests, no GPU)
+#   9. Registry integrity / trust-boundary negative tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  gpu-free-ci:
+    name: GPU-free PR checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ─────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements-dev.txt
+
+      # ── 3. Install dev dependencies ──────────────────────────────────────────
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      # ── 4. JSON-schema validate registries ───────────────────────────────────
+      # The models schema enforces the four honesty fields (gated, weights,
+      # validation, inference) on every version entry (overclaim guard).
+      # The dist_manifest schema enforces the six distribution keys.
+      - name: Validate models.json and dist_manifest.json schemas
+        run: |
+          python -m pytest tests/test_schemas.py -v \
+            --tb=short \
+            -p no:cacheprovider
+
+      # ── 5. shellcheck ─────────────────────────────────────────────────────────
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: shellcheck install.sh and scripts/*.sh
+        run: |
+          shellcheck install.sh
+          find scripts -maxdepth 1 -name "*.sh" -type f | sort | while read -r f; do
+            shellcheck "$f"
+          done
+
+      # ── 6. ast.parse inference/import strings (trust boundary, no exec) ──────
+      # Catches Python syntax errors in models.json inference/import lines
+      # without executing any code and without needing torch/ase/conda.
+      - name: ast.parse all inference and import strings in models.json
+        run: |
+          python -m pytest tests/test_inference_parses.py -v \
+            --tb=short \
+            -p no:cacheprovider
+
+      # ── 7. Status-table sync ──────────────────────────────────────────────────
+      # Fails if the README ## Models & status table diverges from models.json.
+      # Overclaim guard: the table is generated from validation/weights/gated,
+      # so "all-validated" overclaims can never silently persist.
+      - name: Check README status table is in sync with models.json
+        run: python scripts/gen_status_table.py --check
+
+      # ── 8. Full pytest suite ─────────────────────────────────────────────────
+      - name: Run all tests (no GPU)
+        run: |
+          python -m pytest tests/ -q \
+            --tb=short \
+            -p no:cacheprovider
+
+      # ── 9. Integrity / negative tests ─────────────────────────────────────────
+      # Explicitly call out the negative tests so CI failure messages are clear.
+      # (These are already included in step 8 above; this step adds a named
+      # summary that makes PR check output easier to read.)
+      - name: Registry integrity and trust-boundary negative tests
+        run: |
+          python -m pytest tests/test_registry_integrity.py -v \
+            --tb=short \
+            -p no:cacheprovider
+
+  # ── Deferred: GPU smoke test (non-blocking) ───────────────────────────────────
+  # This job is commented out. Uncomment and configure a self-hosted GPU runner
+  # when the human-gated compute checkpoint has been completed (conda-pack tarballs
+  # built + published to HF, binding end-to-end test on a foreign host passed).
+  #
+  # gpu-smoke-test:
+  #   name: GPU smoke test (self-hosted, non-blocking)
+  #   runs-on: [self-hosted, gpu]
+  #   needs: gpu-free-ci
+  #   continue-on-error: true   # non-blocking: PR can merge if GPU runner absent
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Run single-point smoke test
+  #       run: |
+  #         python run_examples/single_point.py --model MACE --version MACE-MPA-0
+  #         python run_examples/single_point.py --model SevenNet --version SevenNet-MF-OMPA
