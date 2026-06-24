@@ -37,4 +37,3 @@ envs/*/
 
 # --- OMC orchestration state (never publish) ---
 .omc/
-.ci-pending/
