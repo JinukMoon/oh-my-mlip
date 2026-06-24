@@ -38,7 +38,7 @@ an MCP server) so a tool-calling agent can drive the whole hub.
 
 What you actually get:
 
-| | |
+| Capability | What it means |
 |---|---|
 | 🧪 **Run 20 frameworks / 31 variants painlessly** | Clone the hub, point `OH_MY_MLIP_HOME` at it, call one model after another from the same convention. Heavy per-framework envs come from prebuilt, relocatable conda-pack tarballs (or `install.sh` rebuilds them locally). |
 | ⚗️ **catbench, easily** | catbench (adsorption / heterogeneous-catalysis benchmarking, authored by the project owner) is pre-wired into every env. You bring your own DFT/reference data; the wiring is done. |
@@ -78,8 +78,8 @@ for you:
 ### Or do it by hand
 
 ```bash
-# 1. Clone the hub and enter it (replace the URL with this repo's clone URL).
-git clone <this-repo-url> oh-my-mlip
+# 1. Clone the hub and enter it.
+git clone https://github.com/JinukMoon/oh-my-mlip.git
 cd oh-my-mlip
 
 # 2. Set OH_MY_MLIP_HOME (autodetected from the clone), caches, and D3/CUDA env.
@@ -121,7 +121,7 @@ The public API surface is small and stable:
 | `oh_my_mlip.resolve(model, version=None)` | registry | get the codegen dict (env `python`, `imports`, `inference`, `env_run`, flags) — no model loaded |
 | `oh_my_mlip.get_calculator(model, ...)` | intra-env | build an ASE `Calculator` **from inside that model's own env** |
 | `oh_my_mlip.run(model, atoms, ...)` | cross-env | one-shot compute; spawns the right env interpreter for you |
-| `oh_my_mlip.Worker` / `WorkerPool` | cross-env | persistent per-env worker for many repeated calls (e.g. a relaxation or AL loop) |
+| `oh_my_mlip.Worker` / `WorkerPool` | cross-env | persistent per-env worker for many repeated calls (e.g. a relaxation, or bulk labeling a structure set) |
 
 For gated models (e.g. UMA) export `HF_TOKEN` and accept the upstream license
 first — see [Gated models](#-gated-models).
