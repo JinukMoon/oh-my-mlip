@@ -1,6 +1,6 @@
 # oh-my-mlip
 
-> Won't pick the best MLIP for you — but it'll let you run 20 of them before
+> Won't pick a model for you — but it'll let you run 20 of them before
 > lunch, without solving a single conda environment.
 
 **One registry, many MLIPs.** Install nothing, solve no environments, just run.
@@ -8,17 +8,17 @@
 one convention — each in its own validated env, with catbench adsorption
 benchmarking pre-wired by its author.
 
-🧭 [What this is](#-what-this-is) ·
-🚀 [Install & quickstart](#-install--quickstart) ·
-📊 [Models & status](#-models--status) ·
-📦 [How distribution works](#-how-distribution-works) ·
-🤖 [MCP server](#-mcp-server) ·
-🔐 [Gated models](#-gated-models) ·
-🧠 [Mental model](#-mental-model) ·
-🗺️ [Roadmap](#-roadmap) ·
-🤝 [Contributing](#-contributing)
+- [What this is](#what-this-is)
+- [Install & quickstart](#install--quickstart)
+- [Models & status](#models--status)
+- [How distribution works](#how-distribution-works)
+- [MCP server](#mcp-server)
+- [Gated models](#gated-models)
+- [Mental model](#mental-model)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
 
-## 🧭 What this is
+## What this is
 
 `oh-my-mlip` is a **convenience service**, not a model and not a benchmark
 verdict. It removes the one thing that actually stops people from using many MLIP
@@ -32,7 +32,7 @@ conflicts, and no GPU lock-in** between frameworks.
 
 That is the whole value, and it is value nobody else hands you in one place: the
 install/env layer solved for **real upstream frameworks** (MACE, SevenNet,
-NequIP, ORB, UMA, …) — not reimplementations — with **catbench** catalysis
+NequIP, ORB, UMA, ...) — not reimplementations — with **catbench** catalysis
 benchmarking wired into every env, and an **agent-native** surface (`AGENTS.md` +
 an MCP server) so a tool-calling agent can drive the whole hub.
 
@@ -40,13 +40,13 @@ What you actually get:
 
 | Capability | What it means |
 |---|---|
-| 🧪 **Run 20 frameworks / 31 variants painlessly** | Clone the hub, point `OH_MY_MLIP_HOME` at it, call one model after another from the same convention. Heavy per-framework envs come from prebuilt, relocatable conda-pack tarballs (or `install.sh` rebuilds them locally). |
-| ⚗️ **catbench, easily** | catbench (adsorption / heterogeneous-catalysis benchmarking, authored by the project owner) is pre-wired into every env. You bring your own DFT/reference data; the wiring is done. |
-| 🤖 **Agent-native** | `AGENTS.md` is the agent contract, and the same registry is exposed over MCP. Hand the repo to an agent and it can run a model. |
+| **Run 20 frameworks / 31 variants painlessly** | Clone the hub, point `OH_MY_MLIP_HOME` at it, call one model after another from the same convention. Heavy per-framework envs come from prebuilt, relocatable conda-pack tarballs (or `install.sh` rebuilds them locally). |
+| **catbench, easily** | catbench (adsorption / heterogeneous-catalysis benchmarking, authored by the project owner) is pre-wired into every env. You bring your own DFT/reference data; the wiring is done. |
+| **Agent-native** | `AGENTS.md` is the agent contract, and the same registry is exposed over MCP. Hand the repo to an agent and it can run a model. |
 
 It deliberately does **not** auto-select a model for you, and it does **not**
 reimplement any model — it packages the real upstream frameworks. (See
-[Mental model](#-mental-model) for the full not-goals list.)
+[Mental model](#mental-model) for the full not-goals list.)
 
 Distillation is **out of scope for v1**: a future, *separate* tool can bind to
 the stable teacher-provider interface exposed here as an optional **teacher-query
@@ -54,7 +54,7 @@ on-ramp (Phase 2)** — cheap bulk teacher labeling to train a CPU-deployable
 NN-MTP/LAMMPS student. If you only want to run MLIPs or catbench, you never touch
 it.
 
-## 🚀 Install & quickstart
+## Install & quickstart
 
 `oh_my_mlip` is **path-importable, not a pip package**: you put the clone root on
 `sys.path` (or set `OH_MY_MLIP_HOME`) and import it. `source env.sh` once per
@@ -124,9 +124,9 @@ The public API surface is small and stable:
 | `oh_my_mlip.Worker` / `WorkerPool` | cross-env | persistent per-env worker for many repeated calls (e.g. a relaxation, or bulk labeling a structure set) |
 
 For gated models (e.g. UMA) export `HF_TOKEN` and accept the upstream license
-first — see [Gated models](#-gated-models).
+first — see [Gated models](#gated-models).
 
-## 📊 Models & status
+## Models & status
 
 This table is **generated from `models.json`** by `scripts/gen_status_table.py`
 (CI runs `--check` to keep it byte-for-byte in sync — the README can never drift
@@ -175,7 +175,7 @@ compute checkpoint). Everything else is a `Phase 2` packaging target. Rows marke
 | TACE-OAM-L | TACE | auto-download | gpu pending | no | Phase 2 |
 <!-- STATUS_TABLE_END -->
 
-## 📦 How distribution works
+## How distribution works
 
 After a fresh clone the `envs/<env>/` directories do not exist yet. They are
 materialized on first use, and either path yields the identical on-disk layout
@@ -197,7 +197,7 @@ materialized on first use, and either path yields the identical on-disk layout
 3. **Gated weights on-demand.** The published tarballs contain the **environment
    only** — never gated weights. Gated weights are fetched on first run with the
    user's own `HF_TOKEN` after the user accepts the upstream license (see
-   [Gated models](#-gated-models)).
+   [Gated models](#gated-models)).
 4. **Arch-specific artifacts compile on first run.** Architecture-pinned
    artifacts — the D3 CUDA kernel `pair_d3.so` and the NequIP/Allegro AOT `.pt2`
    — are **never baked into the distributed tarballs**. They are compiled or
@@ -205,7 +205,7 @@ materialized on first use, and either path yields the identical on-disk layout
    L40S) the first time you run. See
    [`docs/arch_first_run_compile.md`](docs/arch_first_run_compile.md).
 
-## 🤖 MCP server
+## MCP server
 
 The same registry that drives `AGENTS.md` is also exposed as a
 [Model Context Protocol](https://modelcontextprotocol.io) server
@@ -230,7 +230,7 @@ Tools exposed:
 | `list_models` | `list_models()` (+ versions) | GPU-free (pure registry read) |
 | `describe_model` | `resolve(model, version)` codegen dict | GPU-free |
 | `model_status` | the `## Models & status` table data | GPU-free |
-| `run_singlepoint` | `run(model, atoms, …)` energy + forces | GPU runtime |
+| `run_singlepoint` | `run(model, atoms, ...)` energy + forces | GPU runtime |
 | `run_relax` | persistent `Worker` + ASE `BFGS` | GPU runtime |
 | `install_model` | `fetch.fetch_env(model)` (download + relocate env) | HF / compute runtime |
 | `run_catbench` | the catbench roster runner | GPU runtime |
@@ -243,7 +243,7 @@ rather than a traceback. `run_singlepoint` / `run_relax` accept a structure as a
 file path, an `Atoms.todict()` dict, or a simple `{symbols, positions, cell?, pbc?}`
 dict.
 
-## 🔐 Gated models
+## Gated models
 
 Most of the roster is open-weight and needs no token. A few models are **gated**
 (in the v1 roster, all **UMA** variants): their weights sit behind an upstream
@@ -265,25 +265,25 @@ If `HF_TOKEN` is missing or the license has not been accepted, the fetch fails
 working around the gate. Full details and the agent contract are in
 [`docs/gated_models.md`](docs/gated_models.md).
 
-## 🧠 Mental model
+## Mental model
 
 `oh-my-mlip` is opinionated about what it is *not*. It does not:
 
 - **pick the best model for you** — it gives you uniform multi-MLIP access,
   catbench wiring, and guidance; *you* bring the data and judge the results.
 - **reimplement any model** — it packages the real upstream frameworks (MACE,
-  SevenNet, NequIP, ORB, UMA, …), never rewrites of them.
+  SevenNet, NequIP, ORB, UMA, ...), never rewrites of them.
 - **be a pip library** — `oh_my_mlip` is path-importable; you put the clone root
   on `sys.path` (or `source env.sh`), and there is no `setup.py`.
 - **redistribute gated weights** — gated weights are always fetched on first run
   with *your* token, after *you* accept the upstream license.
 - **do distillation in v1** — that lands later as a *separate* tool binding to
-  the teacher-provider interface (the **teacher-query on-ramp**, Phase 2).
+  the teacher-query on-ramp (Phase 2).
 
 What it *is*: one registry, many real MLIPs, each in its own validated env, with
 catbench bundled and an agent-native surface on top.
 
-## 🗺️ Roadmap
+## Roadmap
 
 - **v1 (now).** Small, focused core: the **MACE + SevenNet** distribution
   pipeline is authored and ready (relocatable conda-pack → fetch → relocate →
@@ -293,7 +293,7 @@ catbench bundled and an agent-native surface on top.
   validation state and runnable from a local `install.sh` build. The **MCP
   server** (`list_models`, `describe_model`, `model_status`, `install_model`,
   `run_singlepoint`, `run_relax`, `run_catbench`) is **already included** (see the
-  [MCP server](#-mcp-server) section): its GPU-free tools work now, and its `run_*`
+  [MCP server](#mcp-server) section): its GPU-free tools work now, and its `run_*`
   / `install_model` tools are validated end-to-end at the compute checkpoint.
 - **Phase 2.** Expand the conda-pack/`install.sh` path to the **full 31-model**
   roster; and open the **teacher-query on-ramp** for distillation. The downstream
@@ -306,7 +306,7 @@ catbench bundled and an agent-native surface on top.
 - **Phase 3.** Docker / Apptainer images and CI (including the generated
   status-table `--check` and the foreign-host relocation acceptance test).
 
-## 🤝 Contributing
+## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide.
 
