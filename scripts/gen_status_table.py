@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
-"""gen_status_table.py — generate the README `## Models & status` table.
+"""gen_status_table.py — generate the supported-MLIPs lists from `models.json`.
 
-Reads `models.json` and emits a deterministic markdown table (one row per
-model+version) for the block between the stable markers
+`models.json` is the single source of truth. This script renders two views of it
+and keeps both byte-for-byte in sync (CI runs `--check`):
 
-    <!-- STATUS_TABLE_START -->
-    <!-- STATUS_TABLE_END -->
+  1. A LIGHT `| Framework | Models |` list for the README `## Supported MLIPs`
+     section, between the stable markers
 
-in `README.md`. The table is derived ENTIRELY from the registry's per-version
-`validation` / `weights` / `gated` fields, so the README can never drift from
-`models.json` (the source of truth). This guards against an
-"all-validated" overclaim.
+         <!-- STATUS_TABLE_START -->
+         <!-- STATUS_TABLE_END -->
+
+     in `README.md`. One row per framework, variant names comma-joined — just
+     enough to see what is available, scannable and short.
+
+  2. The FULL detailed table (Model / Framework / Weights / Validation / Gated /
+     v1 tarball — one row per model+version) for `docs/model_status.md`, between
+
+         <!-- STATUS_TABLE_DETAILED_START -->
+         <!-- STATUS_TABLE_DETAILED_END -->
+
+Both are derived ENTIRELY from the registry's per-version `validation` /
+`weights` / `gated` fields, so neither view can drift from `models.json`. This
+guards against an "all-validated" overclaim.
 
 Modes:
-  (default)   print the generated table to stdout.
-  --check     compare the generated table against the current README block and
-              exit non-zero if they differ (this is what CI calls).
+  (default)   print both generated blocks to stdout (clearly delimited).
+  --check     compare each generated block against its committed file and exit
+              non-zero if EITHER differs (this is what CI calls).
 
 No heavy imports: this script reads JSON directly and never imports torch / ase
 / the oh_my_mlip package, so it runs on any host.
@@ -30,9 +41,15 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_JSON = _REPO_ROOT / "models.json"
 README = _REPO_ROOT / "README.md"
+MODEL_STATUS_DOC = _REPO_ROOT / "docs" / "model_status.md"
 
+# Light README list (Framework | Models).
 START_MARKER = "<!-- STATUS_TABLE_START -->"
 END_MARKER = "<!-- STATUS_TABLE_END -->"
+
+# Detailed per-version table in docs/model_status.md.
+DETAILED_START_MARKER = "<!-- STATUS_TABLE_DETAILED_START -->"
+DETAILED_END_MARKER = "<!-- STATUS_TABLE_DETAILED_END -->"
 
 # Human-readable validation labels. The registry carries machine codes; the
 # table renders them so a reader sees ship state at a glance.
@@ -48,7 +65,7 @@ def _validation_label(code: str) -> str:
     return _VALIDATION_LABEL.get(code, code)
 
 
-def _rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
+def _detailed_rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
     """Build (Model, Framework, Weights, Validation, Gated, v1 tarball) rows in a
     stable order: registry framework order, then version order within each
     framework. The `v1 tarball` column is taken from `_meta.shipped_v1` (the
@@ -75,12 +92,36 @@ def _rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
     return rows
 
 
-def render_table(models: dict) -> str:
-    """Render the markdown table (no trailing newline)."""
+def _framework_rows(models: dict) -> list[tuple[str, str]]:
+    """Build (Framework, comma-joined model variant names) rows in registry
+    order — one row per framework. This is the LIGHT view for the README."""
+    rows: list[tuple[str, str]] = []
+    for framework, info in models.items():
+        if framework.startswith("_"):
+            continue
+        names = [
+            vinfo.get("mlip_name", version)
+            for version, vinfo in info.get("versions", {}).items()
+        ]
+        rows.append((framework, ", ".join(names)))
+    return rows
+
+
+def render_simple_list(models: dict) -> str:
+    """Render the light README `| Framework | Models |` table (no trailing
+    newline)."""
+    lines = ["| Framework | Models |", "|---|---|"]
+    for framework, names in _framework_rows(models):
+        lines.append(f"| {framework} | {names} |")
+    return "\n".join(lines)
+
+
+def render_detailed_table(models: dict) -> str:
+    """Render the full detailed markdown table (no trailing newline)."""
     header = "| Model | Framework | Weights | Validation | Gated | v1 tarball |"
     sep = "|---|---|---|---|---|---|"
     lines = [header, sep]
-    for model, framework, weights, validation, gated, shipped in _rows(models):
+    for model, framework, weights, validation, gated, shipped in _detailed_rows(models):
         lines.append(
             f"| {model} | {framework} | {weights} | {validation} | "
             f"{gated} | {shipped} |"
@@ -92,16 +133,36 @@ def _load_models() -> dict:
     return json.loads(MODELS_JSON.read_text(encoding="utf-8"))
 
 
-def _readme_block() -> str:
-    """Extract the current table text between the markers (markers excluded,
-    surrounding blank lines stripped). Raises if the markers are missing."""
-    text = README.read_text(encoding="utf-8")
-    if START_MARKER not in text or END_MARKER not in text:
-        raise SystemExit(
-            f"README is missing the {START_MARKER} / {END_MARKER} markers"
-        )
-    inner = text.split(START_MARKER, 1)[1].split(END_MARKER, 1)[0]
+def _extract_block(path: Path, start: str, end: str, what: str) -> str:
+    """Extract the text between markers (markers excluded, surrounding blank
+    lines stripped) in `path`. Raises if the file or markers are missing."""
+    if not path.exists():
+        raise SystemExit(f"{what}: file {path} does not exist")
+    text = path.read_text(encoding="utf-8")
+    if start not in text or end not in text:
+        raise SystemExit(f"{what} is missing the {start} / {end} markers")
+    inner = text.split(start, 1)[1].split(end, 1)[0]
     return inner.strip("\n")
+
+
+def _check_block(path: Path, start: str, end: str, expected: str, what: str) -> bool:
+    """Return True if the committed block in `path` matches `expected`, else
+    print a diagnostic and return False."""
+    current = _extract_block(path, start, end, what)
+    if current == expected:
+        print(f"gen_status_table: {what} is up to date.")
+        return True
+    print(
+        f"gen_status_table: {what} is OUT OF DATE.\n"
+        "Regenerate it: python scripts/gen_status_table.py "
+        "(see CONTRIBUTING.md for which block goes where)\n",
+        file=sys.stderr,
+    )
+    print(f"--- expected (generator) [{what}] ---", file=sys.stderr)
+    print(expected, file=sys.stderr)
+    print(f"--- found ({path.name}) [{what}] ---", file=sys.stderr)
+    print(current, file=sys.stderr)
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -109,31 +170,34 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--check",
         action="store_true",
-        help="compare against the README block; exit non-zero if they differ",
+        help="compare both committed blocks against the generator; exit "
+        "non-zero if EITHER differs",
     )
     args = ap.parse_args(argv)
 
-    table = render_table(_load_models())
+    models = _load_models()
+    simple = render_simple_list(models)
+    detailed = render_detailed_table(models)
 
     if not args.check:
-        print(table)
+        print(f"{START_MARKER} (README.md — ## Supported MLIPs)")
+        print(simple)
+        print(END_MARKER)
+        print()
+        print(f"{DETAILED_START_MARKER} (docs/model_status.md)")
+        print(detailed)
+        print(DETAILED_END_MARKER)
         return 0
 
-    current = _readme_block()
-    if current == table:
-        print("gen_status_table: README table is up to date.")
-        return 0
-    print(
-        "gen_status_table: README `## Models & status` table is OUT OF DATE.\n"
-        "Regenerate it: python scripts/gen_status_table.py > /tmp/t && "
-        "paste between the markers in README.md\n",
-        file=sys.stderr,
+    ok_readme = _check_block(
+        README, START_MARKER, END_MARKER, simple,
+        "README `## Supported MLIPs` list",
     )
-    print("--- expected (generator) ---", file=sys.stderr)
-    print(table, file=sys.stderr)
-    print("--- found (README) ---", file=sys.stderr)
-    print(current, file=sys.stderr)
-    return 1
+    ok_doc = _check_block(
+        MODEL_STATUS_DOC, DETAILED_START_MARKER, DETAILED_END_MARKER, detailed,
+        "docs/model_status.md detailed table",
+    )
+    return 0 if (ok_readme and ok_doc) else 1
 
 
 if __name__ == "__main__":

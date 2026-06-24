@@ -74,10 +74,11 @@ jobs:
             -p no:cacheprovider
 
       # ── 7. Status-table sync ──────────────────────────────────────────────────
-      # Fails if the README ## Models & status table diverges from models.json.
-      # Overclaim guard: the table is generated from validation/weights/gated,
+      # Fails if either generated view diverges from models.json: the light
+      # README ## Supported MLIPs list OR the detailed docs/model_status.md
+      # table. Overclaim guard: both are generated from validation/weights/gated,
       # so "all-validated" overclaims can never silently persist.
-      - name: Check README status table is in sync with models.json
+      - name: Check status lists (README + docs/model_status.md) are in sync with models.json
         run: python scripts/gen_status_table.py --check
 
       # ── 8. Full pytest suite ─────────────────────────────────────────────────

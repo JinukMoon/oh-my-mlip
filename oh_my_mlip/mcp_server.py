@@ -245,8 +245,8 @@ def build_server():
     def model_status() -> dict:
         """Per-model ship status: validation / gated / weights / v1 tarball. GPU-FREE.
 
-        Renders the same data as ``scripts/gen_status_table.py`` (the README
-        ``## Models & status`` table) straight from ``models.json`` — the single
+        Renders the same data as ``scripts/gen_status_table.py`` (the detailed
+        ``docs/model_status.md`` table) straight from ``models.json`` — the single
         source of truth, so it can never overclaim. Pure registry read.
         """
         return {"rows": _status_rows()}

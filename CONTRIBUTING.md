@@ -74,20 +74,31 @@ Rules:
   see `oh_my_mlip/registry.py:ENV_RUN_ALLOWLIST`.  Any shell metacharacter
   will be rejected by CI.
 
-### 2. Regenerate the status table
+### 2. Regenerate the status lists
 
-The README `## Models & status` table is generated from `models.json`.
-After editing `models.json`, regenerate it:
+`models.json` is the single source of truth for **two** generated views:
+
+- the light `| Framework | Models |` list in the README `## Supported MLIPs`
+  section, between the `<!-- STATUS_TABLE_START -->` /
+  `<!-- STATUS_TABLE_END -->` markers in `README.md`; and
+- the full detailed table (Model / Framework / Weights / Validation / Gated /
+  v1 tarball) in `docs/model_status.md`, between the
+  `<!-- STATUS_TABLE_DETAILED_START -->` /
+  `<!-- STATUS_TABLE_DETAILED_END -->` markers.
+
+After editing `models.json`, regenerate both:
 
 ```bash
 python scripts/gen_status_table.py
 ```
 
-Paste the output between the `<!-- STATUS_TABLE_START -->` and
-`<!-- STATUS_TABLE_END -->` markers in `README.md`.
+It prints both blocks (clearly delimited). Paste the simple list between the
+`STATUS_TABLE` markers in `README.md`, and the detailed table between the
+`STATUS_TABLE_DETAILED` markers in `docs/model_status.md`.
 
-CI runs `python scripts/gen_status_table.py --check` and fails if the table is
-out of sync — so you must do this before opening a PR.
+CI runs `python scripts/gen_status_table.py --check`, which verifies **both**
+files are byte-for-byte in sync and fails if either is out of sync — so you must
+do this before opening a PR.
 
 ### 3. Run the GPU-free CI checks locally
 

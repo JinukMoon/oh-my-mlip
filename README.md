@@ -9,8 +9,9 @@ one convention — each in its own validated env, with catbench adsorption
 benchmarking pre-wired by its author.
 
 - [What this is](#what-this-is)
+- [Philosophy](#philosophy)
 - [Install & quickstart](#install--quickstart)
-- [Models & status](#models--status)
+- [Supported MLIPs](#supported-mlips)
 - [How distribution works](#how-distribution-works)
 - [MCP server](#mcp-server)
 - [Gated models](#gated-models)
@@ -53,6 +54,29 @@ the stable teacher-provider interface exposed here as an optional **teacher-quer
 on-ramp (Phase 2)** — cheap bulk teacher labeling to train a CPU-deployable
 NN-MTP/LAMMPS student. If you only want to run MLIPs or catbench, you never touch
 it.
+
+## Philosophy
+
+`oh-my-mlip` is curated but open, and it is meant to **grow with the community**
+— in the spirit of the other `oh-my-*` projects. The registry (`models.json`) is
+the single source of truth, so a contribution is small, data-shaped, and easy to
+review.
+
+**Anyone can add an MLIP.** Adding a framework is one `models.json` entry — its
+env, its import line, and the one validated calculator line — plus an env recipe.
+That is the whole change; no package internals to touch. PRs are welcome.
+
+We would also love your recommendations:
+
+- **More integrations** — a framework or model you want supported. Suggest it,
+  or open a PR with the `models.json` entry.
+- **Faster / better env setups** — tighter version locks, quicker installs,
+  cleaner GPU-arch handling. If your recipe for an env beats ours, send it.
+
+Because the registry is the source of truth, every such contribution stays small
+and reviewable. The how-to (the add-a-model steps and the trust policy that
+governs `models.json`) lives in [Contributing](#contributing) and
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Install & quickstart
 
@@ -126,54 +150,40 @@ The public API surface is small and stable:
 For gated models (e.g. UMA) export `HF_TOKEN` and accept the upstream license
 first — see [Gated models](#gated-models).
 
-## Models & status
+## Supported MLIPs
 
-This table is **generated from `models.json`** by `scripts/gen_status_table.py`
-(CI runs `--check` to keep it byte-for-byte in sync — the README can never drift
-from the registry, which is the guard against an "all validated" overclaim). The
-`Validation` column is each model's true per-GPU validation state from the
-registry. The **`v1 tarball`** column marks the frameworks whose relocatable
-conda-pack distribution is authored for v1 — **exactly MACE and SevenNet**, shown
-as `upload-pending` because their tarballs are not yet uploaded (the
-build+publish and the binding foreign-host end-to-end run are the deferred
-compute checkpoint). Everything else is a `Phase 2` packaging target. Rows marked
-`gpu pending` are env/load-verified only.
+20 frameworks / 31 model variants. Some weights are gated (need a Hugging Face
+token); some carry non-commercial or copyleft licenses — see the per-model
+details below.
 
 <!-- STATUS_TABLE_START -->
-| Model | Framework | Weights | Validation | Gated | v1 tarball |
-|---|---|---|---|---|---|
-| SevenNet-MF-OMPA | SevenNet | bundled | validated (sm89) | no | upload-pending |
-| SevenNet-Omni | SevenNet | bundled | validated (sm89) | no | upload-pending |
-| MACE-MPA-0 | MACE | bundled | validated (sm89) | no | upload-pending |
-| MACE-MH-1-OMAT | MACE | bundled | validated (sm89) | no | upload-pending |
-| MACE-MH-1-OC20 | MACE | bundled | validated (sm89) | no | upload-pending |
-| NequIP-OAM-XL | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
-| NequIP-OAM-L | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
-| Allegro-OAM-L | Allegro | on-demand-hf | gpu pending | no | Phase 2 |
-| Nequix-MP-1 | Nequix | on-demand-hf | validated (sm89) | no | Phase 2 |
-| DPA-3.1-3M-FT | DeePMD | on-demand-hf | validated (sm89) | no | Phase 2 |
-| ORB-v3 | ORB | auto-download | validated (sm89) | no | Phase 2 |
-| GRACE-2L-OAM | GRACE | on-demand-hf | validated (sm89) | no | Phase 2 |
-| MatterSim-v1-5M | MatterSim | bundled | validated (sm89) | no | Phase 2 |
-| CHGNet-v0.3.0 | CHGNet | bundled | validated (sm89) | no | Phase 2 |
-| AlphaNet-v1-OMA | AlphaNet | on-demand-hf | gpu pending | no | Phase 2 |
-| Eqnorm-MPtrj | Eqnorm | auto-download | validated (sm89) | no | Phase 2 |
-| eSEN-30M-OAM | fairchemv1 | on-demand-hf | validated (sm89) | no | Phase 2 |
-| EqV3-OMatMPtrjSalex | EquiformerV3 | on-demand-hf | gpu pending | no | Phase 2 |
-| UMA-m-1p1-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| UMA-m-1p1-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| UMA-s-1p1-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| UMA-s-1p1-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| UMA-s-1p2-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| UMA-s-1p2-OC22 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| UMA-s-1p2-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| PET-OAM-XL | PET | on-demand-hf | gpu pending | no | Phase 2 |
-| EquFlashV2 | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
-| EquFlash | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
-| MatRIS-10M-OAM | MatRIS | auto-download | gpu pending | no | Phase 2 |
-| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | gpu pending | no | Phase 2 |
-| TACE-OAM-L | TACE | auto-download | gpu pending | no | Phase 2 |
+| Framework | Models |
+|---|---|
+| SevenNet | SevenNet-MF-OMPA, SevenNet-Omni |
+| MACE | MACE-MPA-0, MACE-MH-1-OMAT, MACE-MH-1-OC20 |
+| NequIP | NequIP-OAM-XL, NequIP-OAM-L |
+| Allegro | Allegro-OAM-L |
+| Nequix | Nequix-MP-1 |
+| DeePMD | DPA-3.1-3M-FT |
+| ORB | ORB-v3 |
+| GRACE | GRACE-2L-OAM |
+| MatterSim | MatterSim-v1-5M |
+| CHGNet | CHGNet-v0.3.0 |
+| AlphaNet | AlphaNet-v1-OMA |
+| Eqnorm | Eqnorm-MPtrj |
+| fairchemv1 | eSEN-30M-OAM |
+| EquiformerV3 | EqV3-OMatMPtrjSalex |
+| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OMAT |
+| PET | PET-OAM-XL |
+| EquFlash | EquFlashV2, EquFlash |
+| MatRIS | MatRIS-10M-OAM |
+| DPA4 | DPA-4.0.1-pro-MPtrj |
+| TACE | TACE-OAM-L |
 <!-- STATUS_TABLE_END -->
+
+Per-model validation state, gated flag, and v1 distribution status: see
+[`docs/model_status.md`](docs/model_status.md). Licenses: see
+[`docs/model_licenses.md`](docs/model_licenses.md).
 
 ## How distribution works
 
@@ -229,7 +239,7 @@ Tools exposed:
 |---|---|---|
 | `list_models` | `list_models()` (+ versions) | GPU-free (pure registry read) |
 | `describe_model` | `resolve(model, version)` codegen dict | GPU-free |
-| `model_status` | the `## Models & status` table data | GPU-free |
+| `model_status` | the detailed per-model status data (see [`docs/model_status.md`](docs/model_status.md)) | GPU-free |
 | `run_singlepoint` | `run(model, atoms, ...)` energy + forces | GPU runtime |
 | `run_relax` | persistent `Worker` + ASE `BFGS` | GPU runtime |
 | `install_model` | `fetch.fetch_env(model)` (download + relocate env) | HF / compute runtime |
