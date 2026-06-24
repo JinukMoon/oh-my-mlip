@@ -18,11 +18,27 @@ import json
 import os
 import subprocess
 import threading
+from pathlib import Path
 from typing import Any, Iterable
 
 from oh_my_mlip import registry
 
 __all__ = ["get_calculator", "run", "Worker", "WorkerPool"]
+
+
+def _env_not_installed_msg(model: str, env: str, python_exe: str) -> str:
+    """Actionable message (NOT a raw traceback) for a missing env interpreter.
+
+    Names the exact build command so an agent/user can self-serve. Mirrors the
+    hint surfaced by fetch.py / mcp_server.py so every entry point agrees.
+    """
+    return (
+        f"the conda env {env!r} for {model} is not materialized yet "
+        f"(interpreter not found: {python_exe}). Install it first:\n"
+        f'    bash "$OH_MY_MLIP_HOME/install.sh" {model}\n'
+        f"  (or by env name: install.sh {env}), or fetch the prebuilt env via "
+        f"oh_my_mlip.fetch.fetch_env({model!r}) / the install_model MCP tool."
+    )
 
 
 # ── Layer 2: get_calculator (INTRA-ENV ONLY) ─────────────────────────────────
@@ -136,16 +152,28 @@ class Worker:
         return cmd
 
     def start(self) -> "Worker":
-        """Spawn the worker and consume the ready-handshake line."""
-        self._proc = self._popen(
-            self._build_cmd(),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=self._build_env(),
-        )
+        """Spawn the worker and consume the ready-handshake line.
+
+        If the model's env interpreter is not on disk (the env has not been
+        materialized yet), raise a clear, actionable ``WorkerError`` naming the
+        exact ``install.sh`` command rather than letting a raw ``FileNotFoundError``
+        escape from ``Popen``. This makes the README/AGENTS "actionable message,
+        not a traceback" promise true for ``run()`` / ``Worker`` too.
+        """
+        try:
+            self._proc = self._popen(
+                self._build_cmd(),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                env=self._build_env(),
+            )
+        except FileNotFoundError as exc:
+            raise WorkerError(
+                _env_not_installed_msg(self.model, self.spec["env"], self._python_exe)
+            ) from exc
         line = self._proc.stdout.readline()
         if not line:
             err = self._read_stderr()

@@ -39,6 +39,48 @@ python <repo>/run_examples/catbench_quickstart.py MyDataset --only MACE,SevenNet
   `zenodo_download`) can produce this JSON from public sources — run them in any
   env that ships catbench. This repo does not ship or redistribute any dataset.
 
+### `<tag>_adsorption.json` schema
+
+The internal schema is owned by the external **catbench** library
+(`catbench.adsorption.AdsorptionCalculation` reads it via
+`catbench.utils.data_utils.load_catbench_json`). The shape below is **confirmed**
+against that loader; a minimal, loadable example ships at
+[`raw_data_example/Example_adsorption.json`](raw_data_example/Example_adsorption.json)
+and the full reference is in [`docs/catbench_data_format.md`](../docs/catbench_data_format.md).
+
+Top level is a JSON object mapping a **reaction key** (any unique string) to a
+reaction entry:
+
+```jsonc
+{
+  "<reaction_key>": {
+    "raw": {
+      "star":           { "atoms_json": "<ase json str>", "energy_ref": -111.111, "stoi": -1 },
+      "<adslab_key>":   { "atoms_json": "<ase json str>", "energy_ref": -126.222, "stoi":  1 },
+      "gas-<species>":  { "atoms_json": "<ase json str>", "energy_ref":  -14.345, "stoi": -1 }
+    },
+    "ref_ads_eng": -0.766,
+    "adsorbate_indices": [12, 13]
+  }
+}
+```
+
+| Field | Where | Meaning (confirmed from the catbench loader) |
+|---|---|---|
+| `<reaction_key>` | top level | unique name for one adsorption reaction (becomes a `result/` subdir). |
+| `raw` | per reaction | map of structure name -> structure entry. A clean slab is keyed **`star`**; the adsorbate-covered slab is any non-`star`, non-`gas` key; gas-phase references are keyed with **`gas`** in the name (e.g. `gas-CO`). |
+| `atoms_json` | per structure | the structure serialized with ASE's JSON writer: `buf=io.StringIO(); atoms.write(buf, format="json")`. `load_catbench_json` reads it back with `ase.io.read(buf, format="json")`. |
+| `energy_ref` | per structure | the DFT reference total energy (eV) of that structure. |
+| `stoi` | per structure | stoichiometric coefficient in the adsorption reaction (slab `-1`, adslab `+1`, each gas its coefficient). |
+| `ref_ads_eng` | per reaction | the reference (DFT) adsorption energy (eV) the benchmark compares against. |
+| `adsorbate_indices` | per reaction | indices (into the adslab structure) of the adsorbate atoms. **Required** — `AdsorptionCalculation` raises `KeyError` if missing. |
+
+Generate it from public sources with catbench's own helpers
+(`cathub_preprocessing`, `zenodo_download` / `download`) inside any env that ships
+catbench — they emit exactly this file and auto-detect `adsorbate_indices`. This
+repo bundles no dataset; the shipped example is a **format illustration only**,
+not benchmark data.
+
 ## Gated models
 
 For gated models (e.g. UMA) accept the upstream license and export your own

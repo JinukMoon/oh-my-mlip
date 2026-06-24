@@ -377,6 +377,36 @@ def test_fetch_env_check_gated_resolves_version_none():
         assert spec["version"]  # a concrete default version was chosen
 
 
+def test_worker_missing_env_raises_actionable_message(monkeypatch, tmp_path):
+    # When the model's env interpreter does not exist on disk, Worker.start()
+    # must raise a clear, actionable WorkerError naming install.sh — NOT a raw
+    # FileNotFoundError traceback. We point OH_MY_MLIP_HOME at an empty tmp dir
+    # so the resolved interpreter ($HOME/envs/mace/bin/python) is absent, and use
+    # the REAL subprocess.Popen (no _popen mock) so it raises FileNotFoundError.
+    monkeypatch.setenv("OH_MY_MLIP_HOME", str(tmp_path))
+    w = provider.Worker("MACE", version="MACE-MPA-0")
+    assert not os.path.exists(w._python_exe)  # env not materialized
+    with pytest.raises(provider.WorkerError) as ei:
+        w.start()
+    msg = str(ei.value)
+    assert "not materialized" in msg
+    assert "install.sh" in msg
+    assert "MACE" in msg
+    # the resolved env name appears so the by-env-name command is shown too
+    assert "mace" in msg
+
+
+def test_run_missing_env_raises_actionable_message(monkeypatch, tmp_path):
+    # run() routes through Worker.start(); the same actionable message must
+    # surface from the one-shot path (no GPU, no env on disk).
+    monkeypatch.setenv("OH_MY_MLIP_HOME", str(tmp_path))
+    with pytest.raises(provider.WorkerError) as ei:
+        provider.run("MACE", object(), ("energy",))
+    msg = str(ei.value)
+    assert "not materialized" in msg
+    assert "install.sh" in msg
+
+
 def test_package_imports_without_torch_ase():
     # Importing the package must not require torch/ase/huggingface_hub.
     import importlib

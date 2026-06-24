@@ -71,16 +71,50 @@ def _json_default(obj):
 
 
 def encode_atoms(atoms) -> dict:
-    """Serialize an ase.Atoms into a JSON-safe dict via Atoms.todict()."""
-    raw = atoms.todict()
-    # Round-trip through the numpy-aware encoder to flatten ndarrays.
+    """Serialize a structure into a JSON-safe dict.
+
+    Accepts EITHER an ``ase.Atoms`` (serialized via ``Atoms.todict()``) OR a
+    plain dict already describing the structure — a full ``Atoms.todict()`` dict
+    or the simple ``{symbols, positions, cell?, pbc?}`` spec. The dict form lets
+    a launcher build a request WITHOUT importing ase (the worker has ase and
+    rehydrates it). Round-trips through the numpy-aware encoder so the wire stays
+    pure JSON.
+    """
+    if isinstance(atoms, dict):
+        raw = atoms
+    else:
+        raw = atoms.todict()
     return json.loads(json.dumps(raw, default=_json_default))
 
 
 def decode_atoms(payload: dict):
-    """Reconstruct an ase.Atoms from an encoded dict (lazy ase import)."""
+    """Reconstruct an ase.Atoms from an encoded dict (lazy ase import).
+
+    Handles two shapes:
+      * a full ``Atoms.todict()`` dict (carries ``numbers`` + positions/cell/pbc)
+      * the simple ``{symbols, positions, cell?, pbc?}`` spec a launcher can build
+        without importing ase.
+    """
     import numpy as np
     from ase import Atoms
+
+    # {"file": "<path>"} spec -> the worker (which has ase) reads the structure
+    # file, so a launcher can pass a POSCAR/cif/xyz path WITHOUT importing ase.
+    if "file" in payload and "numbers" not in payload and "symbols" not in payload:
+        from ase.io import read
+
+        return read(payload["file"])
+
+    # Simple {symbols, positions, ...} spec -> construct Atoms directly.
+    if "symbols" in payload and "numbers" not in payload:
+        kwargs: dict = {"symbols": payload["symbols"]}
+        if payload.get("positions") is not None:
+            kwargs["positions"] = np.asarray(payload["positions"], dtype=float)
+        if payload.get("cell") is not None:
+            kwargs["cell"] = np.asarray(payload["cell"], dtype=float)
+        if payload.get("pbc") is not None:
+            kwargs["pbc"] = payload["pbc"]
+        return Atoms(**kwargs)
 
     d = {}
     for key, value in payload.items():

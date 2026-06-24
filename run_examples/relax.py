@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """relax.py — relax a structure with one MLIP using the public oh_my_mlip API.
 
-For a relaxation we need a live ASE calculator attached across many force calls,
+For a relaxation we need a live ASE optimizer attached across many force calls,
 so this example uses the persistent `Worker` (one long-lived process for the
 model's env) and drives an ASE optimizer against it. This avoids spawning a fresh
 subprocess on every optimizer step.
+
+LAUNCHER NEEDS ase: unlike single_point.py, the ASE optimizer (BFGS) runs in the
+LAUNCHING interpreter (it drives the worker step by step), so this example must
+be run with a python that can import ase, e.g. the toolkit env:
+  /home/jumoon/miniconda3/envs/toolkit/bin/python  (or any env with ase).
+Only the heavy MLIP framework stays in the worker; ase here is just the optimizer
++ structure I/O. (single_point.py is fully ase-free in the launcher.)
 
 Run:
   source env.sh
@@ -26,6 +33,7 @@ from ase.calculators.calculator import Calculator, all_changes  # noqa: E402
 from ase.io import read  # noqa: E402
 from ase.optimize import BFGS  # noqa: E402
 from oh_my_mlip import Worker  # noqa: E402
+from oh_my_mlip.provider import WorkerError  # noqa: E402
 
 
 class _WorkerCalculator(Calculator):
@@ -77,10 +85,16 @@ def main() -> int:
     atoms = _load_atoms()
 
     # One persistent env process backs an ASE calculator adapter for the whole relaxation.
-    with Worker(args.model, version=args.version, apply_d3=args.d3) as worker:
-        atoms.calc = _WorkerCalculator(worker)
-        opt = BFGS(atoms)
-        opt.run(fmax=args.fmax, steps=args.steps)
+    try:
+        with Worker(args.model, version=args.version, apply_d3=args.d3) as worker:
+            atoms.calc = _WorkerCalculator(worker)
+            opt = BFGS(atoms)
+            opt.run(fmax=args.fmax, steps=args.steps)
+    except WorkerError as exc:
+        # Env not materialized (or worker failed to start): print the actionable
+        # message, not a raw traceback.
+        print(f"[oh-my-mlip] {exc}", file=sys.stderr)
+        return 1
 
     print(f"model       : {args.model}{' +D3' if args.d3 else ''}")
     print(f"final energy: {atoms.get_potential_energy():.6f} eV")

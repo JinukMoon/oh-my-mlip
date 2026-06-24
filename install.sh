@@ -9,8 +9,12 @@
 #   $OH_MY_MLIP_HOME/envs/<env>/bin/python   (+ a .omm_ready sentinel)
 #
 # Usage:
-#   ./install.sh [--dry-run] [ENV ...]
-#     ENV        one or more env names (mace, sevennet, ...). Default: all recipes.
+#   ./install.sh [--dry-run] [TARGET ...]
+#     TARGET     one or more env names (mace, sevennet, ...) OR registered model
+#                names (MACE, SevenNet, ...), case-insensitive. Model names are
+#                resolved to their env via models.json, so 'install.sh MACE',
+#                'install.sh mace', and 'install.sh SevenNet' all work.
+#                Default: all recipes.
 #     --dry-run  print the plan and exit WITHOUT downloading/installing anything
 #                (the no-network / contributor inspection path).
 #
@@ -58,11 +62,65 @@ if [ "${#ALL_ENVS[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# ── Resolve an argument to an env name ──
+# Accepts EITHER an env name (e.g. 'mace') OR a registered MODEL name
+# (e.g. 'MACE', 'SevenNet'), case-insensitively. A model name is mapped to its
+# env via the 'env' field in models.json. Prints the resolved env on stdout, or
+# echoes the original argument unchanged if nothing matches (the caller then
+# SKIPs it with a clear message). This is why 'install.sh MACE' and
+# 'install.sh mace' and 'install.sh SevenNet' all work.
+MODELS_JSON="$OH_MY_MLIP_HOME/models.json"
+
+resolve_to_env() {
+  local arg="$1" lower env_match
+  # 1) Direct (case-insensitive) match against an env recipe name.
+  lower="$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]')"
+  for env_match in "${ALL_ENVS[@]}"; do
+    if [ "$lower" = "$(printf '%s' "$env_match" | tr '[:upper:]' '[:lower:]')" ]; then
+      printf '%s\n' "$env_match"
+      return 0
+    fi
+  done
+  # 2) Treat the arg as a registered MODEL name; map model -> env via models.json
+  #    (case-insensitive on the model key). Python is used only to read JSON; if
+  #    it (or the file) is unavailable we fall through to returning the arg as-is.
+  if [ -e "$MODELS_JSON" ] && command -v python3 >/dev/null 2>&1; then
+    env_match="$(MODELS_JSON="$MODELS_JSON" ARG="$arg" python3 - <<'PYEOF' 2>/dev/null || true
+import json
+import os
+
+try:
+    with open(os.environ["MODELS_JSON"], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    raise SystemExit(0)
+
+want = os.environ["ARG"].lower()
+for name, info in data.items():
+    if name.startswith("_") or not isinstance(info, dict):
+        continue
+    if name.lower() == want and isinstance(info.get("env"), str):
+        print(info["env"])
+        break
+PYEOF
+)"
+    if [ -n "$env_match" ]; then
+      printf '%s\n' "$env_match"
+      return 0
+    fi
+  fi
+  # 3) No match -> echo the arg unchanged; the caller SKIPs it loudly.
+  printf '%s\n' "$arg"
+}
+
 # If no env names were given, target every recipe.
 if [ "${#REQUESTED[@]}" -eq 0 ]; then
   TARGETS=("${ALL_ENVS[@]}")
 else
-  TARGETS=("${REQUESTED[@]}")
+  TARGETS=()
+  for arg in "${REQUESTED[@]}"; do
+    TARGETS+=("$(resolve_to_env "$arg")")
+  done
 fi
 
 # ── Detect conda / mamba (skipped under --dry-run so the plan always prints) ──
