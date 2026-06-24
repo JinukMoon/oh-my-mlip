@@ -39,6 +39,19 @@ _Provenance:_ dataset `raw_data/BackSingle2018_adsorption.json` (fetched by
 /TGM `models.json` MACE-MPA-0 inference line exactly. The rebuilt env was deleted
 after the run (disk reclaim).
 
+## SevenNet (7net-mf-ompa, modal=mpa)
+
+| Rung | Result |
+|---|---|
+| **0. build + import + calc** | ✅ `install.sh sevennet` builds clean on WSL (RTX 4060 Ti): torch 2.7.1+cu126 CUDA-available, sevenn 0.12.2.dev0 (git sha `e72eb2c9`, the /TGM pin), e3nn 0.5.6, cuequivariance 0.8.0. `SevenNetCalculator` imports and computes; checkpoint `7net-mf-ompa` auto-downloads. |
+| **T2a. single-point energy (cross-GPU)** | ✅ **PASS** — 6 fixed BackSingle2018 structures, identical `SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=False)` on both sides (plain path; oeq is a speed accel, not a different model). Our RTX 4060 Ti vs /TGM A4500. |
+| T2b / T3 | ⏳ pending |
+
+**max |diff| = 3.05e-05 eV · max |diff|/atom = 9.2e-07 eV/atom** (tol 1e-3 eV/atom).
+Most structures bit-identical; the two adslabs differ by 3e-5 eV — float32 round-off
+(SevenNet's default dtype is float32, vs MACE's float64), well within tolerance.
+Our deterministically-rebuilt SevenNet env reproduces the validated hub. Env deleted after.
+
 ## Method (reproducible)
 - Our side: `install.sh mace` → `envs/mace/bin/python` runs the single-point on the
   fixed structures with `mace_mp(model="medium-mpa-0", dispersion=False,
