@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "description": "oh-my-mlip distribution manifest. The resolver (oh_my_mlip/fetch.py) reads this to map an env -> its conda-pack tarball on the Hugging Face Hub, verify integrity, and refuse to unpack on a host below the env's minimum NVIDIA driver. One HF repo per env.",
+    "readonly": true,
+    "schema": {
+      "<env>": {
+        "env": "conda env name; matches models.json '<framework>'.env and the unpack dir under ${OH_MY_MLIP_HOME}/envs/<env>",
+        "hf_repo": "Hugging Face Hub repo id hosting the conda-pack tarball (one repo per env)",
+        "revision": "pinned HF revision (tag/commit) for reproducibility; never 'main'",
+        "sha256": "sha256 of the tarball; the resolver verifies this after download before unpack",
+        "unpack_size_bytes": "on-disk size after conda-unpack, for free-space precheck (integer bytes)",
+        "min_driver_version": "minimum CUDA driver version the env's torch build requires; when recorded, the resolver compares it against the host driver (torch._C._cuda_getDriverVersion) and prints the install.sh fallback command if the host is lower. While it carries the 'TODO-on-upload' placeholder the comparison is skipped."
+      }
+    },
+    "placeholder_marker": "TODO-on-upload",
+    "note": "Seeded for the v1-shipped envs only (MACE, SevenNet). sha256 / unpack_size_bytes / min_driver_version are filled by scripts/build_conda_pack.sh + scripts/publish_hf.py at upload time; until then they carry the literal 'TODO-on-upload' marker and the resolver must treat such entries as not-yet-publishable."
+  },
+
+  "mace": {
+    "env": "mace",
+    "hf_repo": "TODO-on-upload",
+    "revision": "TODO-on-upload",
+    "sha256": "TODO-on-upload",
+    "unpack_size_bytes": "TODO-on-upload",
+    "min_driver_version": "TODO-on-upload"
+  },
+
+  "sevennet": {
+    "env": "sevennet",
+    "hf_repo": "TODO-on-upload",
+    "revision": "TODO-on-upload",
+    "sha256": "TODO-on-upload",
+    "unpack_size_bytes": "TODO-on-upload",
+    "min_driver_version": "TODO-on-upload"
+  }
+}

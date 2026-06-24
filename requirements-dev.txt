@@ -1,0 +1,17 @@
+# oh-my-mlip — dev / CI dependencies
+# Install with: pip install -r requirements-dev.txt
+#
+# These are the ONLY packages needed to run the GPU-free CI suite locally:
+#   pytest         — test runner
+#   jsonschema     — JSON-Schema validation of models.json + dist_manifest.json
+#
+# No torch, ase, or conda env is required for the CI steps.
+
+pytest>=7.0
+jsonschema>=4.0
+
+# Optional: shellcheck is a native binary, not a pip package.
+# Install separately:
+#   apt install shellcheck        (Debian/Ubuntu)
+#   conda install -c conda-forge shellcheck
+#   brew install shellcheck       (macOS)

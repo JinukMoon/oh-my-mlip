@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "oh-my-mlip/models.schema.json",
+  "title": "oh-my-mlip models.json",
+  "description": "JSON Schema for models.json. Every model version must carry the four honesty fields: gated, weights, validation, and license_url. These guard against an 'all-validated' overclaim.",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^_": {
+      "description": "_meta and any other underscore-prefixed keys are free-form.",
+      "type": "object"
+    },
+    "^[A-Za-z]": {
+      "description": "A framework entry (e.g. MACE, SevenNet, NequIP).",
+      "type": "object",
+      "required": ["env", "python", "versions"],
+      "additionalProperties": true,
+      "properties": {
+        "env": {
+          "type": "string",
+          "minLength": 1,
+          "description": "conda env name; unpack dir under ${OH_MY_MLIP_HOME}/envs/<env>"
+        },
+        "python": {
+          "type": "string",
+          "minLength": 1,
+          "description": "interpreter path (${OH_MY_MLIP_HOME}-relative)"
+        },
+        "default_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "for a multi-version framework, the version key resolve() selects when version=None; must be one of this framework's 'versions' keys (cross-checked in tests/test_schemas.py + resolve())"
+        },
+        "import": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "env_run": {
+          "type": "string",
+          "description": "key=value env-var prefix; parsed through parse_env_run allowlist — never raw shell"
+        },
+        "arch_pinned": {
+          "type": "boolean"
+        },
+        "note": {"type": "string"},
+        "status": {"type": "string"},
+        "model_source": {"type": "string"},
+        "repo": {"type": "string"},
+        "torch": {"type": "string"},
+        "backend_note": {"type": "string"},
+        "versions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/definitions/version_entry"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "version_entry": {
+      "type": "object",
+      "description": "Per-version data. The three honesty fields (gated, weights, validation) are always required. At least one of 'inference' (plain) or both 'inference_sm86'+'inference_sm89' (arch-pinned) must be present.",
+      "required": ["gated", "weights", "validation"],
+      "additionalProperties": true,
+      "oneOf": [
+        {
+          "description": "Non-arch-pinned version: plain inference array required.",
+          "required": ["inference"],
+          "not": {"required": ["inference_sm86"]}
+        },
+        {
+          "description": "Arch-pinned version: both inference_sm86 and inference_sm89 required.",
+          "required": ["inference_sm86", "inference_sm89"]
+        }
+      ],
+      "properties": {
+        "mlip_name": {"type": "string"},
+        "training_set": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "gated": {
+          "type": "boolean",
+          "description": "true -> weights require accepting an upstream license + HF_TOKEN; never redistributed here"
+        },
+        "license_url": {
+          "type": ["string", "null"],
+          "description": "URL of the upstream license page (required when gated=true; null when gated=false)"
+        },
+        "weights": {
+          "type": "string",
+          "enum": ["bundled", "auto-download", "on-demand-hf"],
+          "description": "how weights are obtained"
+        },
+        "validation": {
+          "type": "string",
+          "enum": ["validated_sm86", "validated_sm89", "gpu_pending", "cpu_only"],
+          "description": "host-GPU validation state (guards against an 'all-validated' overclaim)"
+        },
+        "inference": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "calculator construction code lines (intra-env, non-arch-pinned)"
+        },
+        "inference_sm86": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "arch-pinned inference for sm86 (A5000/A6000)"
+        },
+        "inference_sm89": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "arch-pinned inference for sm89 (L40S)"
+        },
+        "arch_pinned": {
+          "type": "boolean"
+        },
+        "note": {"type": "string"},
+        "status": {"type": "string"}
+      }
+    }
+  }
+}

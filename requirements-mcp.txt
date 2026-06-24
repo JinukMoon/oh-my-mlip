@@ -1,0 +1,11 @@
+# oh-my-mlip — optional MCP server extra
+# Install with: pip install -r requirements-mcp.txt
+#
+# This is an OPTIONAL extra. The core oh_my_mlip package is path-importable and
+# never requires mcp; only running the MCP server (oh_my_mlip/mcp_server.py)
+# needs it. The mcp import in mcp_server.py is lazily guarded, so importing
+# oh_my_mlip works fine without this installed.
+#
+# Launch the server:  python -m oh_my_mlip.mcp_server
+
+mcp>=1.0

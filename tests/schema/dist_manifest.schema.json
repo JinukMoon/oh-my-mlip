@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "oh-my-mlip/dist_manifest.schema.json",
+  "title": "oh-my-mlip dist_manifest.json",
+  "description": "JSON Schema for dist_manifest.json. Maps conda env names to their HF-hosted conda-pack tarball metadata.",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^_": {
+      "description": "_meta and other underscore-prefixed keys are free-form.",
+      "type": "object"
+    },
+    "^[a-z]": {
+      "description": "A per-env distribution entry.",
+      "type": "object",
+      "required": ["env", "hf_repo", "revision", "sha256", "unpack_size_bytes", "min_driver_version"],
+      "additionalProperties": false,
+      "properties": {
+        "env": {
+          "type": "string",
+          "minLength": 1,
+          "description": "conda env name; must match models.json framework env field"
+        },
+        "hf_repo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hugging Face Hub repo id or 'TODO-on-upload' placeholder"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "pinned HF revision or 'TODO-on-upload'"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1,
+          "description": "sha256 of the tarball or 'TODO-on-upload'"
+        },
+        "unpack_size_bytes": {
+          "description": "on-disk size after conda-unpack (integer bytes) or 'TODO-on-upload'",
+          "oneOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "string", "const": "TODO-on-upload"}
+          ]
+        },
+        "min_driver_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "minimum NVIDIA driver version or 'TODO-on-upload'"
+        }
+      }
+    }
+  }
+}

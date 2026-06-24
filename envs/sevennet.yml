@@ -1,0 +1,34 @@
+# oh-my-mlip env recipe: SevenNet (sevenn)
+#
+# Build-from-recipe FALLBACK for the SevenNet env. PRIMARY distribution is the
+# relocatable conda-pack tarball (see dist_manifest.json); this recipe is what
+# install.sh uses when the tarball path is unavailable or the host needs a
+# host-correct rebuild.
+#
+# Pins mirror the validated internal setup (SevenNet: python 3.10, torch cu121).
+#   - torch is pinned to a CUDA 12.1 build (cu121) so the bundled CUDA runtime
+#     matches the validated D3 kernel; the host NVIDIA driver must satisfy the
+#     min-driver floor recorded in dist_manifest.json.
+#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
+#     downgrading torch's CUDA libraries.
+#   - SevenNet checkpoints (7net-mf-ompa, 7net-omni) ship inside the sevenn
+#     package; no weights are bundled separately in this recipe.
+name: sevennet
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  # CUDA 12.1 toolchain (provides nvcc for the first-run D3 compile)
+  - pytorch-cuda=12.1
+  - pytorch=2.4.*
+  - cuda-nvcc=12.1.*
+  - numpy<2
+  - ase>=3.23
+  - pip:
+      - sevenn
+      # catbench LAST and isolated; see header note.
+      - --no-deps
+      - catbench

@@ -1,0 +1,40 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- conda-pack tarballs / packaged envs (never commit multi-GB artifacts) ---
+*.tar.gz
+*.tar
+*.tgz
+envs/*/
+
+# --- Model weights / checkpoints (gated weights must never be committed) ---
+*.pt
+*.pt2
+*.pth
+*.ckpt
+*.model
+*.so
+
+# --- Caches ---
+.cache/
+*.log
+.DS_Store
+
+# --- OMC orchestration state (never publish) ---
+.omc/
+.ci-pending/
