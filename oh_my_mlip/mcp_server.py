@@ -86,11 +86,11 @@ def structure_to_atoms(structure: Any):
     runtime). Raises ``ValueError`` with an actionable message on bad input.
     """
     if isinstance(structure, str):
-        from ase.io import read
-
         path = Path(structure).expanduser()
         if not path.exists():
             raise ValueError(f"structure path does not exist: {structure!r}")
+        from ase.io import read
+
         return read(str(path))
 
     if not isinstance(structure, dict):
@@ -100,21 +100,27 @@ def structure_to_atoms(structure: Any):
             f"got {type(structure).__name__}"
         )
 
-    import numpy as np
-    from ase import Atoms
-
-    # Full Atoms.todict() round-trip: it carries 'numbers' (+ positions/cell/pbc).
-    if "numbers" in structure and "symbols" not in structure:
-        from oh_my_mlip._worker import decode_atoms
-
-        return decode_atoms(structure)
-
-    # Simple {symbols, positions, cell?, pbc?} form.
-    if "symbols" not in structure or "positions" not in structure:
+    # Validate the dict shape BEFORE importing numpy/ase, so malformed input
+    # raises a clear ValueError even on a host without those deps (e.g. the
+    # GPU-free CI runner).
+    is_todict = "numbers" in structure and "symbols" not in structure
+    if not is_todict and (
+        "symbols" not in structure or "positions" not in structure
+    ):
         raise ValueError(
             "structure dict must contain 'symbols' and 'positions' "
             "(or be a full Atoms.todict() with 'numbers')"
         )
+
+    import numpy as np
+    from ase import Atoms
+
+    # Full Atoms.todict() round-trip: it carries 'numbers' (+ positions/cell/pbc).
+    if is_todict:
+        from oh_my_mlip._worker import decode_atoms
+
+        return decode_atoms(structure)
+
     kwargs: dict[str, Any] = {
         "symbols": structure["symbols"],
         "positions": np.asarray(structure["positions"], dtype=float),

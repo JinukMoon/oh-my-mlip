@@ -89,6 +89,7 @@ def test_mcp_server_module_constants_present():
 
 # ── structure -> Atoms conversion (GPU-free; needs ase, present everywhere) ──
 def test_structure_to_atoms_simple_dict():
+    pytest.importorskip("ase")
     atoms = mcp_server.structure_to_atoms(
         {
             "symbols": "H2O",
@@ -100,6 +101,7 @@ def test_structure_to_atoms_simple_dict():
 
 
 def test_structure_to_atoms_with_cell_and_pbc():
+    pytest.importorskip("ase")
     atoms = mcp_server.structure_to_atoms(
         {
             "symbols": "Cu",
@@ -113,6 +115,7 @@ def test_structure_to_atoms_with_cell_and_pbc():
 
 
 def test_structure_to_atoms_todict_roundtrip():
+    pytest.importorskip("ase")
     from ase.build import bulk
 
     original = bulk("Cu", "fcc", a=3.61, cubic=True)
@@ -124,6 +127,7 @@ def test_structure_to_atoms_todict_roundtrip():
 
 
 def test_structure_to_atoms_path(tmp_path):
+    pytest.importorskip("ase")
     from ase.build import bulk
 
     p = tmp_path / "cu.xyz"
