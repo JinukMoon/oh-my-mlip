@@ -87,6 +87,21 @@ jobs:
       - name: Verify no Hugging Face token literal leaked
         run: python scripts/verify_no_token.py
 
+      # ── 7c. Accel-block shape check (GPU-free, honesty contract) ──────────────
+      # Asserts every models.json `accel` block is GPU-UNVERIFIED (verified=false,
+      # last_gpu_verified=null, recognized provenance) and prints the
+      # "shape-only; gpu_unverified" banner. No GPU / torch / conda. See
+      # docs/compile.md.
+      - name: Verify accel blocks honor the GPU-unverified contract
+        run: python scripts/verify_compile.py
+
+      # ── 7d. Weight-integrity table (GPU-free) ────────────────────────────────
+      # Renders the recorded validated fingerprints (downloaded == validated).
+      # No download/hash here — just confirms the table runs and the registry
+      # parses. See docs/weights_integrity.md.
+      - name: Weight-integrity fingerprint table
+        run: python scripts/verify_weights_integrity.py
+
       # ── 8. Full pytest suite ─────────────────────────────────────────────────
       - name: Run all tests (no GPU)
         run: |

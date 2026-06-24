@@ -12,8 +12,10 @@
 #     first run (matching the torch CUDA minor).
 #   - orb-models is pinned to the validated version; torch-dftd is its top-level
 #     dispersion dep.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 name: orb
 channels:
   - conda-forge
@@ -29,6 +31,3 @@ dependencies:
       - torch==2.7.1+cu126
       - orb-models==0.5.4
       - torch-dftd==0.5.1
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

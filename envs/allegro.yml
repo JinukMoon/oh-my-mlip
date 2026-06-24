@@ -18,8 +18,10 @@
 #     from mir-group/pair_nequip_allegro patched into LAMMPS (libtorch + KOKKOS).
 #     The source is public but there is NO pip path — it must be compiled per host
 #     /GPU, which is why this recipe stays a candidate until that build is verified.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 # LAMMPS note (not an install line): clone lammps + mir-group/pair_nequip_allegro,
 #   run patch_lammps.sh, then cmake build with -DNEQUIP_AOT_COMPILE=ON -DPKG_KOKKOS=ON
 #   (needs the 10 Sep 2025 LAMMPS release or newer). No pip wheel exists for this.
@@ -41,6 +43,3 @@ dependencies:
       - cuequivariance
       - cuequivariance-torch
       - e3nn
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

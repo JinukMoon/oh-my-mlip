@@ -17,6 +17,12 @@
 #                Default: all recipes.
 #     --dry-run  print the plan and exit WITHOUT downloading/installing anything
 #                (the no-network / contributor inspection path).
+#     --with-accel  opt-in (default OFF): also PRINT the curated GPU compile/accel
+#                commands (NequIP/Allegro/SevenNet) for each targeted env. These
+#                are upstream-doc, GPU-UNVERIFIED recipes (see docs/compile.md);
+#                this flag only surfaces them — it does NOT run a GPU compile.
+#                '--with-accel --dry-run' prints the install plan AND the accel
+#                commands, installing nothing.
 #
 # Requires conda (or mamba) on PATH. D3 first-run compile needs nvcc; if absent
 # this script degrades D3 OFF with a clear message (the MLIP still runs).
@@ -29,13 +35,15 @@ export OH_MY_MLIP_HOME="${OH_MY_MLIP_HOME:-$SCRIPT_DIR}"
 ENVS_DIR="$OH_MY_MLIP_HOME/envs"
 
 DRY_RUN=0
+WITH_ACCEL=0
 REQUESTED=()
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --with-accel) WITH_ACCEL=1 ;;
     -h|--help)
-      sed -n '2,22p' "${BASH_SOURCE[0]:-$0}"
+      sed -n '2,28p' "${BASH_SOURCE[0]:-$0}"
       exit 0
       ;;
     -*)
@@ -117,6 +125,53 @@ PYEOF
   printf '%s\n' "$arg"
 }
 
+# ── Opt-in accel surfacing (--with-accel) ──
+# PRINTS the curated GPU compile/accel command(s) for an env, when the registry
+# records an accel block for that framework. Upstream-doc, GPU-UNVERIFIED: this
+# only surfaces the command (never runs a GPU compile). See docs/compile.md.
+print_accel_for_env() {
+  local env_name="$1" py_bin
+  py_bin="$(command -v python3 || command -v python || true)"
+  [ -e "$MODELS_JSON" ] && [ -n "$py_bin" ] || return 0
+  MODELS_JSON="$MODELS_JSON" ENV="$env_name" "$py_bin" - <<'PYEOF' 2>/dev/null || true
+import json
+import os
+
+try:
+    with open(os.environ["MODELS_JSON"], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    raise SystemExit(0)
+
+env = os.environ["ENV"]
+for name, info in data.items():
+    if name.startswith("_") or not isinstance(info, dict):
+        continue
+    if info.get("env") != env:
+        continue
+    blocks = []
+    for key in ("accel", "accel_lammps"):
+        blk = info.get(key)
+        if isinstance(blk, dict):
+            blocks.append((key, blk))
+    for version, vinfo in info.get("versions", {}).items():
+        blk = vinfo.get("accel") if isinstance(vinfo, dict) else None
+        if isinstance(blk, dict):
+            blocks.append((f"{version}.accel", blk))
+    if not blocks:
+        print(f"    (no accel block recorded for env '{env}')")
+        continue
+    for label, blk in blocks:
+        print(f"    [{name}.{label}] tool={blk.get('tool')}  (upstream-doc, GPU-unverified)")
+        print(f"      install: {blk.get('install')}")
+        if blk.get("compile_cmd"):
+            print(f"      compile: {blk.get('compile_cmd')}")
+        print(f"      load:    {blk.get('load_note')}")
+        if blk.get("verify"):
+            print(f"      verify:  {blk.get('verify')}")
+PYEOF
+}
+
 # If no env names were given, target every recipe.
 if [ "${#REQUESTED[@]}" -eq 0 ]; then
   TARGETS=("${ALL_ENVS[@]}")
@@ -151,6 +206,14 @@ echo "oh-my-mlip install (fallback / build-from-recipe)"
 echo "  OH_MY_MLIP_HOME = $OH_MY_MLIP_HOME"
 echo "  recipes dir     = $ENVS_DIR"
 echo "  targets         = ${TARGETS[*]}"
+if [ "$WITH_ACCEL" -eq 1 ]; then
+  echo "  accel           = ON (--with-accel): curated GPU compile/accel commands"
+  echo "                    will be PRINTED per env (upstream-doc, GPU-unverified;"
+  echo "                    nothing GPU-compiled). See docs/compile.md."
+else
+  echo "  accel           = OFF (default). Pass --with-accel to print the curated"
+  echo "                    GPU compile/accel commands (NequIP/Allegro/SevenNet)."
+fi
 if [ "$NVCC_OK" -eq 1 ]; then
   echo "  nvcc            = $(command -v nvcc)  (D3 first-run compile enabled)"
 else
@@ -171,8 +234,13 @@ if [ "$DRY_RUN" -eq 1 ]; then
     recipe="$ENVS_DIR/$env_name.yml"
     if [ -e "$recipe" ]; then
       echo "  would create env '$env_name' from $recipe -> $ENVS_DIR/$env_name"
+      echo "    then: $ENVS_DIR/$env_name/bin/pip install --no-deps catbench==1.1.2"
     else
       echo "  SKIP '$env_name': no recipe at $recipe"
+    fi
+    if [ "$WITH_ACCEL" -eq 1 ]; then
+      echo "  [--with-accel] curated GPU compile/accel for '$env_name' (printed only):"
+      print_accel_for_env "$env_name"
     fi
   done
   echo "  would: source $OH_MY_MLIP_HOME/env.sh"
@@ -203,6 +271,14 @@ install_one() {
   echo "  creating env '$env_name' from $recipe ..."
   "$CONDA_BIN" env create --prefix "$prefix" --file "$recipe"
 
+  # Install catbench as a post-create step, WITHOUT its deps. catbench is
+  # deliberately NOT in the recipe pip block: a bare '--no-deps' line inside a
+  # conda pip block is an invalid requirement and breaks 'conda env create'. Run
+  # here as a real pip command, where '--no-deps' is a valid flag, so catbench's
+  # pins cannot downgrade torch's CUDA libraries.
+  echo "  installing catbench (--no-deps) into '$env_name' ..."
+  "$prefix/bin/pip" install --no-deps catbench==1.1.2
+
   # Trigger first-run D3 compile so the user does not pay the cost mid-workflow.
   if [ "$NVCC_OK" -eq 1 ]; then
     echo "  triggering first-run D3 compile for '$env_name' ..."
@@ -222,6 +298,12 @@ PYEOF
 
   : > "$sentinel"
   echo "  '$env_name' ready -> $prefix/bin/python"
+
+  if [ "$WITH_ACCEL" -eq 1 ]; then
+    echo "  [--with-accel] curated GPU compile/accel for '$env_name' (printed only;"
+    echo "    upstream-doc, GPU-unverified — run on your GPU host; see docs/compile.md):"
+    print_accel_for_env "$env_name"
+  fi
 }
 
 rc=0

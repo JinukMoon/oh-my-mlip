@@ -114,3 +114,78 @@ def test_lint_catches_missing_recipe(tmp_path: Path):
 
     errors, _ = mod.lint(envs_dir=envs, models_json=models, expected_json=expected)
     assert any("mace" in e and "no" in e.lower() and "recipe" in e for e in errors), errors
+
+
+# ── Regression guards for the conda-env-create --no-deps build bug ─────────────
+
+def test_real_recipes_have_no_bare_no_deps_and_no_catbench():
+    """The committed recipes must contain no bare '- --no-deps' line and no
+    catbench install line in any pip block (both moved to install.sh)."""
+    for recipe in sorted(ENVS_DIR.glob("*.yml")):
+        if recipe.name.startswith("_"):
+            continue
+        for lineno, line in enumerate(recipe.read_text(encoding="utf-8").splitlines(), 1):
+            s = line.strip()
+            assert s != "- --no-deps", f"{recipe.name}:{lineno} has a bare '- --no-deps'"
+            assert not s.startswith("- catbench=="), (
+                f"{recipe.name}:{lineno} still installs catbench in the recipe"
+            )
+
+
+def test_real_tree_lint_passes_new_checks():
+    """The real tree (recipes + install.sh) passes the full lint, including the
+    no-bare-no-deps guard (check 6) and the install.sh catbench post-step
+    (check 7)."""
+    mod = _load_lint_module()
+    errors, _ = mod.lint()
+    assert errors == [], errors
+
+
+def test_lint_catches_bare_no_deps_in_recipe(tmp_path: Path):
+    """Re-introducing a bare '- --no-deps' line in a recipe pip block is caught
+    by check 6 (the exact build bug this guards against)."""
+    mod = _load_lint_module()
+    envs, models, expected = _stage_tree(tmp_path)
+
+    mace = envs / "mace.yml"
+    text = mace.read_text(encoding="utf-8")
+    # Append a bare --no-deps line to the pip block (6-space indent like siblings).
+    broken = text.rstrip("\n") + "\n      - --no-deps\n"
+    mace.write_text(broken, encoding="utf-8")
+
+    errors, _ = mod.lint(envs_dir=envs, models_json=models, expected_json=expected)
+    assert any("mace.yml" in e and "--no-deps" in e for e in errors), errors
+
+
+def test_lint_catches_missing_catbench_post_step_in_install_sh(tmp_path: Path):
+    """An install.sh without the 'pip install --no-deps catbench==...' post-step
+    is caught by check 7."""
+    mod = _load_lint_module()
+    envs, models, expected = _stage_tree(tmp_path)
+
+    fake_install = tmp_path / "install.sh"
+    fake_install.write_text("#!/usr/bin/env bash\necho no catbench here\n", encoding="utf-8")
+
+    errors, _ = mod.lint(
+        envs_dir=envs, models_json=models, expected_json=expected,
+        install_sh=fake_install,
+    )
+    assert any("install.sh" in e and "catbench" in e for e in errors), errors
+
+
+def test_lint_accepts_present_catbench_post_step_in_install_sh(tmp_path: Path):
+    """An install.sh that DOES carry the catbench post-step satisfies check 7."""
+    mod = _load_lint_module()
+    envs, models, expected = _stage_tree(tmp_path)
+
+    fake_install = tmp_path / "install.sh"
+    fake_install.write_text(
+        '#!/usr/bin/env bash\n"$prefix/bin/pip" install --no-deps catbench==1.1.2\n',
+        encoding="utf-8",
+    )
+
+    errors, _ = mod.lint(
+        envs_dir=envs, models_json=models, expected_json=expected,
+        install_sh=fake_install,
+    )
+    assert not any("install.sh" in e and "catbench" in e for e in errors), errors

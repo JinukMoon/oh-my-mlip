@@ -9,6 +9,14 @@ Structural checks (any failure -> non-zero exit):
   3. Each recipe's `python=X.Y.Z` pin matches envs/_expected.json.
   4. Each recipe's `torch==...+cuNNN` line has a matching
      `--extra-index-url .../cuNNN` (same NNN).
+  6. No recipe pip block contains a bare `- --no-deps` line. (Regression guard:
+     a standalone `--no-deps` is an invalid requirement to conda's pip-block
+     parser and silently breaks `conda env create -f`.) catbench is NOT in any
+     recipe; install.sh installs it post-create as `pip install --no-deps
+     catbench==...`.
+  7. install.sh installs catbench as a post-create step (a real
+     `pip install --no-deps catbench==...` line is present), since it was
+     removed from the recipe pip blocks.
 
 Informational (never a failure):
   5. Reports the `# build_status: clean|candidate` split, with candidate reasons.
@@ -28,6 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ENVS_DIR = REPO_ROOT / "envs"
 MODELS_JSON = REPO_ROOT / "models.json"
 EXPECTED_JSON = ENVS_DIR / "_expected.json"
+INSTALL_SH = REPO_ROOT / "install.sh"
 
 try:  # PyYAML is a dev dependency; prefer it, but degrade gracefully.
     import yaml  # type: ignore
@@ -43,6 +52,10 @@ _TORCH_RE = re.compile(r"torch\s*==\s*\S*\+cu(\d+)")
 _INDEX_RE = re.compile(r"--extra-index-url\s+\S*/whl/cu(\d+)")
 _STATUS_RE = re.compile(r"^#\s*build_status:\s*(\w+)", re.IGNORECASE)
 _REASON_RE = re.compile(r"^#\s*candidate-reason:\s*(.+)$", re.IGNORECASE)
+# A bare `- --no-deps` list item inside the pip block (the build-breaking bug).
+_BARE_NODEPS_RE = re.compile(r"^-\s+--no-deps\s*$")
+# install.sh's catbench post-create step: `pip install --no-deps catbench==...`.
+_INSTALL_CATBENCH_RE = re.compile(r"--no-deps\s+catbench==")
 
 
 def _load_json(path: Path) -> dict:
@@ -85,6 +98,7 @@ def lint(
     envs_dir: Path = ENVS_DIR,
     models_json: Path = MODELS_JSON,
     expected_json: Path = EXPECTED_JSON,
+    install_sh: Path = INSTALL_SH,
 ) -> tuple[list[str], dict[str, list[str]]]:
     """Run the lint. Returns (errors, status_split).
 
@@ -153,6 +167,18 @@ def lint(
                     f"(envs/_expected.json)"
                 )
 
+        # Check 6: no bare `- --no-deps` list item in the pip block. A standalone
+        # `--no-deps` is an invalid requirement to conda's pip-block parser and
+        # silently breaks `conda env create -f` (catbench is installed by
+        # install.sh post-create instead).
+        for lineno, line in enumerate(lines, start=1):
+            if _BARE_NODEPS_RE.match(line.strip()):
+                errors.append(
+                    f"{recipe.name}:{lineno}: bare '- --no-deps' in pip block "
+                    f"(invalid requirement; breaks 'conda env create'). catbench "
+                    f"is installed by install.sh post-create instead."
+                )
+
         # Check 5 (informational): build_status header (line 1) + reason.
         status = None
         for line in lines:
@@ -176,6 +202,19 @@ def lint(
             errors.append(
                 f"{recipe.name}: missing/invalid '# build_status:' header "
                 f"(got {status!r})"
+            )
+
+    # Check 7: install.sh installs catbench post-create (a real
+    # `pip install --no-deps catbench==...` line), since catbench was removed
+    # from the recipe pip blocks.
+    if not install_sh.is_file():
+        errors.append(f"install.sh not found at {install_sh}")
+    else:
+        install_text = install_sh.read_text(encoding="utf-8")
+        if not _INSTALL_CATBENCH_RE.search(install_text):
+            errors.append(
+                "install.sh: missing catbench post-create step "
+                "(expected a 'pip install --no-deps catbench==...' line)"
             )
 
     return errors, status_split
@@ -202,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
 
-    print("LINT OK: all structural checks (1-4) passed.")
+    print("LINT OK: all structural checks (1-4, 6-7) passed.")
     return 0
 
 

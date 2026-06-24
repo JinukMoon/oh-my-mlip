@@ -13,8 +13,10 @@
 #   - metatrain is the framework engine (PET models run through it); upet is the
 #     PET model package and the metatensor / metatomic-torch stack are its
 #     top-level deps. All are pip-resolvable wheels.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 name: pet
 channels:
   - conda-forge
@@ -32,6 +34,3 @@ dependencies:
       - upet==0.1.0
       - metatomic-torch==0.1.7
       - metatensor-torch==0.8.3
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

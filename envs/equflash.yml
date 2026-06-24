@@ -19,8 +19,10 @@
 #   - flashTP (SNU-ARC/flashTP, MIT) is a CUDA source build (~10 min) and is
 #     needed ONLY by EquFlash v1's flashtp backend — not by v2. It is the
 #     compile blocker that keeps this recipe a candidate until build-verified.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 # Compile note: EquFlash v1 needs `git clone https://github.com/SNU-ARC/flashTP &&
 #   pip install . --no-build-isolation` (CUDA compile). V2 does NOT need flashTP.
 name: equflash
@@ -48,6 +50,3 @@ dependencies:
       # GGNN framework package (public): SamsungDS/GGNN.
       - GGNN @ git+https://github.com/SamsungDS/GGNN.git
       # flashTP (SNU-ARC/flashTP) is a v1-only CUDA source build; see compile note.
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

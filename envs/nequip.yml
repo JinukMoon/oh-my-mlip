@@ -15,8 +15,10 @@
 #   - nequip is pinned to the validated version; e3nn is its top-level dep.
 #   - openequivariance ships sdist-only and compiles against nvcc + the installed
 #     torch at install time; this is the reason the build is marked candidate.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 name: nequip
 channels:
   - conda-forge
@@ -33,6 +35,3 @@ dependencies:
       - nequip==0.15.0
       - e3nn
       - openequivariance==0.4.1
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

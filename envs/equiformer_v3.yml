@@ -19,8 +19,10 @@
 #     (upstream facebookresearch/fairchem @ 977a80328f2be44649b414a9907a1d6ef2f81e95),
 #     installed EDITABLE (`pip install -e packages/fairchem-core`). The editable
 #     vendored build is why this recipe stays a candidate until build-verified.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 # Vendored-build note: after cloning equiformer_v3 (which carries
 #   packages/fairchem-core), run `pip install -e packages/fairchem-core`.
 name: equiformer_v3
@@ -45,6 +47,3 @@ dependencies:
       # EquiformerV3 framework (atomicarchitects/equiformer_v3, MIT): public git.
       - equiformer_v3 @ git+https://github.com/atomicarchitects/equiformer_v3.git
       # vendored fairchem-core: pip install -e packages/fairchem-core (see note).
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

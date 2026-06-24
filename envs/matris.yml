@@ -14,8 +14,10 @@
 #   - matris is installed from its public git sha (resolvable). The recipe is
 #     marked candidate only because this exact pin set has not yet been
 #     build-verified end to end; there is no owner-blocked dependency.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 name: matris
 channels:
   - conda-forge
@@ -30,6 +32,3 @@ dependencies:
       - --extra-index-url https://download.pytorch.org/whl/cu130
       - torch==2.12.1+cu130
       - matris @ git+https://github.com/HPC-AI-Team/MatRIS@c16f569ca08e6905e91b64e2ee68614303e46f7f
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2

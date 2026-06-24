@@ -12,8 +12,10 @@
 #     first run (matching the torch CUDA minor).
 #   - mattersim is installed from its validated git sha; torch-geometric and e3nn
 #     are top-level deps it needs.
-#   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
-#     downgrading torch's CUDA libraries.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install --no-deps catbench==1.1.2`) so its pins
+#     cannot downgrade torch's CUDA libraries. (A bare `--no-deps` line inside
+#     a conda pip block is an invalid requirement and breaks `conda env create`.)
 name: mattersim
 channels:
   - conda-forge
@@ -30,6 +32,3 @@ dependencies:
       - mattersim @ git+https://github.com/microsoft/mattersim.git@bf13be6f6fd470fd4e299855c755ad13968620bb
       - torch-geometric==2.6.1
       - e3nn
-      # catbench LAST and isolated; see header note.
-      - --no-deps
-      - catbench==1.1.2
