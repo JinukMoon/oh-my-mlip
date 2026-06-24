@@ -12,8 +12,9 @@ name: CI (GPU-free)
 #   5. shellcheck install.sh + scripts/*.sh
 #   6. ast.parse every inference/import string in models.json (no exec)
 #   7. Status-table sync: gen_status_table.py --check
-#   8. pytest tests/ (all unit tests, no GPU)
-#   9. Registry integrity / trust-boundary negative tests
+#   8. Recipe determinism gate: verify_determinism.py
+#   9. pytest tests/ (all unit tests, no GPU)
+#   10. Registry integrity / trust-boundary negative tests
 
 on:
   push:
@@ -80,6 +81,13 @@ jobs:
       # so "all-validated" overclaims can never silently persist.
       - name: Check status lists (README + docs/model_status.md) are in sync with models.json
         run: python scripts/gen_status_table.py --check
+
+      # ── 7a. Recipe determinism gate ──────────────────────────────────────────
+      # Fails on bare pip requirements, range pins, or git installs without an
+      # exact commit SHA. Candidate recipes may only document private file://
+      # sources; clean recipes must be fully reproducible.
+      - name: Verify env recipes use deterministic pip requirements
+        run: python scripts/verify_determinism.py
 
       # ── 7b. Secret scan: no HF token literal anywhere in the tree ─────────────
       # Scans the working tree (tracked + untracked) for hf_<20+> token shapes.

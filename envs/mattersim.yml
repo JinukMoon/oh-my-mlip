@@ -33,4 +33,4 @@ dependencies:
       - torch==2.6.0+cu124
       - mattersim @ git+https://github.com/microsoft/mattersim.git@bf13be6f6fd470fd4e299855c755ad13968620bb
       - torch-geometric==2.6.1
-      - e3nn
+      - e3nn==0.5.6

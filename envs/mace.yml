@@ -35,6 +35,6 @@ dependencies:
       - --extra-index-url https://download.pytorch.org/whl/cu126
       - torch==2.7.1+cu126
       - mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363
-      - cuequivariance
-      - cuequivariance-torch
-      - e3nn
+      - cuequivariance==0.5.1
+      - cuequivariance-torch==0.5.1
+      - e3nn==0.4.4

@@ -34,4 +34,4 @@ dependencies:
       - --extra-index-url https://download.pytorch.org/whl/cu128
       - torch==2.8.0+cu128
       - fairchem-core==2.16.0
-      - e3nn
+      - e3nn==0.5.6

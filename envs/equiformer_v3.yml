@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: compile-unverified (the fairchem-core is vendored under packages/fairchem-core in atomicarchitects/equiformer_v3 and installed editable — an editable/vendored build that is not a plain pip resolve)
+# candidate-reason: equiformer_v3: public git line has no owner-approved SHA in tgm_pinmap.json - needs owner to publish exact immutable pins
 # oh-my-mlip env recipe: Equiformer V3 (atomicarchitects/equiformer_v3 + vendored fairchem-core)
 #
 # Pins mirror the validated internal setup:
@@ -13,8 +13,8 @@
 #     first run (matching the torch CUDA minor).
 #   - torch-geometric and the matching torch_scatter / torch_sparse / torch_cluster
 #     / torch_spline_conv (pt27cu128) wheels are the resolvable parts of the stack.
-#   - The framework is the public MIT repo atomicarchitects/equiformer_v3,
-#     installed via pip from its git remote.
+#   - The framework source needs an owner-approved immutable public pin; do not
+#     install a floating git remote in a deterministic recipe.
 #   - That repo VENDORS its own fairchem-core under packages/fairchem-core
 #     (upstream facebookresearch/fairchem @ 977a80328f2be44649b414a9907a1d6ef2f81e95),
 #     installed EDITABLE (`pip install -e packages/fairchem-core`). The editable
@@ -45,7 +45,7 @@ dependencies:
       - torch_sparse==0.6.18+pt27cu128
       - torch_cluster==1.6.3+pt27cu128
       - torch_spline_conv==1.2.2+pt27cu128
-      - e3nn
-      # EquiformerV3 framework (atomicarchitects/equiformer_v3, MIT): public git.
-      - equiformer_v3 @ git+https://github.com/atomicarchitects/equiformer_v3.git
+      - e3nn==0.5.6
+      # EquiformerV3 framework omitted: tgm_pinmap.json has no public git SHA.
+      # Do not install floating git+https://github.com/atomicarchitects/equiformer_v3.git.
       # vendored fairchem-core: pip install -e packages/fairchem-core (see note).

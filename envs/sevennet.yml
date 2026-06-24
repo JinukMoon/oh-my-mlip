@@ -35,6 +35,6 @@ dependencies:
       - --extra-index-url https://download.pytorch.org/whl/cu126
       - torch==2.7.1+cu126
       - sevenn @ git+https://github.com/MDIL-SNU/SevenNet.git@e72eb2c9ebf6895a9d6fa3318f0ae4409d0f9f73
-      - cuequivariance
-      - cuequivariance-torch
-      - e3nn
+      - cuequivariance==0.8.0
+      - cuequivariance-torch==0.8.0
+      - e3nn==0.5.6

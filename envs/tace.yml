@@ -1,4 +1,5 @@
-# build_status: clean
+# build_status: candidate
+# candidate-reason: tace: compile-unverified — TACE (public github.com/xvzemin/tace, pinned sha) builds a C/CUDA extension; clean once a foreign-host build is verified
 # oh-my-mlip env recipe: TACE (tace)
 #
 # Pins mirror the validated internal setup:
@@ -11,8 +12,10 @@
 #   - cuda-nvcc 13.0.* is included so the D3 dispersion kernel can compile on
 #     first run (matching the torch CUDA minor).
 #   - torch-geometric and e3nn are resolvable top-level deps of the stack.
-#   - The framework package, TACE (xvzemin/tace, MIT), is PURE PYTHON: installed
-#     via pip from its git remote with no C/CUDA/cmake extension — no compile.
+#   - The framework package TACE is the PUBLIC github.com/xvzemin/tace repo,
+#     pinned to the exact commit the validated setup used (2b2214e0...). It is a
+#     deterministic public source; the recipe stays candidate only because the
+#     C/CUDA extension build is not yet foreign-host-verified.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.2`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -33,6 +36,6 @@ dependencies:
       - --extra-index-url https://download.pytorch.org/whl/cu130
       - torch==2.11.0+cu130
       - torch-geometric==2.8.0
-      - e3nn
-      # TACE framework (xvzemin/tace, MIT): pure-Python public git, no compile.
-      - tace @ git+https://github.com/xvzemin/tace.git
+      - e3nn==0.6.0
+      # TACE framework (public github.com/xvzemin/tace, pinned sha): C/CUDA build.
+      - TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
