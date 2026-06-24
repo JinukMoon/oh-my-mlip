@@ -1,5 +1,4 @@
-# build_status: candidate
-# candidate-reason: deepmd-kit cu13x-adjacent wheel + nvidia-cu12 stack; install-test required
+# build_status: clean
 # oh-my-mlip env recipe: DeePMD-kit (deepmd-kit)
 #
 # Pins mirror the validated internal setup:
@@ -29,8 +28,11 @@ dependencies:
   - pip
   # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.8.*
-  - ase
+  - ase=3.27.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu128
       - torch==2.8.0+cu128
       - deepmd-kit==3.1.2
+      - setuptools==70.2.0
+      # deepmd-kit's load_mpi_library() needs the mpich pip package (MPI lib metadata).
+      - mpich==5.0.1
