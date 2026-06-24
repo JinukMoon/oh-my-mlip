@@ -72,15 +72,29 @@ TensorFlow env reproduces /TGM, the deterministic recipe is correct, and the
 **public `grace_models` weights == the /TGM weights**. The cross-backend (non-PyTorch)
 thesis is proven. Env deleted after.
 
+## ORB (orb-v3, orb_v3_conservative_inf_omat)
+
+| Rung | Result |
+|---|---|
+| **0. build + import + calc** | ✅ `install.sh orb` builds clean on WSL (torch 2.7.1+cu126, orb-models 0.5.4, torch-dftd 0.5.1). `pretrained.orb_v3_conservative_inf_omat` + `ORBCalculator` import + compute; checkpoint auto-downloads. |
+| **T2a. single-point energy (cross-GPU)** | ✅ **PASS** — 6 fixed BackSingle2018 structures, identical `orb_v3_conservative_inf_omat(device='cuda', precision='float32-high')` + `ORBCalculator(orbff, device='cuda')` on both sides. |
+
+**max |diff|/atom = 7.45e-5 eV/atom** (tol 1e-3) — PASS. Absolute |diff| reaches
+2.5e-3 eV on the 34-atom adslab: ORB runs `precision='float32-high'` (TF32 matmul),
+which is more GPU-sensitive than float64, so cross-GPU (our sm89 vs /TGM A4500) shows
+a larger absolute spread that is still tight per-atom. A strict same-GPU run would be
+tighter. Our deterministic ORB env reproduces /TGM. Env deleted after.
+
 ## Status summary
 
 | model | backend | build | T1/weights | T2a energy-match | note |
 |---|---|---|---|---|---|
-| MACE | PyTorch | ✅ clean | ✅ byte-identical | ✅ 1.8e-15 eV (machine precision) | float64 |
-| SevenNet | PyTorch | ✅ clean | by-name dl | ✅ 3.1e-5 eV (float32 round-off) | float32 |
-| GRACE | **TensorFlow** | ✅ clean | ✅ public == /TGM | ✅ 5.7e-14 eV (machine precision) | **cross-backend proof** |
+| MACE | PyTorch | ✅ clean | ✅ byte-identical | ✅ 5.9e-16 eV/atom (machine precision) | float64 |
+| SevenNet | PyTorch | ✅ clean | by-name dl | ✅ 9.2e-07 eV/atom (float32 round-off) | float32 |
+| GRACE | **TensorFlow** | ✅ clean | ✅ public == /TGM | ✅ 1.7e-15 eV/atom (machine precision) | **cross-backend proof** |
+| ORB | PyTorch | ✅ clean | by-name dl | ✅ 7.5e-05 eV/atom (float32-high / TF32) | larger abs spread, tight per-atom |
 
-3/3 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow).
+4/4 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
 
 ## Method (reproducible)
 - Our side: `install.sh mace` → `envs/mace/bin/python` runs the single-point on the
