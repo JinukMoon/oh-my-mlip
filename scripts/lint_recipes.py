@@ -147,10 +147,17 @@ def lint(
             )
 
         # Check 4: torch +cuNNN line has a matching --extra-index-url cuNNN.
+        # Skipped entirely for torch-free recipes (TensorFlow/JAX backends such as
+        # GRACE run on TF and declare no torch at all — there is no cu pin to check).
+        has_torch = re.search(r"-\s*torch\s*==", text) is not None
         tm = _TORCH_RE.search(text)
         im = _INDEX_RE.search(text)
-        if tm is None:
-            errors.append(f"{recipe.name}: no 'torch==...+cuNNN' pin found")
+        if not has_torch:
+            pass  # non-torch backend (e.g. GRACE/TensorFlow) — nothing to verify
+        elif tm is None:
+            errors.append(
+                f"{recipe.name}: declares torch but no 'torch==...+cuNNN' pin found"
+            )
         else:
             torch_cu = tm.group(1)
             if im is None:

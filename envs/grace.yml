@@ -1,40 +1,36 @@
-# build_status: candidate
-# candidate-reason: grace: dependency-conflict — tensorflow and torch+cu121 demand mutually-exclusive nvidia-cuda-nvrtc-cu12 pins (TF wants 12.3.107, torch+cu121 wants 12.1.x); a single pip resolve dead-ends (ResolutionImpossible). The validated /TGM env was hand-assembled with --no-deps overrides. Needs a split / --no-deps install recipe (deferred) to build deterministically on a fresh host.
+# build_status: clean
 # oh-my-mlip env recipe: GRACE (tensorpotential) — TensorFlow backend
 #
-# Pins mirror the validated internal setup: python 3.11.11 / torch 2.5.1+cu121 /
-# tensorflow 2.16.2 / tensorpotential 0.5.3 (all PUBLIC sources). install.sh
-# build-from-recipe is the PRIMARY install path. (conda-pack tarballs are planned
-# but not yet published; do not assume any are hosted.)
+# Pins mirror the validated internal setup + the OFFICIAL GRACE install
+# (gracemaker.readthedocs.io): python 3.11 / tensorflow[and-cuda]==2.16.2 /
+# tensorpotential==0.5.3 — all PUBLIC PyPI. install.sh build-from-recipe is the
+# PRIMARY path. (conda-pack tarballs are planned but not yet hosted.)
 #
-#   - GRACE runs on TensorFlow (not PyTorch); torch is present only for the
-#     optional D3 dispersion correction / torch-ema.
-#   - KNOWN BLOCKER (found by a real build): tensorpotential pulls
-#     tensorflow[and-cuda], and tensorflow's nvidia-cuda-nvrtc-cu12==12.3.107
-#     conflicts with torch+cu121's nvrtc requirement. pip cannot co-resolve them
-#     in one pass. The /TGM env worked only because torch was installed with
-#     dependency overrides. The deterministic fix (deferred) is a multi-pass
-#     install: pip install the torch+cu121 stack with --no-deps, then tensorflow
-#     + tensorpotential, OR drop torch (GRACE itself does not need it; D3 becomes
-#     unavailable). Until that recipe lands, grace is honestly candidate.
-#   - Needs legacy Keras: export TF_USE_LEGACY_KERAS=1 if keras>=3.0 is present.
+#   - GRACE is TensorFlow-ONLY — the upstream docs state there is NO PyTorch
+#     dependency. The validated /TGM env carried torch only for the optional D3
+#     dispersion correction; GRACE itself does not need it. Dropping torch removes
+#     the tensorflow[and-cuda] <-> torch+cu121 nvidia-cuda-nvrtc-cu12 conflict that
+#     made the earlier torch-bundled recipe fail to resolve, so this recipe is a
+#     clean single-pass pip install. (D3 is simply unavailable for GRACE; catbench
+#     runs fine without it.)
+#   - tensorflow[and-cuda]==2.16.2 is the upstream-recommended GPU pin (avoids a
+#     known >2.16 GPU memory-leak); it bundles its own nvidia-cu12 wheels, so no
+#     system CUDA toolkit / --extra-index-url is needed.
+#   - Needs legacy Keras: the worker/runtime must `export TF_USE_LEGACY_KERAS=1`
+#     when keras>=3.0 is present (tf_keras is pulled in as a dep).
+#   - Weights: fetch the foundation model with the official CLI
+#     `grace_models download GRACE-2L-OAM` (-> $HOME/.cache/grace, override via
+#     GRACE_CACHE); load via `from tensorpotential.calculator import TPCalculator`.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.2`, WITH deps).
 name: grace
 channels:
   - conda-forge
-  - nvidia
 dependencies:
   - python=3.11.11
   - pip
-  # CUDA 12.1 toolchain (provides nvcc for the first-run D3 compile)
-  - cuda-nvcc=12.1.*
   - ase
   - pip:
-      - --extra-index-url https://download.pytorch.org/whl/cu121
-      # NOTE: these three do NOT co-resolve in one pip pass (see candidate-reason
-      # / the KNOWN BLOCKER note above). A multi-pass / --no-deps recipe is the
-      # deferred fix; the versions below are the validated /TGM targets.
-      - tensorflow==2.16.2
+      # TensorFlow-only stack (no torch -> no nvrtc conflict). Public PyPI.
+      - tensorflow[and-cuda]==2.16.2
       - tensorpotential==0.5.3
-      - torch==2.5.1+cu121

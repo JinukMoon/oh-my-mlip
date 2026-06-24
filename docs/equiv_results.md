@@ -52,26 +52,35 @@ Most structures bit-identical; the two adslabs differ by 3e-5 eV — float32 rou
 (SevenNet's default dtype is float32, vs MACE's float64), well within tolerance.
 Our deterministically-rebuilt SevenNet env reproduces the validated hub. Env deleted after.
 
-## GRACE (TensorFlow backend) — cross-backend thesis: BLOCKED (honest)
+## GRACE (TensorFlow backend) — CROSS-BACKEND THESIS PROVEN ✅
 
-Attempted as the non-PyTorch proof (가치와계획 north-star #2). **The /TGM grace
-env does not co-resolve from a recipe:** `tensorpotential` pulls
-`tensorflow[and-cuda]`, whose `nvidia-cuda-nvrtc-cu12==12.3.107` conflicts with
-`torch+cu121`'s nvrtc pin → pip `ResolutionImpossible`. A full 81-package freeze
-of the validated env fails identically, because /TGM was hand-assembled with
-`--no-deps` overrides a single pip pass can't reproduce. grace is therefore
-**candidate** (see `envs/grace.yml`), with the deferred fix documented (multi-pass
-/ `--no-deps` install, or drop torch since GRACE runs on TF). The cross-backend
-energy-match proof is **deferred** to that fix. The /TGM reference energies were
-captured (TPCalculator, A4500) and are ready for the comparison once grace builds.
+The non-PyTorch proof (가치와계획 north-star #2). The earlier torch-bundled recipe
+dead-ended (`tensorflow[and-cuda]` ↔ `torch+cu121` nvrtc conflict). The official
+GRACE docs (gracemaker.readthedocs.io) confirm **GRACE is TensorFlow-ONLY — no
+PyTorch dependency**; /TGM only carried torch for the optional D3. Dropping torch
+makes the recipe a clean single-pass install.
+
+| Rung | Result |
+|---|---|
+| **0. build + import + calc** | ✅ `install.sh grace` builds clean on WSL (TensorFlow-only, no torch, no resolver conflict): tensorflow 2.16.2, tensorpotential 0.5.3, `TPCalculator` imports + computes. |
+| **weights (public fetch)** | ✅ `grace_models download GRACE-2L-OAM` (official ICAMS host) → `~/.cache/grace`; matches the /TGM local model. |
+| **T2a. single-point energy (cross-GPU)** | ✅ **PASS** — 6 fixed BackSingle2018 structures, `TPCalculator` on both sides. Our RTX 4060 Ti (public-downloaded weights) vs /TGM A4500 (local model). |
+
+**max |diff| = 5.68e-14 eV · max |diff|/atom = 1.67e-15 eV/atom** (tol 1e-3). Most
+structures bit-identical (TF runs float64). This proves THREE things at once: the
+TensorFlow env reproduces /TGM, the deterministic recipe is correct, and the
+**public `grace_models` weights == the /TGM weights**. The cross-backend (non-PyTorch)
+thesis is proven. Env deleted after.
 
 ## Status summary
 
-| model | backend | build | T1 bytes | T2a energy-match | note |
+| model | backend | build | T1/weights | T2a energy-match | note |
 |---|---|---|---|---|---|
-| MACE | PyTorch | ✅ clean | ✅ | ✅ 1.8e-15 eV (machine precision) | float64 |
-| SevenNet | PyTorch | ✅ clean | — | ✅ 3.1e-5 eV (float32 round-off) | float32 |
-| GRACE | TensorFlow | ❌ dep-conflict | — | ⏳ deferred | candidate; needs --no-deps recipe |
+| MACE | PyTorch | ✅ clean | ✅ byte-identical | ✅ 1.8e-15 eV (machine precision) | float64 |
+| SevenNet | PyTorch | ✅ clean | by-name dl | ✅ 3.1e-5 eV (float32 round-off) | float32 |
+| GRACE | **TensorFlow** | ✅ clean | ✅ public == /TGM | ✅ 5.7e-14 eV (machine precision) | **cross-backend proof** |
+
+3/3 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow).
 
 ## Method (reproducible)
 - Our side: `install.sh mace` → `envs/mace/bin/python` runs the single-point on the
