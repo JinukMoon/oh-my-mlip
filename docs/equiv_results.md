@@ -85,6 +85,15 @@ which is more GPU-sensitive than float64, so cross-GPU (our sm89 vs /TGM A4500) 
 a larger absolute spread that is still tight per-atom. A strict same-GPU run would be
 tighter. Our deterministic ORB env reproduces /TGM. Env deleted after.
 
+## CHGNet (v0.3.0)
+
+| Rung | Result |
+|---|---|
+| **0. build + import + calc** | ✅ `install.sh chgnet` builds clean on WSL (torch 2.7.1+cu126, chgnet 0.4.0). `CHGNet.load(model_name='0.3.0')` + `CHGNetCalculator(model=model)` import + compute. |
+| **T2a. single-point energy (cross-GPU)** | ✅ **PASS** — 6 fixed BackSingle2018 structures, identical inference on both sides. **max |diff|/atom = 9.2e-07 eV/atom** (tol 1e-3); 5/6 structures bit-identical, one adslab differs by 3e-5 eV (float32 round-off). |
+
+Our deterministic CHGNet env reproduces /TGM. Env deleted after.
+
 ## Status summary
 
 | model | backend | build | T1/weights | T2a energy-match | note |
@@ -93,8 +102,9 @@ tighter. Our deterministic ORB env reproduces /TGM. Env deleted after.
 | SevenNet | PyTorch | ✅ clean | by-name dl | ✅ 9.2e-07 eV/atom (float32 round-off) | float32 |
 | GRACE | **TensorFlow** | ✅ clean | ✅ public == /TGM | ✅ 1.7e-15 eV/atom (machine precision) | **cross-backend proof** |
 | ORB | PyTorch | ✅ clean | by-name dl | ✅ 7.5e-05 eV/atom (float32-high / TF32) | larger abs spread, tight per-atom |
+| CHGNet | PyTorch | ✅ clean | by-name dl | ✅ 9.2e-07 eV/atom (float32 round-off) | 5/6 bit-identical |
 
-4/4 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
+5/5 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
 
 ## Method (reproducible)
 - Our side: `install.sh mace` → `envs/mace/bin/python` runs the single-point on the
