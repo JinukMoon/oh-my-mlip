@@ -52,6 +52,27 @@ Most structures bit-identical; the two adslabs differ by 3e-5 eV — float32 rou
 (SevenNet's default dtype is float32, vs MACE's float64), well within tolerance.
 Our deterministically-rebuilt SevenNet env reproduces the validated hub. Env deleted after.
 
+## GRACE (TensorFlow backend) — cross-backend thesis: BLOCKED (honest)
+
+Attempted as the non-PyTorch proof (가치와계획 north-star #2). **The /TGM grace
+env does not co-resolve from a recipe:** `tensorpotential` pulls
+`tensorflow[and-cuda]`, whose `nvidia-cuda-nvrtc-cu12==12.3.107` conflicts with
+`torch+cu121`'s nvrtc pin → pip `ResolutionImpossible`. A full 81-package freeze
+of the validated env fails identically, because /TGM was hand-assembled with
+`--no-deps` overrides a single pip pass can't reproduce. grace is therefore
+**candidate** (see `envs/grace.yml`), with the deferred fix documented (multi-pass
+/ `--no-deps` install, or drop torch since GRACE runs on TF). The cross-backend
+energy-match proof is **deferred** to that fix. The /TGM reference energies were
+captured (TPCalculator, A4500) and are ready for the comparison once grace builds.
+
+## Status summary
+
+| model | backend | build | T1 bytes | T2a energy-match | note |
+|---|---|---|---|---|---|
+| MACE | PyTorch | ✅ clean | ✅ | ✅ 1.8e-15 eV (machine precision) | float64 |
+| SevenNet | PyTorch | ✅ clean | — | ✅ 3.1e-5 eV (float32 round-off) | float32 |
+| GRACE | TensorFlow | ❌ dep-conflict | — | ⏳ deferred | candidate; needs --no-deps recipe |
+
 ## Method (reproducible)
 - Our side: `install.sh mace` → `envs/mace/bin/python` runs the single-point on the
   fixed structures with `mace_mp(model="medium-mpa-0", dispersion=False,
