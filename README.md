@@ -1,12 +1,14 @@
 # oh-my-mlip
 
-> Won't pick a model for you — but it'll let you run 20 of them before
-> lunch, without solving a single conda environment.
+> Won't pick a model for you — but it gives you one convention for reaching
+> many MLIP frameworks, without solving a single conda environment by hand.
 
-**One registry, many MLIPs.** Install nothing, solve no environments, just run.
-20 machine-learning interatomic-potential frameworks (31 model variants) behind
-one convention — each in its own validated env, with catbench adsorption
-benchmarking pre-wired by its author.
+**One registry, many MLIPs.** 20 machine-learning interatomic-potential
+frameworks (31 model variants) catalogued behind one convention — each meant to
+live in its own validated env, built from a curated recipe, with catbench
+adsorption benchmarking pre-wired by its author. **Building today:** MACE and
+SevenNet ship as validated `install.sh` recipes now; the rest of the roster is
+rolling out as recipes are added (see [How distribution works](#how-distribution-works)).
 
 - [What this is](#what-this-is)
 - [Philosophy](#philosophy)
@@ -25,14 +27,15 @@ benchmarking pre-wired by its author.
 verdict. It removes the one thing that actually stops people from using many MLIP
 frameworks at once: **the install / environment-solving layer.**
 
-Every framework ships as its own validated conda environment. A single trusted
-`models.json` registry is the source of truth. A small path-importable Python
-package (`oh_my_mlip`) turns that registry into a uniform way to run any model —
-each in its own interpreter, with **no `conda activate`, no dependency
-conflicts, and no GPU lock-in** between frameworks.
+Each framework is meant to live in its own validated conda environment, built
+from a curated recipe. A single trusted `models.json` registry is the source of
+truth. A small path-importable Python package (`oh_my_mlip`) turns that registry
+into a uniform way to run any model — each in its own interpreter, with **no
+`conda activate`, no dependency conflicts, and no GPU lock-in** between
+frameworks.
 
 That is the whole value, and it is value nobody else hands you in one place: the
-install/env layer solved for **real upstream frameworks** (MACE, SevenNet,
+install/env layer curated for **real upstream frameworks** (MACE, SevenNet,
 NequIP, ORB, UMA, ...) — not reimplementations — with **catbench** catalysis
 benchmarking wired into every env, and an **agent-native** surface (`AGENTS.md` +
 an MCP server) so a tool-calling agent can drive the whole hub.
@@ -41,7 +44,7 @@ What you actually get:
 
 | Capability | What it means |
 |---|---|
-| **Run 20 frameworks / 31 variants painlessly** | Clone the hub, point `OH_MY_MLIP_HOME` at it, call one model after another from the same convention. Heavy per-framework envs come from prebuilt, relocatable conda-pack tarballs (or `install.sh` rebuilds them locally). |
+| **Uniform access to 20 frameworks / 31 variants** | Clone the hub, point `OH_MY_MLIP_HOME` at it, and call one model after another from the same convention. Each per-framework env is built locally by `install.sh <model>` from a curated recipe (MACE and SevenNet build today; the rest are rolling out). |
 | **catbench, easily** | catbench (adsorption / heterogeneous-catalysis benchmarking, authored by the project owner) is pre-wired into every env. You bring your own DFT/reference data; the wiring is done. |
 | **Agent-native** | `AGENTS.md` is the agent contract, and the same registry is exposed over MCP. Hand the repo to an agent and it can run a model. |
 
@@ -49,9 +52,9 @@ It deliberately does **not** auto-select a model for you, and it does **not**
 reimplement any model — it packages the real upstream frameworks. (See
 [Mental model](#mental-model) for the full not-goals list.)
 
-Distillation is **out of scope for v1**: a future, *separate* tool can bind to
-the stable teacher-provider interface exposed here as an optional **teacher-query
-on-ramp (Phase 2)** — cheap bulk teacher labeling to train a CPU-deployable
+Distillation is **out of scope for now**: a future, *separate* tool can bind to
+the stable teacher-provider interface exposed here as an optional, **planned
+teacher-query on-ramp** — cheap bulk teacher labeling to train a CPU-deployable
 NN-MTP/LAMMPS student. If you only want to run MLIPs or catbench, you never touch
 it.
 
@@ -188,31 +191,35 @@ Per-model validation state, gated flag, and v1 distribution status: see
 ## How distribution works
 
 After a fresh clone the `envs/<env>/` directories do not exist yet. They are
-materialized on first use, and either path yields the identical on-disk layout
+materialized on first use into the on-disk layout
 `$OH_MY_MLIP_HOME/envs/<env>/bin/python`:
 
-1. **conda-pack tarballs (primary).** Each env is packed once and hosted on the
-   Hugging Face Hub. `dist_manifest.json` maps an env to its tarball (repo id +
-   pinned revision + sha256 + unpack size + minimum NVIDIA driver). The resolver
-   in `oh_my_mlip/fetch.py` (`fetch_env`) downloads it, verifies the sha256, runs
-   `conda-unpack` once (sentinel-guarded), then probes `torch.cuda`. When the
-   manifest records a `min_driver_version` (it carries the `TODO-on-upload`
-   placeholder until upload, which skips the check), the resolver compares it
-   against the host CUDA driver and, on a host below it, prints the exact
-   `install.sh` fallback command rather than a raw traceback.
-2. **`install.sh` (fallback).** When no tarball is publishable for an env (its
-   manifest entry still carries the `TODO-on-upload` marker) or the prebuilt env
-   cannot run on this host, `install.sh <env>` rebuilds it from a recipe (create
-   env + catbench + first-run compiles).
-3. **Gated weights on-demand.** The published tarballs contain the **environment
-   only** — never gated weights. Gated weights are fetched on first run with the
-   user's own `HF_TOKEN` after the user accepts the upstream license (see
-   [Gated models](#gated-models)).
-4. **Arch-specific artifacts compile on first run.** Architecture-pinned
-   artifacts — the D3 CUDA kernel `pair_d3.so` and the NequIP/Allegro AOT `.pt2`
-   — are **never baked into the distributed tarballs**. They are compiled or
-   reselected for *your* GPU's compute capability (sm86 = A5000/A6000, sm89 =
-   L40S) the first time you run. See
+1. **`install.sh` build-from-recipe (primary today).** `install.sh <model>`
+   builds the env on the current host from a curated recipe (`envs/<env>.yml`):
+   create env + catbench + first-run compiles. It is host-correct by
+   construction. Today only **MACE and SevenNet** have validated recipes; the
+   other frameworks are being added as recipes and are not yet build-verified
+   from a fresh clone. This is the documented path you should expect to use now.
+2. **Weights are never hosted by oh-my-mlip.** The recipe builds the environment
+   only — model weights download from each framework's **official channel** on
+   first run: by name to a shared cache (`auto-download`), from an official URL,
+   or from Hugging Face with *your* own `HF_TOKEN` after you accept the upstream
+   license for gated weights (see [Gated models](#gated-models)). oh-my-mlip
+   redistributes no weights.
+3. **conda-pack tarballs (planned, not yet live).** The intended future
+   convenience path is a relocatable, prebuilt env packed once and hosted on the
+   Hugging Face Hub, resolved by `oh_my_mlip/fetch.py` (`fetch_env`) against
+   `dist_manifest.json` (repo id + pinned revision + sha256 + unpack size +
+   minimum NVIDIA driver). **This is not live:** every `dist_manifest.json` entry
+   still carries the `TODO-on-upload` placeholder and nothing is hosted yet, so
+   the resolver treats those entries as not-yet-publishable and points you at the
+   `install.sh` build instead. When this ships it will yield the same on-disk
+   layout as the recipe build.
+4. **Arch-specific artifacts compile on first run, on your GPU.** Architecture-
+   pinned artifacts — the D3 CUDA kernel `pair_d3.so` and the NequIP/Allegro AOT
+   `.pt2` — are compiled or reselected for *your* GPU's compute capability
+   (sm86 = A5000/A6000, sm89 = L40S) the first time you run (and would never be
+   baked into any future tarball). See
    [`docs/arch_first_run_compile.md`](docs/arch_first_run_compile.md).
 
 ## MCP server
@@ -242,14 +249,14 @@ Tools exposed:
 | `model_status` | the detailed per-model status data (see [`docs/model_status.md`](docs/model_status.md)) | GPU-free |
 | `run_singlepoint` | `run(model, atoms, ...)` energy + forces | GPU runtime |
 | `run_relax` | persistent `Worker` + ASE `BFGS` | GPU runtime |
-| `install_model` | `fetch.fetch_env(model)` (download + relocate env) | HF / compute runtime |
+| `install_model` | `fetch.fetch_env(model)` (prebuilt-env fetch; falls back to the `install.sh` recipe build, the live path today) | compute runtime |
 | `run_catbench` | the catbench roster runner | GPU runtime |
 
 The three GPU-free tools work now from any host. The `run_*` / `install_model`
-tools execute at **GPU runtime** once the model's conda env is materialized — they
-are validated end-to-end at the compute checkpoint; if an env is not installed yet
-they return an actionable message pointing at `install_model` / `install.sh`
-rather than a traceback. `run_singlepoint` / `run_relax` accept a structure as a
+tools execute at **GPU runtime** once the model's conda env is built; if an env
+is not installed yet they return an actionable message pointing at
+`install_model` / `install.sh <model>` rather than a traceback.
+`run_singlepoint` / `run_relax` accept a structure as a
 file path, an `Atoms.todict()` dict, or a simple `{symbols, positions, cell?, pbc?}`
 dict.
 
@@ -287,34 +294,36 @@ working around the gate. Full details and the agent contract are in
   on `sys.path` (or `source env.sh`), and there is no `setup.py`.
 - **redistribute gated weights** — gated weights are always fetched on first run
   with *your* token, after *you* accept the upstream license.
-- **do distillation in v1** — that lands later as a *separate* tool binding to
-  the teacher-query on-ramp (Phase 2).
+- **do distillation now** — that would land later as a *separate* tool binding
+  to the planned teacher-query on-ramp.
 
 What it *is*: one registry, many real MLIPs, each in its own validated env, with
 catbench bundled and an agent-native surface on top.
 
 ## Roadmap
 
-- **v1 (now).** Small, focused core: the **MACE + SevenNet** distribution
-  pipeline is authored and ready (relocatable conda-pack → fetch → relocate →
-  single-point + catbench), with the tarballs **upload-pending the compute
-  checkpoint** (build+publish and the binding foreign-host end-to-end run have
-  not executed yet). Every framework is carried in `models.json` at its true
-  validation state and runnable from a local `install.sh` build. The **MCP
-  server** (`list_models`, `describe_model`, `model_status`, `install_model`,
-  `run_singlepoint`, `run_relax`, `run_catbench`) is **already included** (see the
+- **Now.** Small, focused core. **MACE and SevenNet** build today from validated
+  `install.sh` recipes (create env + catbench + first-run compiles), with weights
+  pulled from their official channels. Every framework is carried in `models.json`
+  at its true validation state. The **MCP server** (`list_models`,
+  `describe_model`, `model_status`, `install_model`, `run_singlepoint`,
+  `run_relax`, `run_catbench`) is **already shipped** (see the
   [MCP server](#mcp-server) section): its GPU-free tools work now, and its `run_*`
-  / `install_model` tools are validated end-to-end at the compute checkpoint.
-- **Phase 2.** Expand the conda-pack/`install.sh` path to the **full 31-model**
-  roster; and open the **teacher-query on-ramp** for distillation. The downstream
-  distillation tool (cheap bulk teacher labeling → CPU-deployable NN-MTP/LAMMPS
-  student) lands **separately** on its own timeline and binds to the stable
-  teacher-provider interface (`get_calculator` intra-env, `Worker`/`WorkerPool`
-  cross-env) exposed here. The binding 100-call worker acceptance test has **not**
-  run yet, so this is described as a *planned* on-ramp: **teacher-query on-ramp
-  planned (Phase 2)**. See [`docs/distillation_onramp.md`](docs/distillation_onramp.md).
-- **Phase 3.** Docker / Apptainer images and CI (including the generated
-  status-table `--check` and the foreign-host relocation acceptance test).
+  / `install_model` tools execute once a model's env is built.
+- **Rolling out.** Add the remaining **recipes** so the full 20-framework /
+  31-variant roster builds from a fresh clone via `install.sh`. Then the
+  **conda-pack / instant-download path**: pack each validated env once, host it
+  on the Hugging Face Hub, and fill `dist_manifest.json` so `fetch_env` can
+  download + relocate a prebuilt env instead of rebuilding it (today that
+  manifest is all `TODO-on-upload` and nothing is hosted).
+- **Later.** Compile-command curation (per-arch first-run build recipes) and a
+  **teacher-query on-ramp** for distillation. The downstream distillation tool
+  (cheap bulk teacher labeling → CPU-deployable NN-MTP/LAMMPS student) would land
+  **separately** on its own timeline and bind to the teacher-provider interface
+  (`get_calculator` intra-env, `Worker`/`WorkerPool` cross-env) exposed here. This
+  is a *planned* on-ramp, not yet built. See
+  [`docs/distillation_onramp.md`](docs/distillation_onramp.md). Container images
+  (Docker / Apptainer) and expanded CI follow.
 
 ## Contributing
 
