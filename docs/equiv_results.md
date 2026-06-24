@@ -106,8 +106,9 @@ Our deterministic CHGNet env reproduces /TGM. Env deleted after.
 | MatterSim | PyTorch | ✅ clean | by-name dl | ✅ 0.0 eV/atom (ALL bit-identical) | needed setuptools==75.8.0 + ase==3.24.0 pins |
 | Eqnorm | PyTorch | ✅ clean | ⚠ by-name dl broken | ✅ 0.0 eV/atom (ALL bit-identical) | recipe fixed (torch_scatter+PyG find-links, ase/setuptools); weights auto-dl wrote 0 bytes |
 | PET | PyTorch | ✅ clean | upet (2.8GB) | ✅ 9.2e-07 eV/atom (5/6 bit-identical) | metatomic backend; proactive ase/setuptools pins preempted the trap |
+| eSEN (fairchemv1) | PyTorch | ✅ clean | ⚠ gated (staged from /TGM) | ✅ 0.0 eV/atom (ALL bit-identical) | fixed: PyG find-links + scipy==1.16.0 (sph_harm) + ase/setuptools; gated weights via HF token (UMA tests the token UX) |
 
-8/8 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
+9/9 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
 
 **Recipe bugs found by these real builds (all fixed):** MatterSim needed two pins
 the loose recipe missed — `setuptools==75.8.0` (setuptools 81+ removed
