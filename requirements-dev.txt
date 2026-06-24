@@ -15,3 +15,4 @@ jsonschema>=4.0
 #   apt install shellcheck        (Debian/Ubuntu)
 #   conda install -c conda-forge shellcheck
 #   brew install shellcheck       (macOS)
+pyyaml>=6.0
