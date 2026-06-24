@@ -27,10 +27,16 @@ dependencies:
   - pip
   # CUDA 12.4 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.4.*
-  - ase
+  # ase pinned to the validated /TGM version: mattersim imports
+  # full_3x3_to_voigt_6_stress from ase.constraints, which newer ASE (>=3.25)
+  # moved/removed — an unpinned ase floats to a breaking version.
+  - ase=3.24.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu124
       - torch==2.6.0+cu124
       - mattersim @ git+https://github.com/microsoft/mattersim.git@bf13be6f6fd470fd4e299855c755ad13968620bb
       - torch-geometric==2.6.1
       - e3nn==0.5.6
+      # mattersim imports pkg_resources at runtime; setuptools>=81 removed it, so
+      # pin the validated /TGM version that still ships pkg_resources.
+      - setuptools==75.8.0

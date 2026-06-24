@@ -103,8 +103,16 @@ Our deterministic CHGNet env reproduces /TGM. Env deleted after.
 | GRACE | **TensorFlow** | ✅ clean | ✅ public == /TGM | ✅ 1.7e-15 eV/atom (machine precision) | **cross-backend proof** |
 | ORB | PyTorch | ✅ clean | by-name dl | ✅ 7.5e-05 eV/atom (float32-high / TF32) | larger abs spread, tight per-atom |
 | CHGNet | PyTorch | ✅ clean | by-name dl | ✅ 9.2e-07 eV/atom (float32 round-off) | 5/6 bit-identical |
+| MatterSim | PyTorch | ✅ clean | by-name dl | ✅ 0.0 eV/atom (ALL bit-identical) | needed setuptools==75.8.0 + ase==3.24.0 pins |
 
-5/5 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
+6/6 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
+
+**Recipe bugs found by these real builds (all fixed):** MatterSim needed two pins
+the loose recipe missed — `setuptools==75.8.0` (setuptools 81+ removed
+`pkg_resources`, which mattersim imports) and `ase==3.24.0` (newer ASE moved
+`full_3x3_to_voigt_6_stress` out of `ase.constraints`). The unpinned conda `- ase`
+floats to a breaking version — a determinism gap the pip-only `verify_determinism.py`
+does not yet catch (TODO: extend the gate to pinned conda deps).
 
 ## Method (reproducible)
 - Our side: `install.sh mace` → `envs/mace/bin/python` runs the single-point on the
