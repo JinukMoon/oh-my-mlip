@@ -27,12 +27,18 @@ dependencies:
   - pip
   # CUDA 11.8 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=11.8.*
-  - ase
+  # ase pinned to the validated /TGM version (unpinned ase floats to a breaking release)
+  - ase=3.25.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu118
+      # torch-scatter's +ptXXcuYYY wheels live on the PyG wheel index, not the
+      # pytorch index — without this find-links the pinned wheel is "not found".
+      - --find-links https://data.pyg.org/whl/torch-2.6.0+cu118.html
       - torch==2.6.0+cu118
       - eqnorm @ git+https://github.com/yzchen08/eqnorm.git@57527db44fee9fab3fb5775dd860ca4bbe014f44
       - torch-geometric==2.6.1
       - torch-scatter==2.1.2+pt26cu118
       - e3nn==0.5.6
       - vesin==0.3.7
+      # setuptools<81 still ships pkg_resources (matches /TGM); newer removed it.
+      - setuptools==78.1.1
