@@ -22,22 +22,24 @@ In the v1 roster, all **UMA** variants are gated. Everything else is open.
 1. **Accept the license.** Open the model's `license_url` while logged into
    Hugging Face with the account whose token you will use, and accept the terms.
    For UMA that is `https://huggingface.co/facebook/UMA`.
-2. **Export your token.** Create a read token at
-   `https://huggingface.co/settings/tokens`, then:
-   ```bash
-   export HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxx
-   ```
-   `source env.sh` does **not** set `HF_TOKEN` for you — that is intentional, so
-   no token is ever baked into the repo or a shared cache.
+2. **Make your token available.** Create a read token at
+   `https://huggingface.co/settings/tokens`, then make it available to
+   oh-my-mlip. See [`hf_token.md`](hf_token.md) for the canonical, leak-safe
+   setup (the preferred path is `huggingface-cli login`; avoid pasting the token
+   literal into your shell). `source env.sh` does **not** set `HF_TOKEN` for you
+   — that is intentional, so no token is ever baked into the repo or a shared
+   cache.
 3. **Run normally.** The first call downloads the weights into the shared cache
    (`HF_HOME` / `FAIRCHEM_CACHE_DIR`, set by `env.sh`). Subsequent runs reuse the
    cache.
 
 ```bash
 source env.sh
-export HF_TOKEN=hf_...
+huggingface-cli login          # or: export HF_TOKEN="$(< /path/outside/repo/token)"
 python run_examples/single_point.py UMA --version UMA-s-1p2-OMAT
 ```
+
+See [`hf_token.md`](hf_token.md) for the full, leak-safe token setup.
 
 ## What happens without a token / without accepting the license
 

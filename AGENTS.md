@@ -168,13 +168,22 @@ fetching weights:
 - **Gated models** (`gated: true`, e.g. all UMA variants): the weights require
   (1) accepting the upstream license at the model's `license_url`
   (`https://huggingface.co/facebook/UMA` for UMA) with the same Hugging Face
-  account, and (2) exporting your own token: `export HF_TOKEN=hf_...`. **This
-  repo never redistributes gated weights** — they are always fetched on first run
-  with the user's own token after the user accepts the license. If `HF_TOKEN` is
-  missing or the license has not been accepted, the fetch fails by design; surface
-  the `license_url` to the user rather than retrying.
+  account, and (2) making the user's own read token available (preferred:
+  `huggingface-cli login`; or `HF_TOKEN_PATH` / `OMM_HF_TOKEN_FILE` / `HF_TOKEN`).
+  **This repo never redistributes gated weights** — they are always fetched on
+  first run with the user's own token after the user accepts the license. If no
+  token is resolvable or the license has not been accepted, the fetch fails by
+  design; surface the `license_url` to the user rather than retrying.
 
-See `docs/gated_models.md` for the full flow.
+**When a gated model is requested:** do not just dump a traceback. GUIDE the user
+through token setup per [`docs/hf_token.md`](docs/hf_token.md) — accept the
+license, create a READ token, make it available the leak-safe way (never
+instruct pasting the token literal on the command line) — and fail any gated
+fetch with an actionable pointer to `docs/hf_token.md` and the model's
+`license_url`, not a raw exception.
+
+See `docs/gated_models.md` for the full flow and
+[`docs/hf_token.md`](docs/hf_token.md) for the canonical token setup.
 
 ## 6. First-run compilation (D3 `.so`, NequIP/Allegro `.pt2`)
 

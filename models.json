@@ -74,8 +74,8 @@
         "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89",
         "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='omat_pbe')"]},
       "MACE-MH-1-OC20": {"mlip_name": "MACE-MH-1-OC20", "training_set": ["OMAT24", "MPtrj", "SPICE", "OC20", "OMOL", "RGD1", "MATPES"],
-        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89", "note": "verify head name (OMAT uses head='omat_pbe'; confirm OC20 head with jumoon)",
-        "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='oc20')"]}
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89", "note": "MACE-MH-1 is multi-head; the OC20/catalysis head is 'oc20_usemppbe' (PBE surfaces), not 'oc20'.",
+        "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='oc20_usemppbe')"]}
     }
   },
   "NequIP": {
@@ -205,7 +205,7 @@
     "import": ["from fairchem.core import OCPCalculator"],
     "versions": {
       "eSEN-30M-OAM": {"mlip_name": "eSEN-30M-OAM", "training_set": ["OMat24", "MPtrj", "sAlex"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/fairchem/OMAT24", "weights_source_url": "https://huggingface.co/fairchem/OMAT24/resolve/main/esen_30m_oam.pt", "validation": "validated_sm89",
+        "gated": true, "license_url": "https://huggingface.co/facebook/OMAT24", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/OMAT24", "validation": "validated_sm89",
         "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/fairchem/esen_30m_oam.pt', cpu=False)"]}
     }
   },
@@ -218,8 +218,8 @@
     "import": ["from fairchem.core import OCPCalculator"],
     "versions": {
       "EqV3-OMatMPtrjSalex": {"mlip_name": "EqV3-OMatMPtrjSalex", "training_set": ["OMat24", "MPtrj", "sAlex"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/mirror-physics/equiformer_v3", "validation": "gpu_pending", "note": "weights_source_url removed: exact HF filename unconfirmed (owner to confirm in mirror-physics/equiformer_v3).",
-        "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equiformer_v3/omat24-mptrj-salex_gradient.pt', cpu=False)"]}
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/mirror-physics/equiformer_v3", "weights_source_url": "https://huggingface.co/mirror-physics/equiformer_v3/resolve/main/checkpoint/omat24-mptrj-salex_gradient.pt", "validation": "gpu_pending", "note": "HF file lives under a checkpoint/ prefix: checkpoint/omat24-mptrj-salex_gradient.pt (the bare filename 404s).",
+        "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equiformer_v3/checkpoint/omat24-mptrj-salex_gradient.pt', cpu=False)"]}
     }
   },
   "UMA": {
@@ -256,14 +256,14 @@
   "PET": {
     "env": "pet",
     "python": "${OH_MY_MLIP_HOME}/envs/pet/bin/python",
-    "model_source": "${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt (HF lab-cosmo/upet, TorchScript export)",
+    "model_source": "${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.ckpt (HF lab-cosmo/upet; only a .ckpt is published, no .pt)",
     "status": "clone + D3(.so) + load verified (CPU, MetatomicCalculator). GPU single-point/speed pending.",
     "note": "Calculator moved metatensor.torch.atomistic -> metatomic.torch.ase_calculator. MetatomicCalculator takes the exported .pt path directly.",
     "import": ["from metatomic.torch.ase_calculator import MetatomicCalculator"],
     "versions": {
       "PET-OAM-XL": {"mlip_name": "PET-OAM-XL", "training_set": ["OMat24", "sAlex", "MPtrj"],
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/lab-cosmo/upet", "weights_source_url": "https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt", "validation": "gpu_pending",
-        "inference": ["calc = MetatomicCalculator('${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt')"]}
+        "inference": ["calc = MetatomicCalculator('${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.ckpt')"]}
     }
   },
   "EquFlash": {
@@ -281,7 +281,7 @@
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://figshare.com/ndownloader/files/65435007", "weights_source_url": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
         "inference": ["calc = UCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equflash/EquFlashV2.pt', cpu=False)"]},
       "EquFlash": {"mlip_name": "EquFlash", "training_set": ["OMat24"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://figshare.com/ndownloader/files/65435004", "weights_source_url": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
         "inference": ["calc = UCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equflash/EquFlash.pt', cpu=False)"]}
     }
   },

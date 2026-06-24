@@ -47,7 +47,7 @@ How to read the columns:
 | CHGNet-v0.3.0 | CHGNet | bundled | validated (sm89) | no | Phase 2 |
 | AlphaNet-v1-OMA | AlphaNet | on-demand-hf | gpu pending | no | Phase 2 |
 | Eqnorm-MPtrj | Eqnorm | auto-download | validated (sm89) | no | Phase 2 |
-| eSEN-30M-OAM | fairchemv1 | on-demand-hf | validated (sm89) | no | Phase 2 |
+| eSEN-30M-OAM | fairchemv1 | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | EqV3-OMatMPtrjSalex | EquiformerV3 | on-demand-hf | gpu pending | no | Phase 2 |
 | UMA-m-1p1-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-m-1p1-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |

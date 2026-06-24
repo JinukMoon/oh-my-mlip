@@ -81,6 +81,12 @@ jobs:
       - name: Check status lists (README + docs/model_status.md) are in sync with models.json
         run: python scripts/gen_status_table.py --check
 
+      # ── 7b. Secret scan: no HF token literal anywhere in the tree ─────────────
+      # Scans the working tree (tracked + untracked) for hf_<20+> token shapes.
+      # The matched value is redacted in output. See docs/hf_token.md.
+      - name: Verify no Hugging Face token literal leaked
+        run: python scripts/verify_no_token.py
+
       # ── 8. Full pytest suite ─────────────────────────────────────────────────
       - name: Run all tests (no GPU)
         run: |

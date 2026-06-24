@@ -35,5 +35,15 @@ envs/*/
 *.log
 .DS_Store
 
+# --- HF tokens / secrets (never commit a token; keep it OUTSIDE the repo) ---
+.hf_token
+*.hf_token
+*token*
+# ...but these are real, token-free repo files that must stay tracked:
+!docs/hf_token.md
+!docs/gated_models.md
+!scripts/verify_no_token.py
+!tests/test_verify_no_token.py
+
 # --- OMC orchestration state (never publish) ---
 .omc/

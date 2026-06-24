@@ -1,5 +1,4 @@
-# build_status: candidate
-# candidate-reason: alphanet is an editable local install with no public VCS URL — upstream unknown, owner input needed
+# build_status: clean
 # oh-my-mlip env recipe: AlphaNet (alphanet)
 #
 # Pins mirror the validated internal setup:
@@ -12,13 +11,10 @@
 #   - cuda-nvcc 12.1.* is included so the D3 dispersion kernel can compile on
 #     first run (matching the torch CUDA minor).
 #   - torch-scatter is pinned to the matching pt21cu121 wheel that AlphaNet needs.
-#   - The validated internal env installs alphanet==0.1.1 from an EDITABLE local
-#     checkout (`-e /TGM/Apps/MLIP/src/AlphaNet`) with no git remote, so the
-#     framework package cannot be resolved from any index here.
+#   - The AlphaNet framework is the public GPL-3.0 package zmyybc/AlphaNet,
+#     installed via pip from its git remote (no compile step — pure pip).
 #   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
 #     downgrading torch's CUDA libraries.
-# TODO-owner: real AlphaNet source URL (pip name or git+https) — the recorded
-#   install is an editable local path with no public VCS remote.
 name: alphanet
 channels:
   - conda-forge
@@ -34,8 +30,8 @@ dependencies:
       - torch==2.1.2+cu121
       - torch-geometric==2.6.1
       - torch-scatter==2.1.2+pt21cu121
-      # alphanet itself is a local editable checkout with no public remote;
-      # see TODO-owner above.
+      # AlphaNet framework (GPL-3.0): public git, pip-installable, no compile.
+      - alphanet @ git+https://github.com/zmyybc/AlphaNet.git
       # catbench LAST and isolated; see header note.
       - --no-deps
       - catbench==1.1.2

@@ -1,6 +1,6 @@
 # build_status: candidate
-# candidate-reason: flashTP_e3nn is a local file:// build (no pip source) — must be built locally; upstream unknown
-# oh-my-mlip env recipe: EquFlash (fairchem-core + flashTP)
+# candidate-reason: compile-unverified (EquFlash v1's flashTP_e3nn is a CUDA source build from SNU-ARC/flashTP; v2 is cueq-only and may be clean once build-verified)
+# oh-my-mlip env recipe: EquFlash (SamsungDS/GGNN; flashTP v1 only)
 #
 # Pins mirror the validated internal setup:
 #   python 3.12.13 / torch 2.9.1+cu126.
@@ -13,14 +13,16 @@
 #     first run (matching the torch CUDA minor).
 #   - fairchem-core, torch-geometric and the matching torch_scatter / torch_sparse
 #     (pt29cu126) wheels are the resolvable parts of the stack.
-#   - The validated internal env carries flashTP_e3nn from a LOCAL file:// path
-#     (the flash tensor-product kernel) with no public index, and a GGNN editable
-#     git checkout. flashTP_e3nn is the hard blocker: it is a compiled local
-#     artifact, so it is omitted here.
+#   - The framework is the public SamsungDS/GGNN package. EquFlashV2 is cueq-only
+#     (FullConv uses cuequivariance exclusively), so the cuequivariance==0.6.0
+#     pins from GGNN's requirements.txt are the resolvable runtime for v2.
+#   - flashTP (SNU-ARC/flashTP, MIT) is a CUDA source build (~10 min) and is
+#     needed ONLY by EquFlash v1's flashtp backend — not by v2. It is the
+#     compile blocker that keeps this recipe a candidate until build-verified.
 #   - catbench is installed LAST, with --no-deps, to avoid its dependency pins
 #     downgrading torch's CUDA libraries.
-# TODO-owner: flashTP_e3nn source (build script or public wheel/git URL) — the
-#   recorded install is a local file:// artifact with no public source.
+# Compile note: EquFlash v1 needs `git clone https://github.com/SNU-ARC/flashTP &&
+#   pip install . --no-build-isolation` (CUDA compile). V2 does NOT need flashTP.
 name: equflash
 channels:
   - conda-forge
@@ -39,7 +41,13 @@ dependencies:
       - torch_scatter==2.1.2+pt29cu126
       - torch_sparse==0.6.18+pt29cu126
       - e3nn
-      # flashTP_e3nn (flash tensor-product kernel) is a local build; see TODO-owner.
+      # EquFlashV2 runtime is cueq-only; cuequivariance pins from GGNN reqs.
+      - cuequivariance==0.6.0
+      - cuequivariance-torch==0.6.0
+      - cuequivariance-ops-torch-cu12==0.6.0
+      # GGNN framework package (public): SamsungDS/GGNN.
+      - GGNN @ git+https://github.com/SamsungDS/GGNN.git
+      # flashTP (SNU-ARC/flashTP) is a v1-only CUDA source build; see compile note.
       # catbench LAST and isolated; see header note.
       - --no-deps
       - catbench==1.1.2

@@ -46,6 +46,48 @@ class GatedError(FetchError):
     """Raised when a gated model is requested without HF_TOKEN."""
 
 
+# ── HF token resolution ──────────────────────────────────────────────────────
+def _resolve_token(env: dict | None = None) -> dict:
+    """Resolve how the user's Hugging Face token is made available, WITHOUT ever
+    reading or returning the token's value.
+
+    Precedence (most-explicit wins):
+      1. ``HF_TOKEN``          — token already in the environment (standard HF).
+      2. ``HF_TOKEN_PATH`` / HF cache — standard ``huggingface_hub`` resolution
+         (a token file path, or ``huggingface-cli login`` having written one).
+      3. ``OMM_HF_TOKEN_FILE`` — oh-my-mlip convenience: a path to a file holding
+         the token. We DO NOT read it; instead we export it as ``HF_TOKEN_PATH``
+         so third-party loaders (``huggingface_hub``) resolve it the standard
+         way for child processes.
+
+    Returns a dict describing the resolution that is safe to log:
+      ``{"source": <which>, "env": <child-visible env additions>}``.
+    The ``env`` mapping NEVER contains a token literal — at most a path under
+    ``HF_TOKEN_PATH``. ``source`` is one of ``"HF_TOKEN"``,
+    ``"HF_TOKEN_PATH"``, ``"OMM_HF_TOKEN_FILE"``, or ``"none"``.
+    """
+    src = os.environ if env is None else env
+    out: dict = {"source": "none", "env": {}}
+
+    if src.get("HF_TOKEN"):
+        out["source"] = "HF_TOKEN"
+        return out
+
+    if src.get("HF_TOKEN_PATH"):
+        out["source"] = "HF_TOKEN_PATH"
+        return out
+
+    omm = src.get("OMM_HF_TOKEN_FILE")
+    if omm:
+        # Re-export as the standard HF variable for child processes; do NOT read
+        # the file contents (no token literal ever enters this process's state).
+        out["source"] = "OMM_HF_TOKEN_FILE"
+        out["env"] = {"HF_TOKEN_PATH": omm}
+        return out
+
+    return out
+
+
 # ── cache / layout ───────────────────────────────────────────────────────────
 def cache_root() -> Path:
     """Shared download+unpack cache: $OH_MY_MLIP_HOME/cache or ~/.cache/oh-my-mlip."""
@@ -94,11 +136,20 @@ def _check_gated(model: str, version: str | None) -> dict:
             f"with YOUR Hugging Face token.",
             flush=True,
         )
-        if not os.environ.get("HF_TOKEN"):
+        resolved = _resolve_token()
+        if resolved["source"] == "none":
             raise GatedError(
-                f"{model} is gated: set HF_TOKEN (after accepting "
-                f"{license_url}) and retry."
+                f"{model} is gated: authenticate with Hugging Face (after "
+                f"accepting {license_url}) and retry. Run "
+                f"`huggingface-cli login`, or set HF_TOKEN_PATH / "
+                f"OMM_HF_TOKEN_FILE to a token file outside the repo. "
+                f"See docs/hf_token.md."
             )
+        # If the token was provided via the oh-my-mlip convenience var, export it
+        # as the standard HF_TOKEN_PATH so child loaders resolve it the normal
+        # way — never inline the token value into the environment.
+        for key, val in resolved["env"].items():
+            os.environ.setdefault(key, val)
     return spec
 
 
@@ -229,7 +280,10 @@ def fetch_env(
 
     cache = cache_root()
     cache.mkdir(parents=True, exist_ok=True)
-    token = os.environ.get("HF_TOKEN")
+    # Pass an explicit HF_TOKEN if present; otherwise let huggingface_hub do its
+    # own standard resolution (HF_TOKEN_PATH / the HF cache login). We never read
+    # a token file ourselves, so no token literal enters this process's state.
+    token = os.environ.get("HF_TOKEN") or None
     tarball_name = entry.get("tarball") or f"{env}.tar.gz"
     local_tar = hf_hub_download(
         repo_id=entry["hf_repo"],
