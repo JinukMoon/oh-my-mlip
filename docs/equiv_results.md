@@ -144,3 +144,28 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
 | AlphaNet | ✅ (with find-links + numpy<2) | ✅ | **public HEAD (v0.1.2) does NOT reproduce /TGM** (TESTED): slab bit-identical but gas molecules drift up to 0.24 eV/atom (H2 off 0.49 eV). Confirms the owner must publish the EXACT commit/wheel — pinning HEAD would give wrong energies. Strong build-test finding. |
 | EquFlash | ❌ resolver conflict | — | find-links fix landed (torch_scatter/sparse pt29cu126), but fairchem-core==1.10.0 ↔ torch==2.9.1+cu126 dead-ends pip (the /TGM env was hand-assembled with overrides, like grace's nvrtc case). EquFlashV2 is cueq-only and its /TGM ref IS captured — would match if the env built. Needs a --no-deps/split recipe. |
 | MatRIS | ✅ (cu130 → CPU here) | ✅ matris.applications.base | by-name weights download (matris_10m_oam) writes an empty file → EOFError (public fetch broken, like eqnorm). NOT in /TGM, so no reference to stage or compare. torch 2.12.1+cu130 → cuda False on our box. |
+| Nequix | ❌ openequivariance wheel build fails | — | openequivariance is sdist-only and its CUDA extension wheel FAILS to build during pip install (compile subprocess error) → the whole JAX+oeq pip block fails. JAX backend. NOT in /TGM (no reference). Compile-tier blocker. |
+
+
+## Final tally (all 20 envs attempted)
+
+**14/20 envs energy-matched to /TGM** (≤ 2.2e-07 eV/atom, most bit-identical), across
+**two backends** (PyTorch + TensorFlow), incl. both gated envs (eSEN, UMA — UMA via the
+HF-token gated download). The other 6 are honestly recorded compile/hardware/source-tier:
+- **EquiformerV3** — builds + **energy bit-identical**; resolvable (owner pins the tested sha + vendored-fairchem build).
+- **Allegro** — builds + all imports OK; needs an AOT-compiled .pt2 (no /TGM run command).
+- **TACE** — counted in the 14 (compiled + CPU-matched); GPU(cu130) unverified on a CUDA-12 box.
+- **NequIP** — builds; openequivariance extension won't load (torch<2.10) + AOT .pt2 needed.
+- **EquFlash** — fairchem-core↔torch resolver conflict (/TGM hand-assembled); V2 ref captured.
+- **AlphaNet** — builds but public HEAD **drifts** from /TGM (gas energies); owner must pin the exact commit.
+- **MatRIS** — builds + imports; by-name weights fetch broken (empty file); not in /TGM.
+- **Nequix** — openequivariance sdist wheel build fails; JAX; not in /TGM.
+
+**Systemic recipe-bug classes found + fixed (the build-test's real value):** setuptools≥81
+removed pkg_resources (pin per env); floating conda `ase`/`scipy` drift (pin); PyG
+`torch_scatter`/`sparse` `+ptXXcuYYY` wheels need `--find-links data.pyg.org` (recurred 5×);
+deepmd/dpa4 need the **pip** `mpich`; GRACE is TF-only (drop torch); env.sh cache-symlink
+bug; incomplete recipes (dpa4). **Two host-floor limits:** torch `+cu130` needs an NVIDIA
+driver at the CUDA-13 floor (our CUDA-12.8 box → CPU); `openequivariance` needs torch≥2.10
+or a working nvcc JIT. → oh-my-mlip should publish a per-recipe **host-floor matrix**, not
+claim universal portability.
