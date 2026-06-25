@@ -40,6 +40,8 @@ dependencies:
   - ase
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu126
+      # torch_scatter/torch_sparse +pt29cu126 wheels are on the PyG wheel index.
+      - --find-links https://data.pyg.org/whl/torch-2.9.1+cu126.html
       - torch==2.9.1+cu126
       - fairchem-core==1.10.0
       - torch-geometric==2.6.1

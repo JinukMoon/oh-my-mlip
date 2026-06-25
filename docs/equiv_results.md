@@ -139,3 +139,4 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
 |---|---|---|---|
 | NequIP | ✅ | ✅ nequip.ase | openequivariance extension won't load (torch 2.9.1 < 2.10 → JIT fallback fails on this box); NequIP-OAM ASE path needs oeq + an AOT-compiled .pt2 |
 | Allegro | ✅ | ✅ cuequivariance_torch + nequip.ase + allegro (ALL import) | only blocker: Allegro-OAM ASE path needs an AOT-compiled `.pt2` (from_compiled_model); /TGM has inference=None (no ready run command). Closest compile-tier to runnable. |
+| EquFlash | ❌ resolver conflict | — | find-links fix landed (torch_scatter/sparse pt29cu126), but fairchem-core==1.10.0 ↔ torch==2.9.1+cu126 dead-ends pip (the /TGM env was hand-assembled with overrides, like grace's nvrtc case). EquFlashV2 is cueq-only and its /TGM ref IS captured — would match if the env built. Needs a --no-deps/split recipe. |
