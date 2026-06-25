@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: alphanet: AlphaNet was an editable local TGM source with no public git SHA in tgm_pinmap.json - needs owner to publish an exact public commit or wheel
+# candidate-reason: alphanet: public AlphaNet HEAD (v0.1.2) does NOT reproduce the validated /TGM editable build — TESTED: slab energy bit-identical but gas molecules differ up to 0.24 eV/atom (H2 off 0.49 eV). The owner must publish the EXACT commit/wheel they used. (Also needs the PyG find-links + numpy<2 already noted below.)
 # oh-my-mlip env recipe: AlphaNet (alphanet)
 #
 # Pins mirror the validated internal setup:
@@ -32,8 +32,13 @@ dependencies:
   - ase
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu121
+      # torch-scatter +pt21cu121 wheels are on the PyG wheel index.
+      - --find-links https://data.pyg.org/whl/torch-2.1.2+cu121.html
       - torch==2.1.2+cu121
       - torch-geometric==2.6.1
       - torch-scatter==2.1.2+pt21cu121
-      # AlphaNet framework omitted: tgm_pinmap.json has no public git SHA.
+      # AlphaNet framework omitted: no public git SHA, AND public HEAD (v0.1.2)
+      # was TESTED to NOT match /TGM (gas energies drift up to 0.24 eV/atom).
+      # When the owner provides the exact commit, it also needs numpy<2 (torch
+      # 2.1.2 ABI) — e.g. numpy==1.26.4 — alongside the PyG find-links above.
       # Do not install floating git+https://github.com/zmyybc/AlphaNet.git.
