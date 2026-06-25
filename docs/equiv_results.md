@@ -129,3 +129,9 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
   command (no Claude Code on 147; token-free).
 - Cross-GPU is valid for T2a because a single-point is a pure function of the fixed
   structure (no chaotic relaxation). T2b/T3 require the same GPU and are deferred.
+
+## Candidate tier — build/import status (compile/hardware blockers, honestly recorded)
+
+| model | env builds | framework import | blocker (why still candidate) |
+|---|---|---|---|
+| NequIP | ✅ | ✅ nequip.ase | openequivariance extension won't load (torch 2.9.1 < 2.10 → JIT fallback fails on this box); NequIP-OAM ASE path needs oeq + an AOT-compiled .pt2 |
