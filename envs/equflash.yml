@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: equflash: compile-unverified — v1's flashTP_e3nn (public github.com/SNU-ARC/flashTP, pinned sha) is a CUDA source build; v2 is cueq-only and may be clean once build-verified
+# candidate-reason: equflash: ENERGY-VERIFIED (EquFlashV2, cueq-only) — matches /TGM to 9.8e-07 eV/atom. The single-pip-block FAILS (fairchem-core 1.10 <-> torch 2.9.1 ResolutionImpossible); a 2-PASS install resolves it. Stays candidate only because install.sh does one pip pass; needs multi-pass support to auto-build. v1 (flashTP) additionally needs the SNU-ARC/flashTP CUDA compile.
 # oh-my-mlip env recipe: EquFlash (SamsungDS/GGNN; flashTP v1 only)
 #
 # Pins mirror the validated internal setup:
@@ -28,6 +28,21 @@
 #     conda pip block is also an invalid requirement that breaks `conda env create`.)
 # Compile note: EquFlash v1 needs `git clone https://github.com/SNU-ARC/flashTP &&
 #   pip install . --no-build-isolation` (CUDA compile). V2 does NOT need flashTP.
+#
+# WORKING MULTI-PASS INSTALL (EquFlashV2, energy-verified; install.sh single-pass
+# can't do this yet — run manually or via a future multi-pass install.sh):
+#   pass 1 (torch + PyG + cueq + GGNN), with the PyG find-links:
+#     pip install --extra-index-url https://download.pytorch.org/whl/cu126 \
+#       -f https://data.pyg.org/whl/torch-2.9.1+cu126.html \
+#       torch==2.9.1+cu126 torch-geometric==2.6.1 torch_scatter==2.1.2+pt29cu126 \
+#       torch_sparse==0.6.18+pt29cu126 e3nn==0.5.6 cuequivariance==0.6.0 \
+#       cuequivariance-torch==0.6.0 cuequivariance-ops-torch-cu12==0.6.0 \
+#       "git+https://github.com/SamsungDS/GGNN@16b5cae474370977b59120e8bc57e4bcc19cd093#egg=GGNN"
+#   pass 2 (fairchem WITHOUT deps, then GGNN's runtime deps incl. the Alchemi ops):
+#     pip install --no-deps fairchem-core==1.10.0
+#     pip install pyyaml lmdb numba scipy==1.16.0 pymatgen orjson submitit wandb \
+#       torchtnt pydantic huggingface_hub hydra-core tqdm pynvml \
+#       nvalchemi-toolkit-ops==0.3.0   # <- provides `nvalchemiops` (GGNN.common.utils)
 name: equflash
 channels:
   - conda-forge
