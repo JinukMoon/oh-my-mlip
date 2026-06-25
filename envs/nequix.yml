@@ -44,4 +44,5 @@ dependencies:
       - e3nn-jax==0.20.8
       - equinox==0.13.6
       - openequivariance==0.6.4
+      - ninja==1.13.0
       - openequivariance_extjax==0.6.4
