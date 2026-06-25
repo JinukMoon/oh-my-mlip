@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: equiformer_v3: public git line has no owner-approved SHA in tgm_pinmap.json - needs owner to publish exact immutable pins
+# candidate-reason: equiformer_v3: framework needs an owner-approved public pin. TESTED: public atomicarchitects/equiformer_v3@a7300c58df683dc99cb48027d5bfd4c887486c48 (vendored fairchem a7300c58d) REPRODUCES /TGM BIT-IDENTICAL. Resolvable once owner approves pinning this sha + the vendored-fairchem editable build + deps (lmdb numba torchtnt wandb pydantic huggingface_hub scipy==1.16.0 pymatgen hydra-core) + the PyG find-links.
 # oh-my-mlip env recipe: Equiformer V3 (atomicarchitects/equiformer_v3 + vendored fairchem-core)
 #
 # Pins mirror the validated internal setup:
@@ -39,6 +39,8 @@ dependencies:
   - ase
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu128
+      # torch_scatter +pt27cu128 wheels are on the PyG wheel index.
+      - --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html
       - torch==2.7.1+cu128
       - torch-geometric==2.7.0
       - torch_scatter==2.1.2+pt27cu128
