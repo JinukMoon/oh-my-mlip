@@ -1,5 +1,7 @@
 # Equivalence results — per-MLIP proof ledger
 
+> See also **`docs/host_requirements.md`** — the per-env host-floor matrix (driver/CUDA floors, compile needs, what works where).
+
 Per-ENV evidence that an env rebuilt here from the recipe reproduces the
 validated /TGM hub. NOTE: each env hosts a MODEL FAMILY (often several versions —
 e.g. the UMA env exposes 7 versions, SevenNet 2); each row below validates ONE

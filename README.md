@@ -153,6 +153,10 @@ The public API surface is small and stable:
 For gated models (e.g. UMA) export `HF_TOKEN` and accept the upstream license
 first — see [Gated models](#gated-models).
 
+## Host requirements
+
+Each env is pinned to a specific torch/CUDA build — see **[docs/host_requirements.md](docs/host_requirements.md)** for the per-env driver/CUDA floors, the equivalence-vs-/TGM matrix (14/20 envs matched), and what runs where.
+
 ## Supported MLIPs
 
 20 frameworks / 31 model variants. Some weights are gated (need a Hugging Face
