@@ -139,7 +139,7 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
 
 | model | env builds | framework import | blocker (why still candidate) |
 |---|---|---|---|
-| NequIP | ✅ | ✅ nequip.ase | openequivariance extension won't load (torch 2.9.1 < 2.10 → JIT fallback fails on this box); NequIP-OAM ASE path needs oeq + an AOT-compiled .pt2 |
+| NequIP | ✅ **ENERGY-MATCHED** | ✅ | ✅ via AOT .pt2: 3.8e-07 eV/atom (our sm89 vs /TGM sm86). The oeq 'won't load' was just missing `ninja` + `nvrtc.h` on CPATH (NOT torch<2.10). Needs the per-arch .pt2 (nequip-compile on the user GPU). |
 | Allegro | ✅ **ENERGY-MATCHED** | ✅ | ✅ via AOT .pt2: 2.9e-07 eV/atom (our sm89 vs /TGM sm86). Fix was the missing cuequivariance-ops-cu12 + -ops-torch-cu12 kernels. The .pt2 is per-GPU-arch (nequip-compile on the user GPU, or /TGM ships sm86/sm89). |
 | EquiformerV3 | ✅ (find-links + vendored fairchem editable) | ✅ | ✅ **ALL bit-identical (0.0 eV/atom)** — public HEAD REPRODUCES /TGM (vendored fairchem a7300c58d == /TGM exactly). RESOLVABLE: owner can pin atomicarchitects/equiformer_v3@a7300c58df68 + the vendored-fairchem build (lmdb/numba/torchtnt/wandb/pydantic/scipy==1.16.0/pymatgen/hydra-core). Unlike AlphaNet, NO drift. |
 | TACE | ✅ (C/CUDA ext compiled!) | ✅ | ✅ CPU energy-match 1.9e-06 eV/atom vs /TGM. The TACE extension COMPILED on our CUDA-12.8 box; cu130 GPU inference N/A here (driver too old) → ran CPU. Compile-VERIFIED (was 'compile-unverified'). |

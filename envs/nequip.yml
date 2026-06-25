@@ -37,4 +37,6 @@ dependencies:
       - nequip==0.15.0
       - e3nn==0.5.7
       - openequivariance==0.4.1
+      # oeq JIT-compiles its CUDA extension at first use -> needs ninja on PATH.
+      - ninja
       - setuptools==80.9.0

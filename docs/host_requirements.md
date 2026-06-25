@@ -31,7 +31,7 @@ full per-model numbers.
 | alphanet | candidate | 3.11.13 | 2.1.2 | cu121 | 525+ | ⚠ version drift (public HEAD ≠ /TGM) | owner must pin the exact commit (gas energies drift 0.24 eV/atom) |
 | equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ❌ resolver (env doesn't resolve) | fairchem-core 1.10 ↔ torch 2.9.1 conflict; needs --no-deps recipe |
 | matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | ⚠ no ref (builds+imports OK) | by-name weights fetch broken; not in /TGM (no reference) |
-| nequip | candidate | 3.11.13 | 2.9.1 | cu128 | 570+ | ⏳ oeq+AOT (builds+imports OK) | openequivariance needs torch>=2.10 to load; + AOT .pt2 |
+| nequip | candidate | 3.11.13 | 2.9.1 | cu128 | 570+ | ✅ matched (3.8e-07 eV/atom via AOT .pt2) | oeq JIT needs ninja + nvrtc.h on CPATH; + a per-arch .pt2 (nequip-compile) |
 | nequix | candidate | 3.10.20 | 2.10.0 | cu126 | 525+ | ❌ oeq build (openequivariance wheel build fails) | JAX; not in /TGM |
 
 ## The two host-floor limits (found empirically)
