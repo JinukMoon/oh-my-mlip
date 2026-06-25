@@ -56,13 +56,16 @@ fi
 #   MatRIS.load -> ~/.cache/matris, TACE -> ~/.cache/tace are hardcoded upstream. Symlink the
 #   shared weights into the user cache only when the user does not already have their own.
 for _m in matris tace eqnorm; do
-  # Skip if anything already occupies the path — a real dir/file ([ -e ]) OR an
-  # existing symlink even when its target is missing ([ -L ], i.e. a broken link
-  # from a prior run whose models/<m> isn't built yet). Using only [ -e ] would
-  # miss a broken symlink and then `ln -s` (no -f) would fail "File exists" and,
-  # under the caller's `set -e`, abort install.sh. `|| true` is a final guard so
-  # sourcing env.sh can never abort the install on a benign cache-symlink hiccup.
-  if [ ! -e "$HOME/.cache/$_m" ] && [ ! -L "$HOME/.cache/$_m" ]; then
+  # ONLY symlink when the repo actually holds pre-staged weights at models/<m>
+  # (the share-my-weights case). A fresh clone has no models/<m>, so creating a
+  # symlink to an empty/absent target is harmful: these frameworks do a plain
+  # `os.mkdir("$HOME/.cache/<m>")` (no exist_ok) on first use, which then fails
+  # `FileExistsError` against our symlink and aborts inference. When models/<m>
+  # is absent we leave ~/.cache/<m> alone so the package creates + downloads into
+  # it normally. Also skip if anything (real path OR any symlink) already exists,
+  # and `|| true` so sourcing env.sh can never abort the caller's `set -e`.
+  if [ -d "${OH_MY_MLIP_HOME}/models/$_m" ] \
+     && [ ! -e "$HOME/.cache/$_m" ] && [ ! -L "$HOME/.cache/$_m" ]; then
     mkdir -p "$HOME/.cache" 2>/dev/null || true
     ln -s "${OH_MY_MLIP_HOME}/models/$_m" "$HOME/.cache/$_m" 2>/dev/null || true
   fi

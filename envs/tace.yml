@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: tace: compile-unverified — TACE (public github.com/xvzemin/tace, pinned sha) builds a C/CUDA extension; clean once a foreign-host build is verified
+# candidate-reason: tace: the TACE C/CUDA extension COMPILED on a CUDA-12.8 box and CPU single-point matches /TGM to 1.9e-06 eV/atom (TESTED). Only cu130 GPU inference is unverified here (torch 2.11.0+cu130 needs an NVIDIA driver at the CUDA-13 floor; our box is CUDA 12.8 -> ran CPU).
 # oh-my-mlip env recipe: TACE (tace)
 #
 # Pins mirror the validated internal setup:
