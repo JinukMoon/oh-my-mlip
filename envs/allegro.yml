@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: allegro: compile-unverified — the Allegro ASE path needs an AOT-compiled .pt2 (from_compiled_model only); the Python side is a clean public pip install. (LAMMPS-MLIAP MD is a separate optional host build, not needed for ASE.)
+# candidate-reason: allegro: Python side is a clean pip install + ENERGY-VERIFIED — running the AOT-compiled .pt2 matches /TGM to 2.9e-07 eV/atom (our sm89 vs /TGM sm86). Stays candidate only because the .pt2 is a per-GPU-arch artifact: compile it on the user GPU with `nequip-compile <ckpt> <out>.nequip.pt2 --mode aotinductor --device cuda --target ase` (see docs/compile.md), not a pip line.
 # oh-my-mlip env recipe: Allegro (nequip-allegro)
 #
 # Pins mirror the validated internal setup:
@@ -44,6 +44,11 @@ dependencies:
       - nequip-allegro==0.7.1
       - cuequivariance==0.8.1
       - cuequivariance-torch==0.8.1
+      # the cueq OPS kernels provide the tensor_product op schemas the AOT
+      # .pt2 needs at load (without them: 'Could not find schema for
+      # cuequivariance::tensor_product_uniform_1d_jit').
+      - cuequivariance-ops-cu12==0.8.1
+      - cuequivariance-ops-torch-cu12==0.8.1
       - e3nn==0.5.7
       # (LAMMPS-MLIAP MD is an optional host cmake build — see the note above;
       #  it is NOT a pip dependency and is not required for ASE inference.)

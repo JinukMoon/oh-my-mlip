@@ -27,7 +27,7 @@ full per-model numbers.
 | sevennet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
 | tace | candidate | 3.11.15 | 2.11.0 | cu130 | 580+ (CUDA 13) | ✅ matched (CPU) (1.9e-06 eV/atom) | C/CUDA ext compiles; needs CUDA-13 driver for GPU |
 | uma | clean | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (1.6e-07 eV/atom) | gated weights (HF token); UMA proven via HF_TOKEN_PATH |
-| allegro | candidate | 3.11.13 | 2.8.0 | cu128 | 570+ | ⏳ AOT compile (builds+imports OK) | needs AOT-compiled .pt2 (NequIPCalculator.from_compiled_model) |
+| allegro | candidate | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (2.9e-07 eV/atom via AOT .pt2) | needs cueq-ops kernels + a per-arch .pt2 (nequip-compile on the user GPU) |
 | alphanet | candidate | 3.11.13 | 2.1.2 | cu121 | 525+ | ⚠ version drift (public HEAD ≠ /TGM) | owner must pin the exact commit (gas energies drift 0.24 eV/atom) |
 | equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ❌ resolver (env doesn't resolve) | fairchem-core 1.10 ↔ torch 2.9.1 conflict; needs --no-deps recipe |
 | matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | ⚠ no ref (builds+imports OK) | by-name weights fetch broken; not in /TGM (no reference) |
