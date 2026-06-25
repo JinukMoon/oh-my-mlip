@@ -1,7 +1,10 @@
 # Equivalence results — per-MLIP proof ledger
 
-Per-model evidence that an env rebuilt here from the recipe reproduces the
-validated /TGM hub. Tiers (see `docs/equiv_protocol.md`): **T1** weight bytes ·
+Per-ENV evidence that an env rebuilt here from the recipe reproduces the
+validated /TGM hub. NOTE: each env hosts a MODEL FAMILY (often several versions —
+e.g. the UMA env exposes 7 versions, SevenNet 2); each row below validates ONE
+representative version per env, which exercises that env's full code path +
+weights mechanism. So "N/20 envs" (not models) is the precise count. Tiers (see `docs/equiv_protocol.md`): **T1** weight bytes ·
 **T2a** single-point energy (cross-GPU OK) · **T2b** catbench-relax (same-GPU) ·
 **T3** time (same-GPU). `validated` ≡ T1 + T2b + T3.
 
@@ -135,3 +138,4 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
 | model | env builds | framework import | blocker (why still candidate) |
 |---|---|---|---|
 | NequIP | ✅ | ✅ nequip.ase | openequivariance extension won't load (torch 2.9.1 < 2.10 → JIT fallback fails on this box); NequIP-OAM ASE path needs oeq + an AOT-compiled .pt2 |
+| Allegro | ✅ | ✅ cuequivariance_torch + nequip.ase + allegro (ALL import) | only blocker: Allegro-OAM ASE path needs an AOT-compiled `.pt2` (from_compiled_model); /TGM has inference=None (no ready run command). Closest compile-tier to runnable. |
