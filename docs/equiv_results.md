@@ -109,8 +109,9 @@ Our deterministic CHGNet env reproduces /TGM. Env deleted after.
 | eSEN (fairchemv1) | PyTorch | ✅ clean | ⚠ gated (staged from /TGM) | ✅ 0.0 eV/atom (ALL bit-identical) | fixed: PyG find-links + scipy==1.16.0 (sph_harm) + ase/setuptools; gated weights via HF token (UMA tests the token UX) |
 | UMA | PyTorch | ✅ clean | ✅ GATED dl via HF token | ✅ 1.6e-07 eV/atom (5/6 ~bit-identical) | flagship gated; HF_TOKEN_PATH download proven end-to-end |
 | DeePMD (DPA-3.1) | PyTorch | ✅ clean | local ckpt (staged) | ✅ 1.5e-07 eV/atom (3/6 bit-identical) | needed mpich==5.0.1 (load_mpi_library); flipped candidate->clean |
+| DPA4 (DPA-4.0.1) | PyTorch | ⚠ candidate | local ckpt (staged) | ✅ 2.2e-07 eV/atom (CPU; cu130 GPU N/A here) | recipe completed (e3nn/vesin/vesin-torch/pip mpich); cu130 needs driver≥CUDA13, ran CPU |
 
-11/11 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
+12/12 attempted models reproduce the validated hub — across **two backends** (PyTorch + TensorFlow). Per-atom energy-match metric used throughout (tol 1e-3 eV/atom).
 
 **Recipe bugs found by these real builds (all fixed):** MatterSim needed two pins
 the loose recipe missed — `setuptools==75.8.0` (setuptools 81+ removed

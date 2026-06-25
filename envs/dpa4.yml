@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: deepmd-kit cu13x wheel + mpich; install-test required
+# candidate-reason: torch cu130 needs an NVIDIA driver >= the CUDA-13 floor; on a CUDA-12 host it runs CPU-only. Recipe completed + CPU-verified vs /TGM (2e-7 eV/atom); GPU inference unverified here (our test box is CUDA 12.8).
 # oh-my-mlip env recipe: DPA-4 (deepmd-kit 3.2 line)
 #
 # Pins mirror the validated internal setup:
@@ -31,9 +31,13 @@ dependencies:
   - pip
   # CUDA 13.0 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=13.0.*
-  - mpich
-  - ase
+  - ase=3.28.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu130
       - torch==2.11.0+cu130
       - deepmd-kit==3.2.0b0
+      - e3nn==0.6.0
+      - vesin==0.5.8
+      - vesin-torch==0.5.8
+      # deepmd-kit load_mpi_library() needs the mpich PIP package (Python metadata).
+      - mpich==5.0.1
