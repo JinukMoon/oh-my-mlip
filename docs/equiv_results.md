@@ -146,7 +146,7 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
 | AlphaNet | ✅ (with find-links + numpy<2) | ✅ | **public HEAD (v0.1.2) does NOT reproduce /TGM** (TESTED): slab bit-identical but gas molecules drift up to 0.24 eV/atom (H2 off 0.49 eV). Confirms the owner must publish the EXACT commit/wheel — pinning HEAD would give wrong energies. Strong build-test finding. |
 | EquFlash | ✅ **ENERGY-MATCHED** (multi-pass) | ✅ | ✅ EquFlashV2 (cueq-only) matches /TGM to 9.8e-07 eV/atom. The fairchem↔torch resolver conflict is dodged by a 2-pass install (torch+cueq+GGNN, then fairchem --no-deps + runtime deps incl. nvalchemi-toolkit-ops==0.3.0). Candidate only until install.sh supports multi-pass. |
 | MatRIS | ✅ (cu130 → CPU here) | ✅ matris.applications.base | by-name weights download (matris_10m_oam) writes an empty file → EOFError (public fetch broken, like eqnorm). NOT in /TGM, so no reference to stage or compare. torch 2.12.1+cu130 → cuda False on our box. |
-| Nequix | ❌ openequivariance wheel build fails | — | openequivariance is sdist-only and its CUDA extension wheel FAILS to build during pip install (compile subprocess error) → the whole JAX+oeq pip block fails. JAX backend. NOT in /TGM (no reference). Compile-tier blocker. |
+| Nequix | ✅ builds + imports (no ref) | ✅ NequixCalculator | with ninja + nvrtc.h on CPATH the oeq base builds (torch 2.10); NequixCalculator imports (torch backend). openequivariance_extjax (JAX accel) wheel still fails (nanobind/CMake) but not needed for import. NOT in /TGM → no energy reference. |
 
 
 ## Final tally (all 20 envs attempted)

@@ -32,7 +32,7 @@ full per-model numbers.
 | equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ✅ matched (9.8e-07 eV/atom, multi-pass) | needs a 2-pass install (fairchem --no-deps) + nvalchemi-toolkit-ops; install.sh multi-pass pending |
 | matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | ⚠ no ref (builds+imports OK) | by-name weights fetch broken; not in /TGM (no reference) |
 | nequip | candidate | 3.11.13 | 2.9.1 | cu128 | 570+ | ✅ matched (3.8e-07 eV/atom via AOT .pt2) | oeq JIT needs ninja + nvrtc.h on CPATH; + a per-arch .pt2 (nequip-compile) |
-| nequix | candidate | 3.10.20 | 2.10.0 | cu126 | 525+ | ❌ oeq build (openequivariance wheel build fails) | JAX; not in /TGM |
+| nequix | candidate | 3.10.20 | 2.10.0 | cu126 | 525+ | ✅ builds+imports (no ref) | needs ninja + nvrtc.h on CPATH; extjax(JAX) accel build still fails (optional); not in /TGM |
 
 ## The two host-floor limits (found empirically)
 

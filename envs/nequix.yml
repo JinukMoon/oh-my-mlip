@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: openequivariance is sdist-only (builds against nvcc/torch); also pulls JAX CUDA plugins
+# candidate-reason: nequix: BUILDS + IMPORTS (NequixCalculator, torch backend) — with `ninja` + nvrtc.h on the include path (export CPATH to the env's nvidia/*/include) for the oeq build, the openequivariance base installs on torch 2.10. The openequivariance_extjax (JAX accel) wheel still fails a nanobind/CMake build, but it is not needed for the torch-backend import. NOT in /TGM, so no energy reference to validate against (build/import-only).
 # oh-my-mlip env recipe: Nequix (nequix, JAX-based)
 #
 # Pins mirror the validated internal setup:
