@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: openequivariance is sdist-only (builds against nvcc/torch)
+# candidate-reason: nequip: ENERGY-VERIFIED — the AOT-compiled .pt2 matches /TGM to 3.8e-07 eV/atom (our sm89 vs /TGM sm86). openequivariance's 'won't load' was NOT a torch<2.10 limit; it just needed ninja (added) + nvrtc.h on the include path (export CPATH to the env's nvidia/*/include, or CUDA_HOME) for the first-use JIT. Stays candidate only because the .pt2 is a per-GPU-arch artifact (nequip-compile on the user GPU; see docs/compile.md).
 # oh-my-mlip env recipe: NequIP (nequip)
 #
 # Pins mirror the validated internal setup:
