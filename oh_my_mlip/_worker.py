@@ -50,6 +50,7 @@ stays pure JSON (no pickle, no eval).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 
@@ -163,7 +164,8 @@ def serve(calc, infile=sys.stdin, outfile=sys.stdout) -> None:
         try:
             atoms = decode_atoms(req["atoms"])
             props = tuple(req.get("properties", ("energy", "forces")))
-            results = compute(calc, atoms, props)
+            with contextlib.redirect_stdout(sys.stderr):
+                results = compute(calc, atoms, props)
             _emit(outfile, {"id": rid, "ok": True, "results": results})
         except Exception as exc:  # noqa: BLE001 - surface as ok:false, stay alive
             _emit(outfile, {"id": rid, "ok": False, "error": repr(exc)})
@@ -186,12 +188,13 @@ def main(argv: list[str] | None = None) -> int:
     from oh_my_mlip.provider import get_calculator
 
     try:
-        calc = get_calculator(
-            args.model,
-            version=args.version,
-            device=args.device,
-            apply_d3=args.apply_d3,
-        )
+        with contextlib.redirect_stdout(sys.stderr):
+            calc = get_calculator(
+                args.model,
+                version=args.version,
+                device=args.device,
+                apply_d3=args.apply_d3,
+            )
     except Exception as exc:  # noqa: BLE001 - handshake failure
         _emit(sys.stdout, {"ready": False, "error": repr(exc)})
         return 1

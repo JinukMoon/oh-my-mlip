@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "oh-my-mlip",
+  "description": "Self-healing MLIP installer for Claude Code — one slash command installs, compiles, and verifies any of 20+ ML interatomic potential frameworks on GPU with zero human intervention.",
+  "owner": {
+    "name": "Jinuk Moon",
+    "email": "jumoon@snu.ac.kr"
+  },
+  "plugins": [
+    {
+      "name": "oh-my-mlip",
+      "description": "Claude Code plugin for oh-my-mlip: /oh-my-mlip:setup <model> installs the model env, runs first-run compilation where needed, and verifies energy+force on GPU via single_point.py — all in a self-healing loop backed by AGENTS.md recovery strategies.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Jinuk Moon",
+        "email": "jumoon@snu.ac.kr"
+      },
+      "source": "./",
+      "category": "scientific-computing",
+      "homepage": "https://github.com/JinukMoon/oh-my-mlip",
+      "tags": [
+        "mlip",
+        "ase",
+        "catalysis",
+        "machine-learning",
+        "interatomic-potential"
+      ]
+    }
+  ],
+  "version": "0.1.0"
+}

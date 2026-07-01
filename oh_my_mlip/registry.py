@@ -139,6 +139,44 @@ def list_versions(model: str, models: dict | None = None) -> list[str]:
     return list(data[model].get("versions", {}).keys())
 
 
+def _resolve_family_and_version_name(
+    model: str,
+    version: str | None,
+    data: dict,
+) -> tuple[str, str | None]:
+    """Normalize family-name or version-name input to ``(family, version)``."""
+    if model.startswith("_"):
+        raise RegistryError(
+            f"unknown model: {model!r} (known: {list_models(data)})"
+        )
+    if model in data:
+        return model, version
+
+    matches: list[str] = []
+    for family, info in data.items():
+        if family.startswith("_") or not isinstance(info, dict):
+            continue
+        versions = info.get("versions", {})
+        if isinstance(versions, dict) and model in versions:
+            matches.append(family)
+
+    if not matches:
+        raise RegistryError(
+            f"unknown model: {model!r} (known: {list_models(data)})"
+        )
+    if len(matches) > 1:
+        raise RegistryError(
+            f"ambiguous version name {model!r}; found under families {matches}; "
+            f"pass the family name and version=... explicitly"
+        )
+    if version is not None and version != model:
+        raise RegistryError(
+            f"{model!r} is a version name for family {matches[0]!r}; "
+            f"do not also pass version={version!r}"
+        )
+    return matches[0], model
+
+
 # ── env_run key=value allowlist (security boundary) ──────────────────────────
 # models.json is code-equivalent / trusted (PR-gated), but env_run must be
 # constrained: it is applied as a subprocess env, NEVER shell-interpolated.
@@ -217,6 +255,11 @@ def resolve(
 ) -> dict:
     """Resolve a model (+ optional version) into the LOCKED codegen dict.
 
+    ``model`` may be either a framework/family key (for example ``"MACE"``)
+    or a version key found under a family's ``versions`` object (for example
+    ``"MACE-MPA-0"``). Version-key inputs are normalized to their owning
+    family before resolution.
+
     Returns::
 
         {
@@ -232,6 +275,9 @@ def resolve(
           "gated": bool,
           "license_url": str | None,
           "weights": str,
+          "weights_fetch": str,
+          "weights_source": str,
+          "weights_source_url": str | None,
           "validation": str,
           "note": str | None,
         }
@@ -245,10 +291,7 @@ def resolve(
     data = models if models is not None else load_models()
     home_path = home()
 
-    if model.startswith("_") or model not in data:
-        raise RegistryError(
-            f"unknown model: {model!r} (known: {list_models(data)})"
-        )
+    model, version = _resolve_family_and_version_name(model, version, data)
     info = data[model]
     versions = info.get("versions", {})
     if not versions:
@@ -310,6 +353,13 @@ def resolve(
         "gated": bool(vinfo.get("gated", False)),
         "license_url": vinfo.get("license_url"),
         "weights": vinfo.get("weights", "bundled"),
+        "weights_fetch": vinfo.get("weights_fetch", "by-name"),
+        "weights_source": vinfo.get("weights_source"),
+        "weights_source_url": vinfo.get("weights_source_url"),
+        "weights_sha256": vinfo.get("weights_sha256"),
+        "weights_size": vinfo.get("weights_size"),
+        "weights_fetch_command": vinfo.get("weights_fetch_command"),
+        "weights_cache_env": vinfo.get("weights_cache_env"),
         "validation": vinfo.get("validation", "unknown"),
         "note": vinfo.get("note") or info.get("note"),
     }

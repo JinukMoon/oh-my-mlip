@@ -38,17 +38,17 @@ How to read the columns:
 | MACE-MH-1-OC20 | MACE | auto-download | validated (sm89) | no | upload-pending |
 | NequIP-OAM-XL | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
 | NequIP-OAM-L | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
-| Allegro-OAM-L | Allegro | on-demand-hf | gpu pending | no | Phase 2 |
+| Allegro-OAM-L | Allegro | on-demand-hf | validated (sm89) | no | Phase 2 |
 | Nequix-MP-1 | Nequix | on-demand-hf | validated (sm89) | no | Phase 2 |
 | DPA-3.1-3M-FT | DeePMD | on-demand-hf | validated (sm89) | no | Phase 2 |
 | ORB-v3 | ORB | auto-download | validated (sm89) | no | Phase 2 |
 | GRACE-2L-OAM | GRACE | on-demand-hf | validated (sm89) | no | Phase 2 |
 | MatterSim-v1-5M | MatterSim | bundled | validated (sm89) | no | Phase 2 |
 | CHGNet-v0.3.0 | CHGNet | bundled | validated (sm89) | no | Phase 2 |
-| AlphaNet-v1-OMA | AlphaNet | on-demand-hf | gpu pending | no | Phase 2 |
+| AlphaNet-v1-OMA | AlphaNet | on-demand-hf | validated (sm89) | no | Phase 2 |
 | Eqnorm-MPtrj | Eqnorm | auto-download | validated (sm89) | no | Phase 2 |
 | eSEN-30M-OAM | fairchemv1 | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| EqV3-OMatMPtrjSalex | EquiformerV3 | on-demand-hf | gpu pending | no | Phase 2 |
+| EqV3-OMatMPtrjSalex | EquiformerV3 | on-demand-hf | validated (sm89) | no | Phase 2 |
 | UMA-m-1p1-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-m-1p1-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-s-1p1-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
@@ -56,10 +56,10 @@ How to read the columns:
 | UMA-s-1p2-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-s-1p2-OC22 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-s-1p2-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
-| PET-OAM-XL | PET | on-demand-hf | gpu pending | no | Phase 2 |
+| PET-OAM-XL | PET | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlashV2 | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlash | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
-| MatRIS-10M-OAM | MatRIS | auto-download | gpu pending | no | Phase 2 |
-| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | gpu pending | no | Phase 2 |
-| TACE-OAM-L | TACE | auto-download | gpu pending | no | Phase 2 |
+| MatRIS-10M-OAM | MatRIS | auto-download | tier1_cpu_driver_skew | no | Phase 2 |
+| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | tier1_cpu_driver_skew | no | Phase 2 |
+| TACE-OAM-L | TACE | auto-download | tier1_cpu_driver_skew | no | Phase 2 |
 <!-- STATUS_TABLE_DETAILED_END -->

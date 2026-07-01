@@ -10,7 +10,9 @@ Covers:
   * MISMATCH            — file differs from the recorded fingerprint (exit 1).
   * fingerprint-pending — no weights_sha256 recorded for the model.
   * file-not-found      — a path is supplied but absent (exit 1).
-  * the real models.json table shows the 15 validated fingerprints.
+  * the real models.json table marks RECORDED exactly the versions that declare
+    a weights_sha256 (deepmd/grace/PET inference targets are freeze/export-
+    generated or multi-file, so they are intentionally fingerprint-pending).
 
 No GPU, conda, torch, or ase required.
 """
@@ -111,13 +113,29 @@ def test_unknown_model_exits_two():
 
 # ── Real registry smoke test ──────────────────────────────────────────────────
 
-def test_real_registry_has_fifteen_recorded_fingerprints():
+def test_real_registry_recorded_matches_declared_fingerprints():
+    """run() must mark RECORDED exactly the versions that declare weights_sha256.
+
+    Counted dynamically from models.json (not a magic number) so legitimately
+    dropping a fingerprint — e.g. deepmd/grace/PET, whose inference targets are
+    freeze/export-generated or multi-file and therefore not byte-reproducible —
+    does not require touching this guard. The point is that the verifier sees
+    every recorded fingerprint and no phantom ones.
+    """
     mod = _load()
     models = json.loads(MODELS_JSON.read_text(encoding="utf-8"))
+    declared = sum(
+        1
+        for fw in models.values()
+        if isinstance(fw, dict)
+        for v in fw.get("versions", {}).values()
+        if isinstance(v, dict) and v.get("weights_sha256")
+    )
+    assert declared > 0, "expected at least one recorded fingerprint in models.json"
     rows, rc = mod.run(models)
     assert rc == 0
     recorded = [name for name, status, _ in rows if status == mod.RECORDED]
-    assert len(recorded) == 15, recorded
+    assert len(recorded) == declared, (declared, recorded)
 
 
 def test_cli_table_runs_on_real_registry(capsys):

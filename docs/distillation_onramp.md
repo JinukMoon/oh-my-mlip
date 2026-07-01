@@ -22,7 +22,7 @@ surfaces from `oh_my_mlip`.
 
 ## The two surfaces a downstream tool binds to
 
-### 1. `get_calculator(model, version=None, device="cuda", apply_d3=False)` — INTRA-ENV
+### 1. `get_calculator(...)` — INTRA-ENV (canonical signature: AGENTS.md §2)
 
 Returns a ready-to-use ASE `Calculator`.
 

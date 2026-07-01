@@ -21,6 +21,7 @@ import threading
 from pathlib import Path
 from typing import Any, Iterable
 
+from oh_my_mlip.fetch import ensure_weights
 from oh_my_mlip import registry
 
 __all__ = ["get_calculator", "run", "Worker", "WorkerPool"]
@@ -67,6 +68,7 @@ def get_calculator(
     internal catb_all.py / verify_all.py path.
     """
     spec = registry.resolve(model, version=version, arch=arch)
+    ensure_weights(model, version=spec["version"], spec=spec)
 
     # exec the import + inference strings in a shared namespace. `device` is
     # exposed so inference lines that reference a `device` variable resolve; the
@@ -135,6 +137,18 @@ class Worker:
     # -- lifecycle --
     def _build_env(self) -> dict:
         child_env = dict(os.environ)
+        # Prepend the env's own bin dir to PATH (conda-activate-equivalent for
+        # TOOL resolution only — the interpreter is still invoked by absolute
+        # path, never via `conda activate`). Some envs shell out to their own
+        # console scripts at runtime: NequIP/Allegro load an AOT .pt2 whose
+        # OpenEquivariance extension JIT-loads via torch.utils.cpp_extension,
+        # which runs `ninja` from PATH. Without the env bin on PATH that `ninja`
+        # is invisible and the load fails ("Ninja is required to load C++
+        # extensions"). Prepending the env bin fixes this generally.
+        env_bin = os.path.dirname(os.path.expandvars(self._python_exe))
+        if env_bin:
+            existing = child_env.get("PATH", "")
+            child_env["PATH"] = env_bin + (os.pathsep + existing if existing else "")
         # env_run is already parsed + allowlisted by registry.resolve().
         child_env.update(self.spec["env_run"])
         child_env.setdefault("OH_MY_MLIP_HOME", registry.home())

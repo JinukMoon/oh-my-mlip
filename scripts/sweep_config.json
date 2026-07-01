@@ -1,0 +1,26 @@
+{
+  "_doc": "Local WSL GPU sweep order for the self-healing setup test. Host: RTX 4060 Ti, sm89, nvcc 12.8, conda 25.7. For each entry: install env -> verify energy+force on GPU via single_point.py (assert GPU PID) -> on PASS delete env + clean caches -> next. Self-heal per AGENTS.md section 8; stall-stop via setup_guardrail.py (same error signature 2x). Gated entries: attempt ONLY if HF_TOKEN valid + license accepted, else record skipped(gated) and continue (never auto-retry, AGENTS.md section 5).",
+  "host": {"gpu": "RTX 4060 Ti", "arch": "sm89", "vram_gb": 16, "nvcc": "12.8", "disk_ceiling_gb": 30},
+  "order": [
+    {"family": "MACE",         "env": "mace",          "verify_model": "MACE-MPA-0",          "gated": false, "compile": false, "tier": "validated"},
+    {"family": "SevenNet",     "env": "sevennet",      "verify_model": "SevenNet-MF-OMPA",    "gated": false, "compile": false, "tier": "validated"},
+    {"family": "NequIP",       "env": "nequip",        "verify_model": "NequIP-OAM-L",        "gated": false, "compile": true,  "tier": "compile-pilot"},
+    {"family": "Allegro",      "env": "allegro",       "verify_model": "Allegro-OAM-L",       "gated": false, "compile": true,  "tier": "compile-pilot"},
+    {"family": "ORB",          "env": "orb",           "verify_model": "ORB-v3",              "gated": false, "compile": false, "tier": "roster"},
+    {"family": "CHGNet",       "env": "chgnet",        "verify_model": "CHGNet-v0.3.0",       "gated": false, "compile": false, "tier": "roster"},
+    {"family": "MatterSim",    "env": "mattersim",     "verify_model": "MatterSim-v1-5M",     "gated": false, "compile": false, "tier": "roster"},
+    {"family": "Nequix",       "env": "nequix",        "verify_model": "Nequix-MP-1",         "gated": false, "compile": false, "tier": "roster"},
+    {"family": "GRACE",        "env": "grace",         "verify_model": "GRACE-2L-OAM",        "gated": false, "compile": false, "tier": "roster"},
+    {"family": "Eqnorm",       "env": "eqnorm",        "verify_model": "Eqnorm-MPtrj",        "gated": false, "compile": false, "tier": "roster"},
+    {"family": "AlphaNet",     "env": "alphanet",      "verify_model": "AlphaNet-v1-OMA",     "gated": false, "compile": false, "tier": "roster"},
+    {"family": "DeePMD",       "env": "deepmd",        "verify_model": "DPA-3.1-3M-FT",       "gated": false, "compile": false, "tier": "roster"},
+    {"family": "DPA4",         "env": "dpa4",          "verify_model": "DPA-4.0.1-pro-MPtrj", "gated": false, "compile": false, "tier": "roster"},
+    {"family": "PET",          "env": "pet",           "verify_model": "PET-OAM-XL",          "gated": false, "compile": false, "tier": "roster"},
+    {"family": "EquFlash",     "env": "equflash",      "verify_model": "EquFlashV2",          "gated": false, "compile": false, "tier": "roster"},
+    {"family": "MatRIS",       "env": "matris",        "verify_model": "MatRIS-10M-OAM",      "gated": false, "compile": false, "tier": "roster"},
+    {"family": "TACE",         "env": "tace",          "verify_model": "TACE-OAM-L",          "gated": false, "compile": false, "tier": "roster"},
+    {"family": "EquiformerV3", "env": "equiformer_v3", "verify_model": "EqV3-OMatMPtrjSalex", "gated": false, "compile": false, "tier": "roster"},
+    {"family": "fairchemv1",   "env": "fairchemv1",    "verify_model": "eSEN-30M-OAM",        "gated": true,  "compile": false, "tier": "gated"},
+    {"family": "UMA",          "env": "uma",           "verify_model": "UMA-m-1p1-OC20",      "gated": true,  "compile": false, "tier": "gated"}
+  ]
+}

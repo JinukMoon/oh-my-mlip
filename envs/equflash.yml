@@ -1,5 +1,5 @@
-# build_status: candidate
-# candidate-reason: equflash: ENERGY-VERIFIED (EquFlashV2, cueq-only) — matches /TGM to 9.8e-07 eV/atom. The single-pip-block FAILS (fairchem-core 1.10 <-> torch 2.9.1 ResolutionImpossible); a 2-PASS install resolves it. Stays candidate only because install.sh does one pip pass; needs multi-pass support to auto-build. v1 (flashTP) additionally needs the SNU-ARC/flashTP CUDA compile.
+# build_status: clean
+# build_note: equflash: ENERGY-VERIFIED (EquFlashV2, cueq-only) — matches /TGM to 9.8e-07 eV/atom, and tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): energy=-16.391567 eV, torch.cuda alloc ~191MB. The single conda-env-create pip block FAILS (fairchem-core 1.10 <-> torch 2.9.1 ResolutionImpossible); the 2-PASS install is now AUTOMATED by the multi-pass sidecar envs/equflash.build.sh, which install.sh auto-runs when present. NOTE: v1 (flashTP) additionally needs the SNU-ARC/flashTP CUDA compile (optional accel; the default EquFlashV2 path is cueq-only and does not need it).
 # oh-my-mlip env recipe: EquFlash (SamsungDS/GGNN; flashTP v1 only)
 #
 # Pins mirror the validated internal setup:

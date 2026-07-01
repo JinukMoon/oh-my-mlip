@@ -50,5 +50,6 @@ dependencies:
       - cuequivariance-ops-cu12==0.8.1
       - cuequivariance-ops-torch-cu12==0.8.1
       - e3nn==0.5.7
+      - ninja==1.13.0
       # (LAMMPS-MLIAP MD is an optional host cmake build — see the note above;
       #  it is NOT a pip dependency and is not required for ASE inference.)

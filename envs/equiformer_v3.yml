@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: equiformer_v3: framework needs an owner-approved public pin. TESTED: public atomicarchitects/equiformer_v3@a7300c58df683dc99cb48027d5bfd4c887486c48 (vendored fairchem a7300c58d) REPRODUCES /TGM BIT-IDENTICAL. Resolvable once owner approves pinning this sha + the vendored-fairchem editable build + deps (lmdb numba torchtnt wandb pydantic huggingface_hub scipy==1.16.0 pymatgen hydra-core) + the PyG find-links.
+# candidate-reason: equiformer_v3: HOST BUILD+GPU-VERIFIED on RTX 4060 Ti sm89 (2026-06-30) via install.sh single-pass with the pinned sha below: single_point.py EquiformerV3 energy=-16.392015 eV, torch.cuda max_mem 752MB (torch 2.7.1+cu128). The vendored fairchem-core (subdirectory build, sha a7300c58) provides OCPCalculator + the EqV3 model; deps (lmdb numba torchtnt wandb pydantic huggingface_hub pymatgen hydra-core) resolve transitively, and scipy is now pinned to 1.16.0 (>=1.17 removed scipy.special.sph_harm used by the gemnet layers). Stays candidate only on GOVERNANCE: pinning atomicarchitects/equiformer_v3@a7300c58 (which REPRODUCES /TGM BIT-IDENTICAL) is pending owner approval of this immutable public sha; the build/run itself is verified.
 # oh-my-mlip env recipe: Equiformer V3 (atomicarchitects/equiformer_v3 + vendored fairchem-core)
 #
 # Pins mirror the validated internal setup:
@@ -48,6 +48,13 @@ dependencies:
       - torch_cluster==1.6.3+pt27cu128
       - torch_spline_conv==1.2.2+pt27cu128
       - e3nn==0.5.6
+      # scipy MUST be pinned: the vendored fairchem-core gemnet layers import
+      # scipy.special.sph_harm, which scipy>=1.17 REMOVED -> an unpinned scipy
+      # floats to 1.17.x and the worker fails at import with
+      # "cannot import name 'sph_harm' from 'scipy.special'". 1.16.0 still ships it.
+      - scipy==1.16.0
+      # Vendored fairchem-core from the EquiformerV3 source tree; provides
+      # `fairchem.core.OCPCalculator` used by models.json.
+      - "fairchem-core @ git+https://github.com/atomicarchitects/equiformer_v3.git@a7300c58df683dc99cb48027d5bfd4c887486c48#subdirectory=packages/fairchem-core"
       # EquiformerV3 framework omitted: tgm_pinmap.json has no public git SHA.
       # Do not install floating git+https://github.com/atomicarchitects/equiformer_v3.git.
-      # vendored fairchem-core: pip install -e packages/fairchem-core (see note).

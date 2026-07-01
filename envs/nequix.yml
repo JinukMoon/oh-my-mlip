@@ -1,5 +1,5 @@
-# build_status: candidate
-# candidate-reason: nequix: BUILDS + IMPORTS (NequixCalculator, torch backend) — with `ninja` + nvrtc.h on the include path (export CPATH to the env's nvidia/*/include) for the oeq build, the openequivariance base installs on torch 2.10. The openequivariance_extjax (JAX accel) wheel still fails a nanobind/CMake build, but it is not needed for the torch-backend import. NOT in /TGM, so no energy reference to validate against (build/import-only).
+# build_status: clean
+# build_note: nequix: HOST tier-2 GPU PASS (RTX 4060 Ti sm89, 2026-06-30) via the JAX backend — NequixCalculator(...nequix-mp-1.nqx, backend='jax', use_kernel=False) energy=-16.378962 eV on jax CudaDevice. nequix is JAX-native; OpenEquivariance is OPTIONAL and is INTENTIONALLY OMITTED here (its 0.6.4 sdist won't build on this host; use_kernel=False uses e3nn-jax instead). The single conda env create installs cleanly now that oeq is removed.
 # oh-my-mlip env recipe: Nequix (nequix, JAX-based)
 #
 # Pins mirror the validated internal setup:
@@ -43,6 +43,10 @@ dependencies:
       - jaxlib==0.6.2
       - e3nn-jax==0.20.8
       - equinox==0.13.6
-      - openequivariance==0.6.4
-      - ninja==1.13.0
-      - openequivariance_extjax==0.6.4
+      # openequivariance / openequivariance_extjax INTENTIONALLY OMITTED: oeq is
+      # OPTIONAL (upstream `pip install nequix[oeq]`), its 0.6.4 sdist fails a
+      # nanobind/CMake build on this host (no cp310 wheel), and it is NOT needed.
+      # The default JAX backend runs WITHOUT kernels via use_kernel=False
+      # (e3nn-jax tensor products), which is the verified path here. torch torch
+      # is kept only for nequix's optional torch backend import; the verified
+      # single-point uses backend='jax'.

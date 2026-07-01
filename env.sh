@@ -47,6 +47,12 @@ if [ -n "${CUDA_HOME:-}" ]; then
   # Append (not prepend) so each env's torch-bundled CUDA libs keep priority; this is only a
   # fallback for envs whose torch does not load libcudart.so.12 into memory (e.g. cu118 builds).
   export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}${CUDA_HOME}/lib64:${CUDA_HOME}/lib"
+  # Expose the toolkit headers (nvrtc.h, cuda_runtime.h, ...) so first-run CUDA
+  # extension JIT builds can find them. NequIP/Allegro load an AOT .pt2 whose
+  # OpenEquivariance extension JIT-compiles on a cold cache via torch's
+  # cpp_extension (needs ninja on PATH — provided per-env by the provider — AND
+  # nvrtc.h on the include path). Append so any env-bundled headers keep priority.
+  export CPATH="${CPATH:+$CPATH:}${CUDA_HOME}/include"
 fi
 # Per-env LD_LIBRARY_PATH note: a few envs declare an `env_run` prefix in models.json
 # (e.g. DPA4 needs LD_LIBRARY_PATH="" to dodge an Intel oneAPI libfabric clash). That prefix
@@ -76,8 +82,12 @@ unset _m || true
 #   Some envs JIT-compile fast kernels at runtime; a clean HOME recompiles from scratch
 #   (first run can "hang" for minutes). Seed a prebuilt copy into the user cache only-if-absent
 #   (cp -n) so there is zero recompile and the same kernel loads immediately.
-#   NOTE: NequIP/Allegro do NOT use this JIT path; they load AOT .pt2 (recompiled/reselected on
-#   the user GPU) and are unaffected by this seed.
+#   NOTE: NequIP/Allegro DO use this JIT path indirectly: their AOT .pt2 is built
+#   with the OpenEquivariance modifier, so loading it imports openequivariance,
+#   whose extension JIT-loads via torch's cpp_extension. On a cold cache that
+#   recompiles (needs ninja on PATH + nvrtc.h on CPATH; see sections 3 + the
+#   provider's per-env PATH injection). Seeding the prebuilt copy here skips that
+#   recompile on a same-arch host.
 _TE_SRC="${OH_MY_MLIP_HOME}/models/torch_ext"
 if [ -d "$_TE_SRC" ]; then
   _TE_DST="${TORCH_EXTENSIONS_DIR:-$HOME/.cache/torch_extensions}"

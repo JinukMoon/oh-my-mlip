@@ -10,6 +10,29 @@ larger workflow. A human can follow it verbatim too.
 > whatever machine you are on (laptop, workstation, single GPU box). There is
 > nothing to submit to a queue.
 
+## ⚠️ Hard operating constraints (omm self-healing setup) — read before any install
+
+These are non-negotiable and override convenience:
+
+1. **WSL-ONLY install / compile / delete.** Every MLIP env build, GPU compile
+   (D3 `.so`, NequIP/Allegro `.pt2`), verification, and env deletion happens
+   **only on this local WSL host**. **NEVER** install, build, compile, or delete
+   on remote servers (e.g. 147 / 114) — their login nodes are blocked and SLURM
+   is a bottleneck. The setup sweep is a local-WSL operation, full stop.
+2. **Success = ASE energy + forces on the GPU, not "install succeeded".** A model
+   is only DONE when `run_examples/single_point.py <model>` actually returns
+   energy and forces (GPU-backed). `install.sh` exit-0 / the `.omm_ready`
+   sentinel is necessary but **not** sufficient.
+3. **Self-healing loop.** The agent autonomously installs → compiles → verifies,
+   retrying with *different* strategies (see §8 error-class policy) until ASE
+   works, or the same error signature repeats (deterministic stall stop via
+   `scripts/setup_guardrail.py`). Bounded disk; clean up each env after testing.
+4. **Driven by a fresh Codex agent.** The autonomous install/compile/verify loop
+   is handed to a fresh Codex agent (independent perspective, separate runtime).
+5. **End vision — omm embeds in the session like OMC.** The Claude Code plugin
+   (`.claude-plugin/` + `skills/`) is the point: drop into any session and
+   `/oh-my-mlip:setup <model>` makes MLIP install trivial. Keep that the north star.
+
 ## 0. Read these first (do NOT rely on memory — read them every time)
 
 The two repo-root files are the single source of truth. Read them before
@@ -203,6 +226,56 @@ prebuilt-per-arch D3 artifact or degrades D3 **off** with a clear message (the
 MLIP itself still runs; only the dispersion correction is unavailable). It never
 silently produces wrong numbers. See `docs/arch_first_run_compile.md`.
 
+## 8. Self-healing setup: error-class policy (retryable vs halt-and-report)
+
+This section is the **single source of truth** for recovery strategy selection
+in the self-healing install loop. The agent reads the traceback and classifies
+it here; `scripts/setup_guardrail.py` owns only the deterministic stop set (disk
+ceiling, identical-signature stall N=2, cumulative-attempt cap N=5, wall-clock
+cap, and scoped cache cleanup — see "Deterministic stop" below). Neither
+`skills/setup/SKILL.md` nor `setup_guardrail.py` copies or re-encodes this
+taxonomy.
+
+### RETRYABLE — agent picks a different strategy; loop continues
+
+| Error class | Recovery action |
+|---|---|
+| **GPU arch mismatch** (`sm86` ↔ `sm89`; e.g. wrong `.pt2` loaded for host) | Reselect the arch-matched compiled artifact (`models/compiled/{sm86,sm89}/`) or recompile for the host arch via `scripts/compile_nequip.sh`. Do NOT delete the mismatched artifact first — rename to avoid a re-fetch race. |
+| **Transient network / partial weight download** (connection reset, incomplete HF tarball, partial `.nequip.zip`) | Re-fetch the artifact. Clean the partial file before retrying so the fetch does not resume a corrupt state. |
+
+### HALT-AND-REPORT — do NOT auto-retry; surface an actionable message and stop
+
+| Error class | Required action |
+|---|---|
+| **`nvcc` absent** | D3 dispersion compilation falls back: `install.sh` either fetches a prebuilt per-arch D3 artifact or degrades D3 **off** with a clear message (the MLIP itself still runs; only D3 is unavailable). See `docs/arch_first_run_compile.md` and `§6` of this file. Do not attempt to install `nvcc` or the CUDA toolkit. Report the degrade state to the user. |
+| **Gated weights** (`gated: true`) — token missing or license not accepted | Surface the model's `license_url` and point to `docs/hf_token.md`. **Never auto-retry** a gated fetch (consistent with `§5`). The fetch failing here is by design; the user must accept the license and supply a read token. |
+| **conda / mamba absent** | Surface an actionable install guide pointing the user to Miniconda/Mambaforge (`https://docs.conda.io/projects/miniconda`). A scoped Miniconda install is acceptable **only after the user explicitly consents**; the host must not be mutated without consent. |
+| **Undocumented / unclear install or weight source** — the model's install recipe or `weights_*` fetch path is missing or wrong in `models.json` and the official page does not resolve it | Make **one bounded autonomous attempt** (check the official model/docs page + 1–2 real fetch/build tries). If that fails, **STOP — do not burn tokens on open-ended self-heal.** Ask the user to share the model's official install/weight-download docs or link, set the version's `models.json` `note` to start with `awaiting user docs:` describing what was tried, and report the blocker. This is the same trigger as the deterministic stop set (identical signature ×2, cumulative N=5, or wall-clock): on reaching it, switch to this docs-request path instead of auto-retrying. (Precedent: GRACE's nested-SavedModel flatten pattern was fixed fast once the user supplied the `gracemaker` foundation-models docs.) |
+
+### Deterministic stop (owned by `scripts/setup_guardrail.py`, not this section)
+
+`setup_guardrail.py` enforces **four bounded-self-heal stop conditions**
+regardless of error class; whichever trips first stops the loop unconditionally:
+
+1. **disk headroom** below the ceiling (default **30 GB**) → `guardrail_halt`.
+2. **same normalized stderr signature** recurring ≥ N=2 times → `stalled`.
+3. **cumulative attempts** reaching `cumulative_max` (default **5**, signature-agnostic)
+   → `stalled_cumulative`. This bounds the loop even when the agent retries with a
+   *different* strategy each round (which produces a fresh signature every time, so
+   the signature stall alone would never fire — the divergence guard).
+4. **wall-clock** elapsed since the first attempt reaching `wallclock_max_s`
+   (off by default; set per host/model) → `wallclock_halt`.
+
+Partial-artifact cleanup runs between attempts (`clean-cache`). When the helper
+returns `"stalled"`, `"stalled_cumulative"`, `"wallclock_halt"`, or
+`"guardrail_halt"`, the agent stops unconditionally and surfaces the helper's
+verdict. These four conditions are the stop set; the recovery *strategy* axis
+(retryable vs halt-and-report) lives in §8 above, and the root-cause *diagnosis*
+axis (the install-failure buckets) is a separate, observability-only concern that
+this stop set never re-encodes.
+
+---
+
 ## 7. Checklist before you hand back code
 
 - [ ] Read `models.json` (not memory) for `python` / `import` / `inference`.
@@ -216,6 +289,24 @@ silently produces wrong numbers. See `docs/arch_first_run_compile.md`.
 - [ ] No scheduler/queue assumptions — this runs locally.
 
 ---
+
+### Plugin vs MCP — surfaces, not knowledge homes
+
+The **Claude Code plugin** (`.claude-plugin/` + `skills/`) is the **primary
+onboarding surface**: it provides `/oh-my-mlip:setup`, `/oh-my-mlip:run`, and
+`/oh-my-mlip:catbench` as slash commands in Claude Code with zero extra server
+setup. The plugin skills are thin pointers — they contain no duplicate knowledge;
+all strategy and model facts live here in `AGENTS.md` and `models.json`.
+
+The **MCP server** (`python -m oh_my_mlip.mcp_server`) is an **optional
+structured-query surface** for tool-calling agents that prefer typed tool
+invocations over reading this document. It exposes the same registry information
+and the same run/install entry points. No knowledge has moved from `AGENTS.md`
+into the MCP server — it is a thin adapter only (see docstring in
+`oh_my_mlip/mcp_server.py`).
+
+**Single source of truth:** all model facts in `models.json`; all agent strategy
+in `AGENTS.md`. Neither surface (plugin nor MCP) duplicates or extends these.
 
 ### Section → MCP tool
 

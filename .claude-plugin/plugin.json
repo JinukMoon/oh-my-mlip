@@ -1,0 +1,23 @@
+{
+  "name": "oh-my-mlip",
+  "version": "0.1.0",
+  "description": "Claude Code plugin for oh-my-mlip: self-healing install loop for 20+ MLIP frameworks. One registry, many MLIPs — install, compile, and verify energy+force on GPU with zero human intervention.",
+  "author": {
+    "name": "Jinuk Moon"
+  },
+  "repository": "https://github.com/JinukMoon/oh-my-mlip",
+  "homepage": "https://github.com/JinukMoon/oh-my-mlip",
+  "license": "MIT",
+  "keywords": [
+    "mlip",
+    "ase",
+    "catalysis",
+    "claude-code",
+    "plugin"
+  ],
+  "skills": [
+    "./skills/setup/",
+    "./skills/run/",
+    "./skills/catbench/"
+  ]
+}

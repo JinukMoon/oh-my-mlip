@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: alphanet: public AlphaNet HEAD (v0.1.2) does NOT reproduce the validated /TGM editable build — TESTED: slab energy bit-identical but gas molecules differ up to 0.24 eV/atom (H2 off 0.49 eV). The owner must publish the EXACT commit/wheel they used. (Also needs the PyG find-links + numpy<2 already noted below.)
+# candidate-reason: alphanet: HOST tier-2 GPU PASS (RTX 4060 Ti sm89, 2026-06-30) via envs/alphanet.build.sh (install.sh auto-runs it): AlphaNet pinned to public github.com/zmyybc/AlphaNet@65f8ea93 + torch 2.1.2+cu121 + numpy==1.26.4 + pydantic_settings/rich/scikit-learn; single_point.py AlphaNet energy=-16.406492 eV. ACCURACY CAVEAT (stays candidate): this public build computes correctly (energy+forces) but gas-molecule energies differ from the internal /TGM build (slab bit-identical; gas up to 0.24 eV/atom, H2 ~0.49 eV) — fine for setup verification, not bit-exact reproduction. Do NOT install matscipy (forces numpy>=2, breaks the torch 2.1.2 ABI; JAX-path only).
 # oh-my-mlip env recipe: AlphaNet (alphanet)
 #
 # Pins mirror the validated internal setup:

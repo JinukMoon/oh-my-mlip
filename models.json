@@ -23,7 +23,9 @@
       "weights": "how weights are obtained: 'bundled' (inside the conda-pack tarball) | 'auto-download' (fetched by name to a shared cache on first run) | 'on-demand-hf' (fetched from Hugging Face Hub, may be gated)",
       "weights_fetch": "fetch mechanism: 'by-name' (resolved by model name/cache) | 'url' (explicit download URL) | 'gated-hf' (gated HF repo requiring license acceptance + HF_TOKEN)",
       "weights_source": "the source value matching weights_fetch: an HF repo id (owner/name) for gated-hf, an http(s) URL (or the 'TODO-owner-review' placeholder, filled with the real official link by a later goal) for url, a resolver name/placeholder for by-name",
-      "validation": "host-GPU validation state: 'validated_sm86' | 'validated_sm89' (single-point + D3 verified on that arch) | 'gpu_pending' (env/load OK but GPU single-point and/or D3 not yet verified) | 'cpu_only'"
+      "weights_fetch_command": "optional argv template for by-name weights that still need an explicit local models/<env>/ path; {weights_source} and {target_root} are available",
+      "weights_cache_env": "optional env var set to the target root before running weights_fetch_command",
+      "validation": "host-GPU validation state, TWO INDEPENDENT AXES (do not conflate). ARCH-VALIDITY: 'validated_sm86' | 'validated_sm89' means the compiled/AOT artifact is valid for that compute capability; this transfers across same-arch hosts (e.g. an sm89 value is arch-valid on both L40S and RTX 4060 Ti). HOST-RESOURCE/DRIVER-VALIDITY: a separate concern (VRAM ceiling, CUDA driver<->runtime skew) that does NOT transfer and must be (re)checked on the user's own host. A 'validated_sm89' value carried over from the internal catbench L40S host is an ARCH claim only; on a different sm89 host it may still fail tier-2 for host-resource/driver reasons, in which case CR-1 applies (tier-1 via CPU PASS, tier-2 honest degrade). Other states: 'gpu_pending' (env/load OK but GPU single-point and/or D3 not yet verified on any host) | 'cpu_only'. Source of truth for a given host is that host's measured tier-1/tier-2 result, not a carried-over arch label."
     },
     "gpu_arch": {
       "sm86": {
@@ -34,8 +36,10 @@
       },
       "sm89": {
         "gpu": [
-          "L40S"
-        ]
+          "L40S",
+          "RTX 4060 Ti"
+        ],
+        "host_note": "RTX 4060 Ti (16GB, compute cap 8.9) is the local WSL self-healing host; it is arch-compatible with L40S sm89 artifacts but has a smaller 16GB VRAM ceiling and may hit host-resource/driver-validity limits independent of arch-validity (see field_guide.validation)."
       }
     },
     "catbench": "All envs ship catbench. D3: from catbench.dispersion import DispersionCorrection; calc = DispersionCorrection().apply(calc). The arch-specific pair_d3.so is NOT baked into distributed tarballs; it recompiles on the user GPU on first run (needs nvcc; see env.sh).",
@@ -64,7 +68,7 @@
     "import": ["from sevenn.calculator import SevenNetCalculator"],
     "versions": {
       "SevenNet-MF-OMPA": {"mlip_name": "SevenNet-MF-OMPA", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-mf-ompa", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-mf-ompa", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89", "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): single_point.py SevenNet energy=-16.389599 eV, torch.cuda.memory_allocated 121MB/max 333MB (torch 2.7.1+cu126). enable_oeq=True succeeds against the cuequivariance 0.8.0 wheels in envs/sevennet.yml (no separate openequivariance install needed).",
         "inference": ["calc = SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=True)"]},
       "SevenNet-Omni": {"mlip_name": "SevenNet-Omni", "training_set": ["OMat24", "sAlex", "MPtrj"],
         "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-omni", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
@@ -97,7 +101,7 @@
     "python": "${OH_MY_MLIP_HOME}/envs/nequip/bin/python",
     "default_version": "NequIP-OAM-XL",
     "model_source": "${OH_MY_MLIP_HOME}/models/compiled/{sm86,sm89}/ (compiled .pt2, recompiled/reselected on user GPU)",
-    "note": "arch-pinned. Pick sm86/sm89 by host GPU. sm89 (L40S) verified single-point. NequIPCalculator ASE path is from_compiled_model ONLY (no uncompiled load) -> the per-arch .pt2 is required, not optional; it is reselected/recompiled on the user GPU, never baked into a distributed tarball.",
+    "note": "arch-pinned. Pick sm86/sm89 by host GPU. NequIPCalculator ASE path is from_compiled_model ONLY (no uncompiled load) -> the per-arch .pt2 is required, not optional; it is reselected/recompiled on the user GPU, never baked into a distributed tarball. HOST-VERIFIED tier-2 (RTX 4060 Ti sm89, 2026-06-30) for NequIP-OAM-L: nequip-compile produced models/compiled/sm89/NequIP-OAM-L_sm89.nequip.pt2 (aotinductor, torch 2.9.1+cu128), single_point.py NequIP --version NequIP-OAM-L energy=-16.379920 eV, torch.cuda.memory_allocated 8.5MB/max 47MB. RUNTIME: the .pt2 imports openequivariance, whose extension JIT-loads via torch cpp_extension -> needs `ninja` on PATH (now injected per-env by the provider from <env>/bin) + nvrtc.h on CPATH (now set by env.sh section 3 from CUDA_HOME/include); a cold cache recompiles once, then loads from ~/.cache/torch_extensions. default_version is NequIP-OAM-XL: its sm89 .pt2 must be compiled the same way before `single_point.py NequIP` (no --version) works.",
     "accel": {
       "tool": "openequivariance",
       "install": "pip install openequivariance",
@@ -112,10 +116,10 @@
     "import": ["import openequivariance", "from nequip.ase import NequIPCalculator"],
     "versions": {
       "NequIP-OAM-XL": {"mlip_name": "NequIP-OAM-XL", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/NequIP-OAM-XL:0.1", "weights_source_url": "https://zenodo.org/api/records/18775904/files/NequIP-OAM-XL-0.1.nequip.zip/content", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/NequIP-OAM-XL:0.1", "weights_source_url": "https://zenodo.org/api/records/18775904/files/NequIP-OAM-XL-0.1.nequip.zip/content", "validation": "validated_sm89", "note": "sm89 .pt2 host-verified tier-2 on RTX 4060 Ti (2026-06-30): default single_point.py NequIP energy=-16.386003 eV; nequip-compile produced models/compiled/sm89/NequIP-OAM-XL_sm89.nequip.pt2 (aotinductor). See framework note for the oeq runtime/compile flow.",
         "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/NequIP-OAM-XL_sm86.nequip.pt2', device='cuda')"], "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/NequIP-OAM-XL_sm89.nequip.pt2', device='cuda')"]},
       "NequIP-OAM-L": {"mlip_name": "NequIP-OAM-L", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/NequIP-OAM-L:0.1", "weights_source_url": "https://zenodo.org/api/records/18775904/files/NequIP-OAM-L-0.1.nequip.zip/content", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/NequIP-OAM-L:0.1", "weights_source_url": "https://zenodo.org/api/records/18775904/files/NequIP-OAM-L-0.1.nequip.zip/content", "validation": "validated_sm89", "note": "sm89 .pt2 host-verified tier-2 on RTX 4060 Ti (energy=-16.379920 eV); see framework note for the oeq runtime/compile flow.",
         "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/NequIP-OAM-L_sm86.nequip.pt2', device='cuda')"], "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/NequIP-OAM-L_sm89.nequip.pt2', device='cuda')"]}
     }
   },
@@ -123,16 +127,16 @@
     "env": "allegro",
     "python": "${OH_MY_MLIP_HOME}/envs/allegro/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/compiled/{sm86,sm89}/ (compiled .pt2, recompiled/reselected on user GPU)",
-    "note": "arch-pinned. Verify whether import is cuequivariance_torch or openequivariance (jumoon). GPU single-point not yet re-verified for this public edition -> validation=gpu_pending.",
+    "note": "arch-pinned. HOST-VERIFIED tier-2 (RTX 4060 Ti sm89, 2026-06-30): import is cuequivariance_torch (NOT openequivariance — Allegro is a cueq-backed model). nequip-compile produced models/compiled/sm89/Allegro-OAM-L_sm89.nequip.pt2 (aotinductor, torch 2.8.0+cu128, NO oeq modifier), single_point.py Allegro energy=-16.384536 eV, torch.cuda.memory_allocated 8.5MB/max 101MB. The cueq ops ship as wheels (cuequivariance-ops-cu12) so there is no runtime JIT/ninja step; the provider's per-env PATH injection + env.sh CPATH still apply harmlessly. NequIPCalculator ASE path is from_compiled_model ONLY; the per-arch .pt2 is reselected/recompiled on the user GPU, never shipped.",
     "accel": {
-      "tool": "openequivariance",
-      "install": "pip install openequivariance",
-      "compile_cmd": "nequip-compile <ckpt> <out>.nequip.pt2 --mode aotinductor --device cuda --target ase --modifiers enable_OpenEquivariance",
-      "load_note": "import openequivariance; NequIPCalculator.from_compiled_model(<file>, device='cuda')  (use a torchscript .nequip.pth for torch<2.10)",
-      "verify": "python -c 'import openequivariance'",
+      "tool": "cueq",
+      "install": "cuequivariance + cuequivariance-torch + cuequivariance-ops-cu12/-torch-cu12 are pinned in envs/allegro.yml (no separate install); they provide the tensor_product op schemas the AOT .pt2 needs at load.",
+      "compile_cmd": "nequip-compile <ckpt> <out>.nequip.pt2 --mode aotinductor --device cuda --target ase",
+      "load_note": "import cuequivariance_torch; NequIPCalculator.from_compiled_model(<file>, device='cuda')  (use a torchscript .nequip.pth for torch<2.10; do NOT add --modifiers enable_OpenEquivariance — that is NequIP-only)",
+      "verify": "python -c 'import cuequivariance_torch'",
       "gpu_required": true,
       "verified": false,
-      "provenance": "upstream-doc",
+      "provenance": "prior-local-run",
       "last_gpu_verified": null
     },
     "accel_lammps": {
@@ -149,7 +153,7 @@
     "import": ["import cuequivariance_torch", "from nequip.ase import NequIPCalculator"],
     "versions": {
       "Allegro-OAM-L": {"mlip_name": "Allegro-OAM-L", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/Allegro-OAM-L:0.1", "weights_source_url": "https://zenodo.org/api/records/16980200/files/Allegro-OAM-L-0.1.nequip.zip/content", "validation": "gpu_pending",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://www.nequip.net/models/mir-group/Allegro-OAM-L:0.1", "weights_source_url": "https://zenodo.org/api/records/16980200/files/Allegro-OAM-L-0.1.nequip.zip/content", "validation": "validated_sm89", "note": "sm89 .pt2 host-verified tier-2 on RTX 4060 Ti (energy=-16.384536 eV, cueq backend); see framework note for compile/runtime flow.",
         "inference_sm86": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm86/Allegro-OAM-L_sm86.nequip.pt2', device='cuda')"], "inference_sm89": ["calc = NequIPCalculator.from_compiled_model(compile_path='${OH_MY_MLIP_HOME}/models/compiled/sm89/Allegro-OAM-L_sm89.nequip.pt2', device='cuda')"]}
     }
   },
@@ -157,13 +161,13 @@
     "env": "nequix",
     "python": "${OH_MY_MLIP_HOME}/envs/nequix/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/nequix/",
-    "note": "Default backend=jax can fail on constrained hosts (thread ulimit) -> use backend='torch' + .pt.",
+    "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30) via the JAX backend: NequixCalculator(model_path=...nequix-mp-1.nqx, backend='jax', use_kernel=False) energy=-16.378962 eV on jax.devices()=[CudaDevice(id=0)]. KEY: nequix is a PyPI package (`pip install nequix`) whose DEFAULT backend is jax with the native .nqx checkpoint; OpenEquivariance is OPTIONAL (use_kernel=False -> e3nn-jax tensor products, no oeq build needed). Earlier torch-backend attempts failed because the published .nqx is JAX-native (torch.load can't deserialize it) and oeq 0.6.4 sdist won't build — both AVOIDED by the jax+use_kernel=False path. The local weight MUST keep the .nqx extension (a .pt name makes the loader attempt a torch->jax conversion needing torch e3nn).",
     "import": ["from nequix.calculator import NequixCalculator"],
     "versions": {
       "Nequix-MP-1": {"mlip_name": "Nequix-MP-1", "training_set": ["MPtrj"],
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://github.com/atomicarchitects/nequix/raw/7c2854de8e754b1a60274c7d9d2e014989ed632e/models/nequix-mp-1.nqx", "validation": "validated_sm89",
         "weights_sha256": "1647af8e627e1afa11e2bfadeab0797326513a521afd7dd01606a96f56783eee", "weights_size": 2842366,
-        "inference": ["calc = NequixCalculator(model_path='${OH_MY_MLIP_HOME}/models/nequix/nequix-mp-1.pt', backend='torch')"]}
+        "inference": ["calc = NequixCalculator(model_path='${OH_MY_MLIP_HOME}/models/nequix/nequix-mp-1.nqx', backend='jax', use_kernel=False)"]}
     }
   },
   "DeePMD": {
@@ -173,9 +177,11 @@
     "import": ["from deepmd.calculator import DP"],
     "versions": {
       "DPA-3.1-3M-FT": {"mlip_name": "DPA-3.1-3M-FT", "training_set": ["OpenLAM"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/deepmodelingcommunity/DPA", "weights_source_url": "https://huggingface.co/deepmodelingcommunity/DPA/resolve/main/DPA-3.1-3M.pt", "validation": "validated_sm89",
-        "weights_sha256": "5ffb78b8e0c675b2cd73b343d56a6a3b7eeb972db85fe80bc0846b0df5d16106", "weights_size": 18005091,
-        "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/deepmd/dpa-3.1-3m-ft.pth')"]}
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "deepmodelingcommunity/DPA-3.1-3M", "weights_source_url": "https://huggingface.co/deepmodelingcommunity/DPA-3.1-3M/resolve/main/DPA-3.1-3M.pt", "validation": "validated_sm89",
+        "weights_fetch_command": ["python3", "${OH_MY_MLIP_HOME}/scripts/prepare_deepmd_weights.py", "--target-root", "{target_root}", "--head", "Omat24"],
+        "weights_size": 17958771,
+        "note": "DPA-3.1-3M.pt is a multi-task TRAINING checkpoint (~31 domain heads); DeePMD's DP/DeepPot needs a single-head FROZEN model. prepare_deepmd_weights.py downloads the checkpoint and `dp --pt freeze --head Omat24` it (OMat24 head, consistent with the OAM roster) into frozen-omat24.pth before inference.",
+        "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/deepmd/frozen-omat24.pth')"]}
     }
   },
   "ORB": {
@@ -186,7 +192,7 @@
     "import": ["from orb_models.forcefield import pretrained", "from orb_models.forcefield.calculator import ORBCalculator"],
     "versions": {
       "ORB-v3": {"mlip_name": "ORB-v3", "training_set": ["OMat24"],
-        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "orb_v3_conservative_inf_omat", "weights_source_url": "https://github.com/orbital-materials/orb-models/blob/main/MODELS.md", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "orb_v3_conservative_inf_omat", "weights_source_url": "https://github.com/orbital-materials/orb-models/blob/main/MODELS.md", "validation": "validated_sm89", "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): single_point.py ORB energy=-14.968285 eV, torch.cuda.memory_allocated 119MB/max 141MB (torch 2.7.1+cu126, orb-models 0.5.4).",
         "inference": ["orbff = pretrained.orb_v3_conservative_inf_omat(device='cuda', precision='float32-high')", "calc = ORBCalculator(orbff, device='cuda')"]}
     }
   },
@@ -198,7 +204,9 @@
     "versions": {
       "GRACE-2L-OAM": {"mlip_name": "GRACE-2L-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "GRACE-2L-OAM", "weights_source_url": "https://gracemaker.readthedocs.io/en/latest/gracemaker/foundation", "validation": "validated_sm89",
-        "weights_sha256": "920ee71483d29bef4940343dc3a2f90fc326ae433e12916a96b4f40a14781073", "weights_size": 1362416,
+        "weights_fetch_command": ["python3", "${OH_MY_MLIP_HOME}/scripts/prepare_grace_weights.py", "--name", "{weights_source}", "--target-dir", "{target_root}"], "weights_cache_env": "GRACE_CACHE",
+        "weights_size": 1362416,
+        "note": "grace_models download lands a TF SavedModel in a NESTED layout (<target>/<name>/<name>/saved_model.pb); the registry inference points TPCalculator at <target> directly. prepare_grace_weights.py runs grace_models then flattens the dir so saved_model.pb sits at models/grace/GRACE-2L-OAM/. No weights_sha256 (target is a multi-file SavedModel directory, not a single artifact). weights_size is the saved_model.pb size only.",
         "inference": ["calc = TPCalculator('${OH_MY_MLIP_HOME}/models/grace/GRACE-2L-OAM')"]}
     }
   },
@@ -209,7 +217,7 @@
     "import": ["from mattersim.forcefield import MatterSimCalculator"],
     "versions": {
       "MatterSim-v1-5M": {"mlip_name": "MatterSim-v1-5M", "training_set": ["MatterSim"],
-        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "MatterSim-v1.0.0-5M.pth", "weights_source_url": "https://github.com/microsoft/mattersim", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "MatterSim-v1.0.0-5M.pth", "weights_source_url": "https://github.com/microsoft/mattersim", "validation": "validated_sm89", "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): single_point.py MatterSim energy=-16.389614 eV, torch.cuda.memory_allocated 108MB/max 163MB (torch 2.6.0+cu124). Phase-0 bucket-D (cpu_fallback) resolved: the inference forces device='cuda' so it runs on GPU (not CPU).",
         "inference": ["calc = MatterSimCalculator(load_path='MatterSim-v1.0.0-5M.pth', device='cuda')"]}
     }
   },
@@ -220,7 +228,7 @@
     "import": ["from chgnet.model import CHGNet, CHGNetCalculator"],
     "versions": {
       "CHGNet-v0.3.0": {"mlip_name": "CHGNet-v0.3.0", "training_set": ["MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "0.3.0", "weights_source_url": "https://github.com/CederGroupHub/chgnet", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "0.3.0", "weights_source_url": "https://github.com/CederGroupHub/chgnet", "validation": "validated_sm89", "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): single_point.py CHGNet energy=-16.333233 eV, torch.cuda.memory_allocated 18.7MB/max 88MB (torch 2.7.1+cu126). CHGNetCalculator auto-selects GPU when available; pass use_device='cuda' to force.",
         "inference": ["model = CHGNet.load(model_name='0.3.0')", "calc = CHGNetCalculator(model=model)"]}
     }
   },
@@ -232,8 +240,9 @@
     "import": ["from alphanet.infer.calc import AlphaNetCalculator", "from alphanet.config import All_Config"],
     "versions": {
       "AlphaNet-v1-OMA": {"mlip_name": "AlphaNet-v1-OMA", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://ndownloader.figshare.com/files/53851139", "weights_source_url": "https://github.com/zmyybc/AlphaNet", "validation": "gpu_pending",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://ndownloader.figshare.com/files/53851139", "weights_source_url": "https://github.com/zmyybc/AlphaNet", "validation": "validated_sm89",
         "weights_sha256": "879a477c09e2dd2614e029aeb352892ad21d0bdf80eaccbee40f47cf888e48c5", "weights_size": 19398138,
+        "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): single_point.py AlphaNet energy=-16.406492 eV, torch.cuda.memory_allocated 36MB/max 81MB. Built via envs/alphanet.build.sh (install.sh auto-runs it): AlphaNet pinned to public github.com/zmyybc/AlphaNet@65f8ea93 (--no-deps) + torch 2.1.2+cu121 + numpy==1.26.4 + pydantic_settings/pydantic/rich/scikit-learn; oma.json config from the repo's pretrained/OMA/oma.json, weight alex_0410.ckpt from figshare 53851139 (sha256 879a477.. matches). ACCURACY CAVEAT: this public build computes energy+forces correctly (tier PASS) but gas-molecule energies differ from the internal /TGM build (slab bit-identical; gas up to 0.24 eV/atom, H2 ~0.49 eV) — recipe stays build_status=candidate for that reason. Do NOT install matscipy (forces numpy>=2, breaks torch 2.1.2 ABI).",
         "inference": ["calc = AlphaNetCalculator(ckpt_path='${OH_MY_MLIP_HOME}/models/alphanet/alex_0410.ckpt', device='cuda', precision='32', config=All_Config().from_json('${OH_MY_MLIP_HOME}/models/alphanet/oma.json'))"]}
     }
   },
@@ -246,6 +255,7 @@
       "Eqnorm-MPtrj": {"mlip_name": "Eqnorm-MPtrj", "training_set": ["MPtrj"],
         "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "eqnorm-mptrj", "weights_source_url": "https://matbench-discovery.materialsproject.org/models/eqnorm-mptrj", "validation": "validated_sm89",
         "weights_sha256": "9fd5b97a069e03697e41d2e4c468c5c9b487fc42a2842861ea171a23b9706de5", "weights_size": 21620384,
+        "note": "tier-2 GPU re-confirmed (energy=-16.365646 eV, CUDA alloc 66MB on RTX 4060 Ti). Weight cache: the eqnorm package downloads to ~/.cache/eqnorm/eqnorm-mptrj.pt via `wget` against figshare.com/files/55429685, which 202-blocks on this host (leaves a 0-byte file -> EOFError 'Ran out of input' on torch.load, and the package then SKIPS re-download because the file 'exists'). Recovery: rm the 0-byte cache and fetch via the working subdomain `curl -L https://ndownloader.figshare.com/files/55429685 -o ~/.cache/eqnorm/eqnorm-mptrj.pt` (sha256 9fd5b97.. verifies). Inference has no models/ local target so fetch.py's figshare normalization does not apply to eqnorm's in-package downloader.",
         "inference": ["calc = EqnormCalculator(model_name='eqnorm', model_variant='eqnorm-mptrj', device='cuda')"]}
     }
   },
@@ -259,6 +269,7 @@
       "eSEN-30M-OAM": {"mlip_name": "eSEN-30M-OAM", "training_set": ["OMat24", "MPtrj", "sAlex"],
         "gated": true, "license_url": "https://huggingface.co/facebook/OMAT24", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/OMAT24", "validation": "validated_sm89",
         "weights_sha256": "adf7d38e5bccb8e0334434c0bd65ac75661fb646891df17ecc89c19d111efde1", "weights_size": 362285045,
+        "note": "tier-2 GPU host-verified GATED PASS on RTX 4060 Ti sm89 (2026-06-30): single_point.py fairchemv1 energy=-16.375267 eV, torch.cuda.memory_allocated 140MB/max 518MB; weight esen_30m_oam.pt (362285045 B) fetched from gated facebook/OMAT24. WORKING CREDENTIAL = the huggingface-cli cached token at ~/.cache/huggingface/token (account JinukMoon, which has accepted the facebook/OMAT24 license); NOTE the repo's huggging_token file is a STALE/INVALID token (whoami fails) — do not use it. honest-fail path also verified: NO token -> clean GatedError surfacing license_url + docs/hf_token.md (AGENTS §5). Because env.sh redirects HF_HOME to models/hf, the cli-cached token is not auto-discovered; pass it via HF_TOKEN or HF_TOKEN_PATH.",
         "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/fairchem/esen_30m_oam.pt', cpu=False)"]}
     }
   },
@@ -271,7 +282,7 @@
     "import": ["from fairchem.core import OCPCalculator"],
     "versions": {
       "EqV3-OMatMPtrjSalex": {"mlip_name": "EqV3-OMatMPtrjSalex", "training_set": ["OMat24", "MPtrj", "sAlex"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/mirror-physics/equiformer_v3", "weights_source_url": "https://huggingface.co/mirror-physics/equiformer_v3/resolve/main/checkpoint/omat24-mptrj-salex_gradient.pt", "validation": "gpu_pending", "note": "HF file lives under a checkpoint/ prefix: checkpoint/omat24-mptrj-salex_gradient.pt (the bare filename 404s).",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/mirror-physics/equiformer_v3", "weights_source_url": "https://huggingface.co/mirror-physics/equiformer_v3/resolve/main/checkpoint/omat24-mptrj-salex_gradient.pt", "validation": "validated_sm89", "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): single_point.py EquiformerV3 energy=-16.392015 eV, torch.cuda.memory_allocated 140MB/max 752MB (torch 2.7.1+cu128). Built via the vendored fairchem-core (envs/equiformer_v3.yml sha a7300c58) which provides OCPCalculator + the EqV3 model; recipe now pins scipy==1.16.0 (>=1.17 removed scipy.special.sph_harm used by fairchem gemnet layers). HF file lives under a checkpoint/ prefix: checkpoint/omat24-mptrj-salex_gradient.pt (the bare filename 404s). Recipe stays build_status=candidate only on owner-approval governance of the public sha.",
         "weights_sha256": "429ccded98163122e7ba588d78e2441653f37f3e091e106c432807fe373c8f98", "weights_size": 486243861,
         "inference": ["calc = OCPCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equiformer_v3/checkpoint/omat24-mptrj-salex_gradient.pt', cpu=False)"]}
     }
@@ -281,7 +292,7 @@
     "python": "${OH_MY_MLIP_HOME}/envs/uma/bin/python",
     "default_version": "UMA-s-1p2-OMAT",
     "model_source": "name-based auto-download from Hugging Face (gated; requires accepting the Meta FAIR UMA license and using the user's own HF_TOKEN)",
-    "note": "get_predict_unit + FAIRChemCalculator(task_name). task_name = oc20/omat/oc22/oc25 per variant. GATED: weights are NOT redistributed by this repo; the user must accept the upstream license and provide HF_TOKEN. Verify validity of oc22/oc25 task names (jumoon).",
+    "note": "get_predict_unit + FAIRChemCalculator(task_name). task_name = oc20/omat/oc22/oc25 per variant. GATED: weights are NOT redistributed by this repo; the user must accept the upstream license and provide HF_TOKEN. tier-2 GPU host-verified GATED PASS on RTX 4060 Ti sm89 (2026-06-30): default UMA-s-1p2-OMAT (get_predict_unit('uma-s-1p2', task_name='omat')) energy=-15.006906 eV, torch.cuda.memory_allocated 1183MB/max 1214MB (torch 2.8.0+cu128, fairchem-core 2.16.0). WORKING CREDENTIAL = the huggingface-cli cached token ~/.cache/huggingface/token (account JinukMoon, accepted the facebook/UMA license); the repo's huggging_token file is STALE/INVALID — pass the valid token via HF_TOKEN/HF_TOKEN_PATH (env.sh redirects HF_HOME so the cli token isn't auto-discovered). honest-fail (no token) also verified via the shared gated-hf path (eSEN). NOTE: the UMA checkpoint download is ~2.8GB and can stall on a slow network (a first attempt hung at 602MB); just rerun. Other UMA variants reuse this path with their task_name.",
     "import": ["from fairchem.core import FAIRChemCalculator, pretrained_mlip"],
     "versions": {
       "UMA-m-1p1-OC20": {"mlip_name": "UMA-m-1p1-OC20", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
@@ -310,16 +321,17 @@
   "PET": {
     "env": "pet",
     "python": "${OH_MY_MLIP_HOME}/envs/pet/bin/python",
-    "model_source": "${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.ckpt (HF lab-cosmo/upet; only a .ckpt is published, no .pt)",
-    "status": "clone + D3(.so) + load verified (CPU, MetatomicCalculator). GPU single-point/speed pending.",
-    "note": "Calculator moved metatensor.torch.atomistic -> metatomic.torch.ase_calculator. MetatomicCalculator takes the exported .pt path directly.",
+    "model_source": "${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt (exported from the HF lab-cosmo/upet .ckpt via `mtt export`; the repo publishes only a .ckpt)",
+    "status": "clone + D3(.so) + load + GPU single-point verified (MetatomicCalculator, .pt exported from .ckpt).",
+    "note": "Calculator moved metatensor.torch.atomistic -> metatomic.torch.ase_calculator. MetatomicCalculator needs an EXPORTED metatomic .pt, NOT the raw training .ckpt; scripts/prepare_pet_weights.py downloads the .ckpt and `mtt export`s it to .pt.",
     "import": ["from metatomic.torch.ase_calculator import MetatomicCalculator"],
     "versions": {
       "PET-OAM-XL": {"mlip_name": "PET-OAM-XL", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/lab-cosmo/upet", "weights_source_url": "https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt", "validation": "gpu_pending",
-        "weights_sha256": "63954908a37d3fbcf0330a270f79afa46a3eb93af751b8f4508f8934197e9289", "weights_size": 2921011063,
-        "note": "weights_sha256/weights_size fingerprint the VALIDATED checkpoint pet-oam-xl-v1.0.0.pt (an exported .pt, 2921011063 bytes). The public HF repo (weights_source_url) currently publishes only a .ckpt, not this .pt — so a public download will NOT match this fingerprint. Known discrepancy needing owner resolution; see docs/weights_integrity.md.",
-        "inference": ["calc = MetatomicCalculator('${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.ckpt')"]}
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "PET-OAM-XL", "weights_source_url": "https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt", "validation": "validated_sm89",
+        "weights_fetch_command": ["python3", "${OH_MY_MLIP_HOME}/scripts/prepare_pet_weights.py", "--target-root", "{target_root}"],
+        "weights_size": 2921010871,
+        "note": "Materialized by prepare_pet_weights.py: download pet-oam-xl-v1.0.0.ckpt (HF lab-cosmo/upet) then `mtt export` -> pet-oam-xl-v1.0.0.pt. No weights_sha256: the exported .pt is not byte-reproducible across export runs (each `mtt export` re-serializes); the owner's validated .pt was 2921011063 bytes, ours is 2921010871 — same model, different serialization. weights_size is our local export.",
+        "inference": ["calc = MetatomicCalculator('${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt', device='cuda')"]}
     }
   },
   "EquFlash": {
@@ -336,10 +348,12 @@
       "EquFlashV2": {"mlip_name": "EquFlashV2", "training_set": ["OMat24"],
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://figshare.com/ndownloader/files/65435007", "weights_source_url": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
         "weights_sha256": "068ce25767d5064fae41ffac352484ae59a8544ee671607a09dffdc6d62402a2", "weights_size": 898917921,
+        "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): EquFlashV2 (cueq, 44.9M params) energy=-16.391567 eV, torch.cuda.memory_allocated=200097792 B (~191MB), max 285MB. Weight EquFlashV2.pt (898917921 B, sha256 068ce25.. matches) fetched via figshare; fetch.py rewrites the figshare file URL to the ndownloader.figshare.com subdomain (the bare host 202-blocks). ENV BUILD: a single `conda env create` from equflash.yml is a pip ResolutionImpossible (fairchem-core 1.10.0 vs torch 2.9.1+cu126); install.sh auto-runs the multi-pass sidecar envs/equflash.build.sh (2-pass pip: torch+PyG+cueq+GGNN, then fairchem --no-deps + GGNN runtime deps).",
         "inference": ["calc = UCalculator(checkpoint_path='${OH_MY_MLIP_HOME}/models/equflash/EquFlashV2.pt', cpu=False)"]},
       "EquFlash": {"mlip_name": "EquFlash", "training_set": ["OMat24"],
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://figshare.com/ndownloader/files/65435004", "weights_source_url": "https://github.com/SamsungDS/GGNN", "validation": "validated_sm89",
         "weights_sha256": "4a1eb19e4f719282146285dd1655178a0d1cc70edee7f8e1401e9b1336383bfa", "weights_size": 345648259,
+        "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): EquFlash v1 energy=-16.398239 eV, torch.cuda.memory_allocated 133MB/max 223MB. Runs on the existing equflash env via the DEFAULT backend (cueq) — the flashtp accel below is OPTIONAL/GPU-unverified and NOT required for this single-point PASS. Weight EquFlash.pt (345648259 B, sha256 4a1eb19.. matches) fetched via the figshare subdomain fix.",
         "accel": {
           "tool": "flashtp",
           "install": "git clone https://github.com/SNU-ARC/flashTP.git && cd flashTP && pip install -r requirements.txt && CUDA_ARCH_LIST=\"80;90\" pip install . --no-build-isolation",
@@ -359,11 +373,11 @@
     "python": "${OH_MY_MLIP_HOME}/envs/matris/bin/python",
     "model_source": "name-based auto-download to ~/.cache/matris (pre-fetched MatRIS_10M_OAM.pth.tar via figshare)",
     "torch": "2.12.1+cu130",
-    "status": "env+ckpt+import OK (CPU). GPU single-point + D3 PENDING.",
+    "status": "tier-1 CPU PASS host-verified (RTX 4060 Ti host, 2026-06-30): energy=-16.386652 eV (device='cpu'). Two issues fixed/diagnosed: (A) weight cache ~/.cache/matris/MatRIS_10M_OAM.pth.tar was 0-byte (matris downloads matris/model/model.py DOWNLOAD_URLS figshare.com/ndownloader/files/59142728 which 202-blocks on this host -> EOFError 'Ran out of input'); recovery: rm cache + curl https://ndownloader.figshare.com/files/59142728 (sha256 c033abc5.., 42273174 B). matris uses its own torch.hub downloader so fetch.py figshare normalization does not apply. (E) tier-2 GPU DEGRADE (driver skew, CR-1): torch 2.12.1+cu130 needs a CUDA-13 driver; host is 12.9 -> force device='cpu'.",
     "import": ["from matris.applications.base import MatRISCalculator"],
     "versions": {
       "MatRIS-10M-OAM": {"mlip_name": "MatRIS-10M-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "matris_10m_oam", "weights_source_url": "https://github.com/HPC-AI-Team/MatRIS", "validation": "gpu_pending",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "matris_10m_oam", "weights_source_url": "https://github.com/HPC-AI-Team/MatRIS", "validation": "tier1_cpu_driver_skew",
         "inference": ["calc = MatRISCalculator(model='matris_10m_oam', task='efsm', device='cuda')"]}
     }
   },
@@ -378,8 +392,9 @@
     "import": ["from deepmd.calculator import DP"],
     "versions": {
       "DPA-4.0.1-pro-MPtrj": {"mlip_name": "DPA-4.0.1-pro-MPtrj", "training_set": ["MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj", "weights_source_url": "https://figshare.com/files/65469204", "validation": "gpu_pending",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj", "weights_source_url": "https://figshare.com/ndownloader/files/65469204", "validation": "tier1_cpu_driver_skew",
         "weights_sha256": "446a6e893101fc52190cfccabb9d2328863d651aca36981fd8d3401c71a61221", "weights_size": 273318000,
+        "note": "Weight fetch FIXED via fetch.py figshare normalization: figshare.com/{files,ndownloader/files}/<id> 202-blocks on this host; rewritten to ndownloader.figshare.com/files/<id> (S3 redirect). Downloaded models/dpa4/dpa-4.0.1-pro-mptrj.pt (sha256 446a6e8.. matches, 273318000 bytes). tier-1 CPU PASS: DP single_point energy=-16.364233 eV. tier-2 DEGRADE (bucket E driver skew, like tace): env torch 2.11.0+cu130 needs CUDA-13 driver; host driver is 12.9 -> torch.cuda.is_available()=False -> CPU-only. MUST run with LD_LIBRARY_PATH='' (env_run) to avoid Intel oneAPI libfabric clash.",
         "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/dpa4/dpa-4.0.1-pro-mptrj.pt')"]}
     }
   },
@@ -388,11 +403,11 @@
     "python": "${OH_MY_MLIP_HOME}/envs/tace/bin/python",
     "model_source": "HF xvzemin/tace-foundations auto-download to ~/.cache/tace (TACE-OAM-L.pt pre-fetched)",
     "torch": "2.11.0+cu130",
-    "status": "env+ckpt+import OK (CPU). GPU single-point + D3 PENDING.",
+    "status": "tier-1 CPU PASS host-verified (RTX 4060 Ti host, 2026-06-30): energy=-16.378353 eV (device='cpu'). tier-2 GPU DEGRADE (bucket E driver skew, CR-1): torch 2.11.0+cu130 needs a CUDA-13 driver; host is 12.9 (found 12090) -> CUDA use raises 'NVIDIA driver too old'. Note torch.cuda.is_available() is unreliable here (lazy init reports True then fails on use) -> force device='cpu' on driver-skewed hosts.",
     "import": ["from tace.foundations import tace_foundations", "from tace.interface.ase import TACEAseCalc"],
     "versions": {
       "TACE-OAM-L": {"mlip_name": "TACE-OAM-L", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "TACE-OAM-L", "weights_source_url": "https://huggingface.co/xvzemin/tace-foundations", "validation": "gpu_pending",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "TACE-OAM-L", "weights_source_url": "https://huggingface.co/xvzemin/tace-foundations", "validation": "tier1_cpu_driver_skew",
         "weights_sha256": "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a", "weights_size": 333096435,
         "inference": ["model = tace_foundations['TACE-OAM-L']", "calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])"]}
     }

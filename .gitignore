@@ -47,3 +47,12 @@ envs/*/
 
 # --- OMC orchestration state (never publish) ---
 .omc/
+
+# --- Downloaded weights, caches, runtime state (never publish) ---
+# weights + HF caches are fetched on-demand; gated blobs must never be committed
+models/
+cache/
+# background sweep results/logs (runtime state, not source)
+.sweep/
+# internal ultragoal closure evidence
+.gjc_closure_artifacts/

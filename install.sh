@@ -268,8 +268,20 @@ install_one() {
     return 0
   fi
 
-  echo "  creating env '$env_name' from $recipe ..."
-  "$CONDA_BIN" env create --prefix "$prefix" --file "$recipe"
+  # Multi-pass build sidecar: a few envs cannot be built by a single
+  # `conda env create` (e.g. equflash — fairchem-core 1.10 vs torch 2.9.1 is a
+  # pip ResolutionImpossible that only a documented multi-pass pip resolves). If
+  # `envs/<env>.build.sh` exists it OWNS env creation + all pip passes (invoked
+  # with PREFIX as $1); otherwise the single-pass recipe path is used. Either way
+  # install.sh still owns the catbench + D3 warm-up + sentinel steps below.
+  local build_sidecar="$ENVS_DIR/$env_name.build.sh"
+  if [ -e "$build_sidecar" ]; then
+    echo "  building env '$env_name' via multi-pass sidecar $build_sidecar ..."
+    bash "$build_sidecar" "$prefix"
+  else
+    echo "  creating env '$env_name' from $recipe ..."
+    "$CONDA_BIN" env create --prefix "$prefix" --file "$recipe"
+  fi
 
   # Install catbench as a post-create step (WITH its deps). catbench is
   # deliberately NOT in the recipe pip block: a bare '--no-deps' line inside a
