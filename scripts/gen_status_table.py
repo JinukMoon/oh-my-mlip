@@ -58,6 +58,7 @@ _VALIDATION_LABEL = {
     "validated_sm89": "validated (sm89)",
     "gpu_pending": "gpu pending",
     "cpu_only": "cpu only",
+    "tier1_cpu_driver_skew": "tier-1 CPU (driver skew)",
 }
 
 

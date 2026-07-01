@@ -85,8 +85,8 @@ def test_models_json_honesty_fields_all_versions(models_data):
 
 
 def test_models_json_validation_enum_values(models_data):
-    """validation field must be one of the four allowed enum values."""
-    allowed = {"validated_sm86", "validated_sm89", "gpu_pending", "cpu_only"}
+    """validation field must be one of the allowed enum values."""
+    allowed = {"validated_sm86", "validated_sm89", "gpu_pending", "cpu_only", "tier1_cpu_driver_skew"}
     bad: list[str] = []
     for fw, info in models_data.items():
         if fw.startswith("_"):

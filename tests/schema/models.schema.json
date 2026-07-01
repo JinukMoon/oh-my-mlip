@@ -118,7 +118,7 @@
         },
         "validation": {
           "type": "string",
-          "enum": ["validated_sm86", "validated_sm89", "gpu_pending", "cpu_only"],
+          "enum": ["validated_sm86", "validated_sm89", "gpu_pending", "cpu_only", "tier1_cpu_driver_skew"],
           "description": "host-GPU validation state (guards against an 'all-validated' overclaim)"
         },
         "inference": {

@@ -98,13 +98,22 @@ def _read_candidate_reason(text: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _strip_wrapping_quotes(value: str) -> str:
+    """Strip one matching pair of surrounding quotes from a YAML scalar so a
+    quoted pip requirement (e.g. a git+URL with a #subdirectory fragment) is
+    classified on its content, not the quote character."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
 def _split_inline_comment(value: str) -> tuple[str, str]:
     """Split a YAML scalar's trailing comment without treating #egg/#sha as a
     comment marker."""
     match = _COMMENT_SPLIT_RE.search(value)
     if not match:
-        return value.strip(), ""
-    return value[: match.start()].strip(), value[match.start() + 1 :].strip()
+        return _strip_wrapping_quotes(value.strip()), ""
+    return _strip_wrapping_quotes(value[: match.start()].strip()), value[match.start() + 1 :].strip()
 
 
 def _pip_entries(text: str) -> tuple[list[PipEntry], list[tuple[int, str]]]:

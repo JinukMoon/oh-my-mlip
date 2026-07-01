@@ -59,7 +59,7 @@ How to read the columns:
 | PET-OAM-XL | PET | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlashV2 | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlash | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
-| MatRIS-10M-OAM | MatRIS | auto-download | tier1_cpu_driver_skew | no | Phase 2 |
-| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | tier1_cpu_driver_skew | no | Phase 2 |
-| TACE-OAM-L | TACE | auto-download | tier1_cpu_driver_skew | no | Phase 2 |
+| MatRIS-10M-OAM | MatRIS | auto-download | tier-1 CPU (driver skew) | no | Phase 2 |
+| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | tier-1 CPU (driver skew) | no | Phase 2 |
+| TACE-OAM-L | TACE | auto-download | tier-1 CPU (driver skew) | no | Phase 2 |
 <!-- STATUS_TABLE_DETAILED_END -->

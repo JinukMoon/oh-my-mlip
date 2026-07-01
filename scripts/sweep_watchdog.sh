@@ -68,9 +68,11 @@ cd "$HOME_DIR"
 # The driver is confirmed NOT running, so any lingering install.sh / conda-env-create
 # / pip-into-envs processes are ORPHANS from a driver that died mid-build. Reap them
 # first so a relaunch never stacks two concurrent builds on the same env prefix.
+# shellcheck disable=SC2009  # need full cmdline matching; pgrep patterns can't match these substrings reliably
 ORPHANS=$(ps -eo pid,cmd | grep -F -e "$HOME_DIR/install.sh" -e "conda env create --prefix $HOME_DIR/envs" -e "$HOME_DIR/envs/" | grep -v grep | awk '{print $1}' || true)
 if [ -n "$ORPHANS" ]; then
-  echo "[$(ts)] watchdog: reaping orphaned build procs: $(echo $ORPHANS|tr '\n' ' ')" >>"$WLOG"
+  echo "[$(ts)] watchdog: reaping orphaned build procs: $(echo "$ORPHANS"|tr '\n' ' ')" >>"$WLOG"
+  # shellcheck disable=SC2086  # $ORPHANS is intentionally word-split into separate PID args for kill
   kill -9 $ORPHANS 2>/dev/null || true
 fi
 # cron does NOT source the user's profile, so conda may be off PATH. install.sh

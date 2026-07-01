@@ -215,7 +215,9 @@ if [ -z "$CONDA_BIN" ]; then
   printf '#\n'
   printf '# [bootstrap] Quick install (Linux x86_64):\n'
   printf '#   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh\n'
+  # shellcheck disable=SC2016  # literal help text shown to the user, not expanded here
   printf '#   bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3\n'
+  # shellcheck disable=SC2016  # literal help text shown to the user, not expanded here
   printf '#   eval "$($HOME/miniconda3/bin/conda shell.bash hook)"\n'
   printf '#\n'
   printf '# [bootstrap] After installing, open a new shell (or eval the hook\n'
