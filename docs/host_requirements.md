@@ -6,17 +6,28 @@ honest portability story: oh-my-mlip removes the env/calculator/weights pain on 
 **compatible host** — it is not magic universal portability. Driver floors are
 approximate Linux minimums for the bundled CUDA runtime.
 
-Equivalence = single-point energy vs the validated /TGM hub on BackSingle2018
-(per-atom, tol 1e-3 eV/atom). **17/20 envs matched** (most ≤ 1e-6, several bit-identical), across
-PyTorch + TensorFlow, incl. both gated envs. See `docs/equiv_results.md` for the
-full per-model numbers.
+**Real-usage bar (builds + runs).** On the maintainer's RTX 4060 Ti (sm89, CUDA
+12.8) all **20/20 envs build and compute energy + forces** — 17 on the GPU
+directly, and **dpa4 / tace / matris on CPU** (their cu130 build needs a CUDA-13
+driver). The only out-of-the-box gap is a **weights auto-download** quirk in a
+couple of upstream packages on some networks (eqnorm / matris — see their notes),
+which has a one-line recovery.
+
+**Stricter bar (bit-reproduces our reference).** Equivalence = single-point energy
+vs the validated /TGM hub on BackSingle2018 (per-atom, tol 1e-3 eV/atom).
+**17/20 envs matched** (most ≤ 1e-6, several bit-identical), across PyTorch +
+TensorFlow, incl. both gated envs. The other 3 are **not wrong-value failures**:
+AlphaNet runs and uses the **same weights** (slab energies are bit-identical) but
+the public commit's gas-phase energies drift ~0.24 eV/atom (owner must pin the
+exact commit); MatRIS and Nequix are simply **not in /TGM**, so there is no
+reference to compare. See `docs/equiv_results.md` for the full per-model numbers.
 
 | env | status | py | torch | CUDA | driver floor | equivalence | host requirement / note |
 |---|---|---|---|---|---|---|---|
 | chgnet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
 | deepmd | clean | 3.10.19 | 2.8.0 | cu128 | 570+ | ✅ matched (1.5e-07 eV/atom) | needs pip `mpich` |
 | dpa4 | candidate | 3.11.15 | 2.11.0 | cu130 | 580+ (CUDA 13) | ✅ matched (CPU) (2.2e-07 eV/atom) | needs CUDA-13 driver for GPU; ran CPU on CUDA-12 box; pip `mpich` |
-| eqnorm | clean | 3.11.13 | 2.6.0 | cu118 | 450+ | ✅ matched (0.0 (all bit-identical)) | ⚠ by-name weights fetch broken (stage manually) |
+| eqnorm | clean | 3.11.13 | 2.6.0 | cu118 | 450+ | ✅ matched (0.0 (all bit-identical)) | runs on GPU; pkg auto-dl 202-blocks on some nets → 1-line curl recovery (see note) |
 | equiformer_v3 | candidate | 3.11.15 | 2.7.1 | cu128 | 570+ | ✅ matched (0.0 (all bit-identical)) | vendored-fairchem editable build; owner-pin sha pending |
 | fairchemv1 | clean | 3.11.13 | 2.4.1 | cu121 | 525+ | ✅ matched (0.0 (all bit-identical)) | gated weights (HF token) |
 | grace | clean | 3.11.11 | (TF) | — | — | ✅ matched (machine precision (TensorFlow)) | TF-only; no GPU driver floor for inference |
@@ -30,7 +41,7 @@ full per-model numbers.
 | allegro | candidate | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (2.9e-07 eV/atom via AOT .pt2) | needs cueq-ops kernels + a per-arch .pt2 (nequip-compile on the user GPU) |
 | alphanet | candidate | 3.11.13 | 2.1.2 | cu121 | 525+ | ⚠ version drift (public HEAD ≠ /TGM) | owner must pin the exact commit (gas energies drift 0.24 eV/atom) |
 | equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ✅ matched (9.8e-07 eV/atom, multi-pass) | needs a 2-pass install (fairchem --no-deps) + nvalchemi-toolkit-ops; install.sh multi-pass pending |
-| matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | ⚠ no ref (builds+imports OK) | by-name weights fetch broken; not in /TGM (no reference) |
+| matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | not in /TGM (no ref) | builds+runs (CPU here; GPU needs CUDA-13 driver); pkg auto-dl can write 0-byte on some nets |
 | nequip | candidate | 3.11.13 | 2.9.1 | cu128 | 570+ | ✅ matched (3.8e-07 eV/atom via AOT .pt2) | oeq JIT needs ninja + nvrtc.h on CPATH; + a per-arch .pt2 (nequip-compile) |
 | nequix | candidate | 3.10.20 | 2.10.0 | cu126 | 525+ | ✅ builds+imports (no ref) | needs ninja + nvrtc.h on CPATH; extjax(JAX) accel build still fails (optional); not in /TGM |
 

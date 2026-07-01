@@ -56,10 +56,14 @@ print(out["energy"], out["forces"][0])
 
 ## Supported MLIPs
 
-20 frameworks / 31 model variants. Per-model validation state, gated flag, and
-licenses: [`docs/model_status.md`](docs/model_status.md),
-[`docs/model_licenses.md`](docs/model_licenses.md). Host driver/CUDA floors and
-the equivalence-vs-reference matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
+20 frameworks / 31 model variants. On the maintainer's GPU (RTX 4060 Ti, sm89) the
+**whole roster builds and computes energy + forces** — most on the GPU, a few
+(dpa4/tace/matris) on CPU where their build needs a newer CUDA driver. Separately,
+17/20 envs also **bit-reproduce** our internal `/TGM` reference (the rest run fine
+but aren't in that reference set, or are a public build that drifts). Per-model
+state, gated flag, and licenses: [`docs/model_status.md`](docs/model_status.md),
+[`docs/model_licenses.md`](docs/model_licenses.md); driver/CUDA floors and the
+equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
 
 <!-- STATUS_TABLE_START -->
 | Framework | Models |

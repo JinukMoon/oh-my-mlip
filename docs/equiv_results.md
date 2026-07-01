@@ -157,8 +157,8 @@ TensorFlow), incl. both gated envs (eSEN, UMA — UMA via the HF-token gated
 download). NequIP/Allegro match via a per-arch AOT `.pt2`; DPA4/TACE match on CPU
 (their cu130 build needs a CUDA-13 driver). The other **3** are honestly recorded —
 none is a wrong-value failure, they are source-drift or no-reference:
-- **AlphaNet** — builds + runs, but public HEAD **drifts** from /TGM (gas energies ~0.24 eV/atom); owner must pin the exact commit.
-- **MatRIS** — builds + imports; **not in /TGM** (no energy reference); by-name weights fetch broken (stage manually).
+- **AlphaNet** — builds + runs; uses the **same weights** (slab energies are bit-identical), but the public commit's gas-phase energies drift ~0.24 eV/atom from /TGM (isolated-molecule code path, not a different model); owner must pin the exact commit.
+- **MatRIS** — builds + runs (CPU here; GPU needs a CUDA-13 driver); **not in /TGM** (no energy reference); the package's in-pkg weight auto-download can write a 0-byte file on 202-blocking networks (stage manually).
 - **Nequix** — builds + imports; **not in /TGM** (no reference); the optional JAX (openequivariance_extjax) accel wheel build fails, but it is not needed to import/run.
 
 **Systemic recipe-bug classes found + fixed (the build-test's real value):** setuptools≥81

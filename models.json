@@ -378,7 +378,8 @@
     "versions": {
       "MatRIS-10M-OAM": {"mlip_name": "MatRIS-10M-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
         "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "matris_10m_oam", "weights_source_url": "https://github.com/HPC-AI-Team/MatRIS", "validation": "tier1_cpu_driver_skew",
-        "inference": ["calc = MatRISCalculator(model='matris_10m_oam', task='efsm', device='cuda')"]}
+        "inference": ["calc = MatRISCalculator(model='matris_10m_oam', task='efsm', device='cuda')"],
+        "note": "tier-1 CPU PASS on the RTX 4060 Ti box (2026-06-30): builds + imports + computes energy/forces once on CPU. GPU needs a CUDA-13-class driver (torch 2.12.1+cu130); the CUDA-12.8 host lacks it, so it ran CPU (validation=tier1_cpu_driver_skew). WEIGHTS: MatRISCalculator(model='matris_10m_oam') auto-downloads inside the matris package; on hosts where its upstream endpoint 202-blocks, it writes a 0-byte file -> EOFError on load (same class as eqnorm's in-package figshare download). No weights_sha256 is recorded and MatRIS is NOT in /TGM, so there is no reference checkpoint to stage or compare -- obtain matris_10m_oam from the upstream HPC-AI-Team/MatRIS release and place it where the package expects. Recipe stays candidate for this reason."}
     }
   },
   "DPA4": {
