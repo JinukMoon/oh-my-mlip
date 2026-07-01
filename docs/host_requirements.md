@@ -7,7 +7,7 @@ honest portability story: oh-my-mlip removes the env/calculator/weights pain on 
 approximate Linux minimums for the bundled CUDA runtime.
 
 Equivalence = single-point energy vs the validated /TGM hub on BackSingle2018
-(per-atom, tol 1e-3 eV/atom). **14/20 envs matched** (most bit-identical), across
+(per-atom, tol 1e-3 eV/atom). **17/20 envs matched** (most ≤ 1e-6, several bit-identical), across
 PyTorch + TensorFlow, incl. both gated envs. See `docs/equiv_results.md` for the
 full per-model numbers.
 

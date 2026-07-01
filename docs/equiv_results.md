@@ -151,17 +151,15 @@ does not yet catch (TODO: extend the gate to pinned conda deps).
 
 ## Final tally (all 20 envs attempted)
 
-**14/20 envs energy-matched to /TGM** (≤ 2.2e-07 eV/atom, most bit-identical), across
-**two backends** (PyTorch + TensorFlow), incl. both gated envs (eSEN, UMA — UMA via the
-HF-token gated download). The other 6 are honestly recorded compile/hardware/source-tier:
-- **EquiformerV3** — builds + **energy bit-identical**; resolvable (owner pins the tested sha + vendored-fairchem build).
-- **Allegro** — builds + all imports OK; needs an AOT-compiled .pt2 (no /TGM run command).
-- **TACE** — counted in the 14 (compiled + CPU-matched); GPU(cu130) unverified on a CUDA-12 box.
-- **NequIP** — builds; openequivariance extension won't load (torch<2.10) + AOT .pt2 needed.
-- **EquFlash** — fairchem-core↔torch resolver conflict (/TGM hand-assembled); V2 ref captured.
-- **AlphaNet** — builds but public HEAD **drifts** from /TGM (gas energies); owner must pin the exact commit.
-- **MatRIS** — builds + imports; by-name weights fetch broken (empty file); not in /TGM.
-- **Nequix** — openequivariance sdist wheel build fails; JAX; not in /TGM.
+**17/20 envs energy-matched to /TGM** (all within the 1e-3 eV/atom protocol tol;
+most ≤ 1e-6 eV/atom, several bit-identical), across **two backends** (PyTorch +
+TensorFlow), incl. both gated envs (eSEN, UMA — UMA via the HF-token gated
+download). NequIP/Allegro match via a per-arch AOT `.pt2`; DPA4/TACE match on CPU
+(their cu130 build needs a CUDA-13 driver). The other **3** are honestly recorded —
+none is a wrong-value failure, they are source-drift or no-reference:
+- **AlphaNet** — builds + runs, but public HEAD **drifts** from /TGM (gas energies ~0.24 eV/atom); owner must pin the exact commit.
+- **MatRIS** — builds + imports; **not in /TGM** (no energy reference); by-name weights fetch broken (stage manually).
+- **Nequix** — builds + imports; **not in /TGM** (no reference); the optional JAX (openequivariance_extjax) accel wheel build fails, but it is not needed to import/run.
 
 **Systemic recipe-bug classes found + fixed (the build-test's real value):** setuptools≥81
 removed pkg_resources (pin per env); floating conda `ase`/`scipy` drift (pin); PyG
