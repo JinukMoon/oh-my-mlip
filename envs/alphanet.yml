@@ -1,5 +1,5 @@
-# build_status: candidate
-# candidate-reason: alphanet: HOST tier-2 GPU PASS (RTX 4060 Ti sm89, 2026-06-30) via envs/alphanet.build.sh (install.sh auto-runs it): AlphaNet pinned to public github.com/zmyybc/AlphaNet@65f8ea93 + torch 2.1.2+cu121 + numpy==1.26.4 + pydantic_settings/rich/scikit-learn; single_point.py AlphaNet energy=-16.406492 eV. ACCURACY CAVEAT (stays candidate): this public build computes correctly (energy+forces) but gas-molecule energies differ from the internal /TGM build (slab bit-identical; gas up to 0.24 eV/atom, H2 ~0.49 eV) — fine for setup verification, not bit-exact reproduction. Do NOT install matscipy (forces numpy>=2, breaks the torch 2.1.2 ABI; JAX-path only).
+# build_status: clean
+# owner-approved: public edition accepted (2026-07-01). AlphaNet pinned to public github.com/zmyybc/AlphaNet@65f8ea93 + torch 2.1.2+cu121 + numpy==1.26.4 + pydantic_settings/rich/scikit-learn; HOST tier-2 GPU PASS (RTX 4060 Ti sm89, 2026-06-30) via envs/alphanet.build.sh (install.sh auto-runs it): single_point.py AlphaNet energy=-16.406492 eV (energy+forces correct, slab bit-identical vs internal /TGM). PUBLIC-EDITION CAVEAT: this public commit's gas-molecule (isolated-molecule code path) energies differ from the internal /TGM build (gas up to 0.24 eV/atom, H2 ~0.49 eV) — the accepted public edition is NOT bit-exact to /TGM for gas-phase. Do NOT install matscipy (forces numpy>=2, breaks the torch 2.1.2 ABI; JAX-path only).
 # oh-my-mlip env recipe: AlphaNet (alphanet)
 #
 # Pins mirror the validated internal setup:

@@ -1,5 +1,5 @@
 # build_status: candidate
-# candidate-reason: git-sha install; not yet build-verified
+# candidate-reason: matris: HOST tier-1 CPU PASS (RTX 4060 Ti box, 2026-06-30): builds + imports + computes energy/forces on CPU (energy=-16.386652 eV). Stays candidate for two reasons: (1) GPU driver-skew — torch 2.12.1+cu130 needs a CUDA-13-class driver; this CUDA-12.8 host runs CPU-only, so GPU inference is unverified here; (2) MatRIS is NOT in /TGM, so there is no reference checkpoint to compare against. Weight (~/.cache/matris/MatRIS_10M_OAM.pth.tar, sha256 c033abc5.., 42273174 B) is pre-staged by scripts/prestage_matris_weights.py, which verifies the sha warn-only (upstream figshare file may be re-published).
 # oh-my-mlip env recipe: MatRIS (matris)
 #
 # Pins mirror the validated internal setup:
