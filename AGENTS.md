@@ -56,6 +56,25 @@ These are non-negotiable and override convenience:
    the label. This is the "sign vs reality gap" documented in
    `docs/ground_truth_reclassification.md` (carried-over `validated_sm89` labels
    that actually failed or were skipped on the 4060 Ti host).
+8. **Weight-integrity preflight — never load a 0-byte / partial weight.** A weight
+   pre-staged or fetched to a cache MUST pass a non-empty size guard (and a sha256
+   guard when a fingerprint is recorded) before it is loaded. A 0-byte / 202-block
+   body is re-fetched, NEVER loaded: an `EOFError('Ran out of input')` or
+   "... does not exist" at load time is the bucket-A signature (corrupt/empty cache,
+   not a broken model). Frameworks that download inside their own package
+   (deepmd/grace/pet/dpa4/eqnorm/matris) are served by
+   `scripts/{prestage,prepare}_<env>_weights.py`, wired into `install.sh` and run
+   with the ENV interpreter — do NOT trust the in-package downloader's "file exists"
+   check (it accepts a 0-byte file).
+9. **Driver ↔ CUDA-runtime preflight — degrade to CPU, do not crash.** Before the
+   build, compare the recipe's torch `+cuNNN` (the CUDA runtime the wheel needs)
+   against the CUDA version the host NVIDIA driver exposes. If the host is lower
+   (e.g. host CUDA 12.9 vs a `+cu130` build) the env still builds and runs on CPU,
+   but `torch.cuda` is unavailable — record `validation=tier1_cpu_driver_skew` and
+   say so up front (`install.sh::warn_driver_skew`) instead of letting GPU inference
+   crash with a cryptic "driver too old" (bucket E: tace/dpa4/matris). The fix is a
+   newer host driver, NOT a code change; never silently claim GPU validation on a
+   driver-skewed host.
 
 ## 0. Read these first (do NOT rely on memory — read them every time)
 
