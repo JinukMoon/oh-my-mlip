@@ -345,7 +345,7 @@
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "PET-OAM-XL", "weights_source_url": "https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt", "validation": "validated_sm89",
         "weights_fetch_command": ["python3", "${OH_MY_MLIP_HOME}/scripts/prepare_pet_weights.py", "--target-root", "{target_root}"],
         "weights_size": 2921010871,
-        "note": "Materialized by prepare_pet_weights.py: download pet-oam-xl-v1.0.0.ckpt (HF lab-cosmo/upet) then `mtt export` -> pet-oam-xl-v1.0.0.pt. No weights_sha256: the exported .pt is not byte-reproducible across export runs (each `mtt export` re-serializes); the owner's validated .pt was 2921011063 bytes, ours is 2921010871 — same model, different serialization. weights_size is our local export.",
+        "note": "Materialized by prepare_pet_weights.py: download pet-oam-xl-v1.0.0.ckpt (HF lab-cosmo/upet) then `mtt export` -> pet-oam-xl-v1.0.0.pt. No weights_sha256: the exported .pt is not byte-reproducible across export runs (each `mtt export` re-serializes); the owner's validated .pt was 2921011063 bytes, ours is 2921010871 — same model, different serialization. weights_size is our local export. prepare_pet_weights.py is wired into install.sh (env interpreter, --target-root models/pet; resolves `mtt` next to sys.executable). tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-07-01): single_point.py PET energy=-16.394783 eV (torch 2.9.1+cu128, cuda_available=True).",
         "inference": ["calc = MetatomicCalculator('${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt', device='cuda')"]}
     }
   },
