@@ -28,6 +28,11 @@ These are non-negotiable and override convenience:
    `scripts/sweep_local.py` are serial by design (one env, in order, prefix
    removed after its attempt); do not defeat that with background `&`, `xargs -P`,
    or multiple concurrent shells.
+   Before starting or *retrying* a build, first reap any orphan `install.sh` /
+   `conda` / pip-into-env processes left by a prior attempt (they still hold the
+   env prefix and package-cache locks — see `scripts/sweep_watchdog.sh`), and
+   confirm disk headroom up front (>= 30 GB default) instead of only reacting to
+   the guardrail mid-build.
 3. **Success = ASE energy + forces on the GPU, not "install succeeded".** A model
    is only DONE when `run_examples/single_point.py <model>` actually returns
    energy and forces (GPU-backed). `install.sh` exit-0 / the `.omm_ready`
@@ -41,6 +46,16 @@ These are non-negotiable and override convenience:
 6. **End vision — omm embeds in the session like OMC.** The Claude Code plugin
    (`.claude-plugin/` + `skills/`) is the point: drop into any session and
    `/oh-my-mlip:setup <model>` makes MLIP install trivial. Keep that the north star.
+7. **Host-scoped truth — a carried-over label is NEVER proof.** A `models.json`
+   `validation` value (or any status) carried over from another host/GPU — e.g.
+   the internal L40S catbench — is a *claim*, not evidence that the model runs
+   **here**. The DONE verdict is the measured tier-1/tier-2 result on THIS host
+   (see the two-axis `_meta.field_guide.validation`: arch-validity vs
+   host-resource/driver-validity). If a `validated`-labeled model has not produced
+   energy+forces on this host, treat it as unverified and say so — do not inherit
+   the label. This is the "sign vs reality gap" documented in
+   `docs/ground_truth_reclassification.md` (carried-over `validated_sm89` labels
+   that actually failed or were skipped on the 4060 Ti host).
 
 ## 0. Read these first (do NOT rely on memory — read them every time)
 
