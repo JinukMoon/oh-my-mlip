@@ -232,9 +232,19 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "[--dry-run] Plan only; nothing downloaded or installed."
   for env_name in "${TARGETS[@]}"; do
     recipe="$ENVS_DIR/$env_name.yml"
+    build_sidecar="$ENVS_DIR/$env_name.build.sh"
     if [ -e "$recipe" ]; then
-      echo "  would create env '$env_name' from $recipe -> $ENVS_DIR/$env_name"
+      if [ -e "$build_sidecar" ]; then
+        echo "  would build env '$env_name' via multi-pass sidecar $build_sidecar -> $ENVS_DIR/$env_name"
+        echo "    (sidecar owns env creation + all pip passes; a single 'conda env create' cannot resolve this env)"
+      else
+        echo "  would create env '$env_name' from $recipe -> $ENVS_DIR/$env_name"
+      fi
       echo "    then: $ENVS_DIR/$env_name/bin/pip install catbench==1.1.2"
+      prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
+      if [ -e "$prestage" ]; then
+        echo "    then: python3 $prestage  (pre-stage upstream weights before first use)"
+      fi
     else
       echo "  SKIP '$env_name': no recipe at $recipe"
     fi

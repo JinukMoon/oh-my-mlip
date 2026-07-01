@@ -51,7 +51,11 @@ def _assert_resolves(proc: subprocess.CompletedProcess[str], target: str) -> Non
         if "SKIP" in ln or "no recipe" in ln
     ]
     assert not bad, f"{target}: install.sh emitted SKIP/no-recipe lines:\n" + "\n".join(bad)
-    assert "would create env" in out, f"{target}: no 'would create env' line:\n{out}"
+    # Every target must resolve to a concrete build path: either a single-pass
+    # 'would create env' or a multi-pass 'would build env ... via ... sidecar'.
+    assert ("would create env" in out) or ("would build env" in out), (
+        f"{target}: no 'would create env'/'would build env' line:\n{out}"
+    )
 
 
 @pytest.mark.parametrize("env_name", _env_names())
