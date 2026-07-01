@@ -317,6 +317,21 @@ install_one() {
     python3 "$prestage" || echo "  (weight pre-stage skipped/failed; framework will retry its own download on first use)"
   fi
 
+  # Prepare weights that require the ENV's own tooling (not pure stdlib): some
+  # frameworks ship a TRAINING checkpoint that must be transformed by an in-env
+  # CLI before inference — DeePMD `dp --pt freeze` (single-head frozen .pth), PET
+  # `mtt export` (exported metatomic .pt), GRACE `grace_models download` + flatten.
+  # These CANNOT run under the system python (they need `dp`/`mtt`/`grace_models`
+  # from the env), so run them with the ENV interpreter AFTER the build, passing
+  # --target-root models/<env> uniformly. Without this a fresh build leaves the
+  # weight unprepared and inference fails with "... does not exist" (bucket A).
+  prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
+  if [ -e "$prepare" ]; then
+    echo "  preparing weights for '$env_name' via $(basename "$prepare") (env interpreter) ..."
+    "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name" \
+      || echo "  (weight prepare skipped/failed; inference will fail until $(basename "$prepare") succeeds)"
+  fi
+
   # Trigger first-run D3 compile so the user does not pay the cost mid-workflow.
   if [ "$NVCC_OK" -eq 1 ]; then
     echo "  triggering first-run D3 compile for '$env_name' ..."

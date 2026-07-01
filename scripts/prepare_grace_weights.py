@@ -38,11 +38,17 @@ def _grace_models_cmd() -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Download + flatten a GRACE SavedModel.")
-    ap.add_argument("--name", required=True, help="grace_models model name, e.g. GRACE-2L-OAM")
-    ap.add_argument("--target-dir", required=True, help="inference target dir (models/grace/<name>)")
+    ap.add_argument("--name", default="GRACE-2L-OAM", help="grace_models model name (default: GRACE-2L-OAM)")
+    ap.add_argument("--target-dir", default=None, help="inference target dir (models/grace/<name>); default: <target-root>/<name>")
+    ap.add_argument("--target-root", default=None, help="models/grace directory; when --target-dir is omitted it is derived as <target-root>/<name> (uniform install.sh weight-hook interface)")
     args = ap.parse_args()
 
-    target = Path(args.target_dir)
+    if args.target_dir:
+        target = Path(args.target_dir)
+    elif args.target_root:
+        target = Path(args.target_root) / args.name
+    else:
+        ap.error("provide --target-dir or --target-root")
     if (target / "saved_model.pb").is_file():
         print(f"[prepare_grace] already flattened: {target}/saved_model.pb")
         return 0

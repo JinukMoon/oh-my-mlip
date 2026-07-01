@@ -186,7 +186,7 @@
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "deepmodelingcommunity/DPA-3.1-3M", "weights_source_url": "https://huggingface.co/deepmodelingcommunity/DPA-3.1-3M/resolve/main/DPA-3.1-3M.pt", "validation": "validated_sm89",
         "weights_fetch_command": ["python3", "${OH_MY_MLIP_HOME}/scripts/prepare_deepmd_weights.py", "--target-root", "{target_root}", "--head", "Omat24"],
         "weights_size": 17958771,
-        "note": "DPA-3.1-3M.pt is a multi-task TRAINING checkpoint (~31 domain heads); DeePMD's DP/DeepPot needs a single-head FROZEN model. prepare_deepmd_weights.py downloads the checkpoint and `dp --pt freeze --head Omat24` it (OMat24 head, consistent with the OAM roster) into frozen-omat24.pth before inference.",
+        "note": "DPA-3.1-3M.pt is a multi-task TRAINING checkpoint (~31 domain heads); DeePMD's DP/DeepPot needs a single-head FROZEN model. prepare_deepmd_weights.py downloads the checkpoint and `dp --pt freeze --head Omat24` it (OMat24 head, consistent with the OAM roster) into frozen-omat24.pth before inference. prepare_deepmd_weights.py is wired into install.sh (runs with the ENV interpreter, --target-root models/deepmd) so a fresh build auto-freezes; the helper resolves `dp` next to sys.executable (works without activating the env). tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-07-01): single_point.py DeePMD energy=-14.992299 eV (torch 2.8.0+cu128, cuda_available=True); energy reproduces bit-identically across a from-scratch download+freeze.",
         "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/deepmd/frozen-omat24.pth')"]}
     }
   },

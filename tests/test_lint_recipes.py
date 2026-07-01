@@ -64,9 +64,16 @@ def test_lint_reports_clean_and_candidate_split():
 # ── Negative helpers: build an isolated copy of the tree, then break it ────────
 
 def _stage_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
-    """Copy envs/ + models.json into tmp_path; return (envs, models, expected)."""
+    """Copy the recipe FILES under envs/ + models.json into tmp_path; return
+    (envs, models, expected). Only files directly under envs/ are copied (recipes:
+    *.yml, *.build.sh, _expected.json). A built env is a DIRECTORY and is skipped —
+    copying it would drag in a multi-GB conda env (present after a local install)
+    and make the copy hang. lint only reads the recipe files, so this is complete."""
     envs = tmp_path / "envs"
-    shutil.copytree(ENVS_DIR, envs)
+    envs.mkdir(parents=True, exist_ok=True)
+    for f in ENVS_DIR.iterdir():
+        if f.is_file():
+            shutil.copyfile(f, envs / f.name)
     models = tmp_path / "models.json"
     shutil.copyfile(REPO_ROOT / "models.json", models)
     expected = envs / "_expected.json"

@@ -28,6 +28,14 @@ CHECKPOINT_URL = "https://huggingface.co/deepmodelingcommunity/DPA-3.1-3M/resolv
 DEFAULT_HEAD = "Omat24"  # OMat24-trained head: general materials, consistent with the OAM roster
 
 
+def _dp_cmd() -> str:
+    # When invoked with the deepmd env interpreter (install.sh weight hook /
+    # fetch.py) the env is NOT activated, so `dp` is not on PATH; resolve it next
+    # to sys.executable (env bin) and fall back to PATH only if absent.
+    sibling = Path(sys.executable).resolve().parent / "dp"
+    return str(sibling) if sibling.is_file() else "dp"
+
+
 def _download(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "oh-my-mlip/0.1"})
@@ -58,7 +66,7 @@ def main() -> int:
 
     print(f"[prepare_deepmd] freezing head={args.head} -> {frozen}")
     proc = subprocess.run(
-        ["dp", "--pt", "freeze", "-c", str(checkpoint), "-o", str(frozen), "--head", args.head],
+        [_dp_cmd(), "--pt", "freeze", "-c", str(checkpoint), "-o", str(frozen), "--head", args.head],
         cwd=str(root),
     )
     if proc.returncode != 0:
