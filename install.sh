@@ -172,6 +172,35 @@ for name, info in data.items():
 PYEOF
 }
 
+# ── Driver <-> CUDA-runtime preflight (bucket E) ──
+# A recipe pins torch==X.Y.Z+cuNNN; that cuNNN (e.g. cu130 = CUDA 13.0) is the CUDA
+# RUNTIME the wheel needs, which in turn needs a host NVIDIA driver new enough to
+# expose that CUDA version. If the host driver is too old (e.g. host CUDA 12.9 vs a
+# +cu130 build) the MLIP still BUILDS and runs on CPU, but torch.cuda is unavailable
+# so GPU inference fails at load with a cryptic "driver too old". Warn up front and
+# name the tier1_cpu_driver_skew reality instead of letting it crash later. Non-fatal
+# (CPU still works). cuNNN already encodes major*10+minor, so int("130")=130 and a
+# host "12.9" -> 12*10+9 = 129 compare directly.
+warn_driver_skew() {
+  local env_name="$1" recipe="$2"
+  local cu env_cu host_mm host_cu env_major env_minor
+  cu="$(grep -oE 'torch==[0-9.]+\+cu[0-9]+' "$recipe" 2>/dev/null | grep -oE 'cu[0-9]+' | head -1 || true)"
+  [ -n "$cu" ] || return 0                       # CPU-only recipe / no pinned torch wheel
+  env_cu="${cu#cu}"
+  command -v nvidia-smi >/dev/null 2>&1 || return 0
+  host_mm="$(nvidia-smi 2>/dev/null | grep -oE 'CUDA Version: [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)"
+  [ -n "$host_mm" ] || return 0
+  host_cu="$(( ${host_mm%.*} * 10 + ${host_mm#*.} ))"
+  if [ "$env_cu" -gt "$host_cu" ]; then
+    env_major="$(( env_cu / 10 ))"
+    env_minor="$(( env_cu % 10 ))"
+    echo "  WARNING driver skew for '$env_name': recipe torch is +$cu (needs CUDA ${env_major}.${env_minor} runtime),"
+    echo "    but the host NVIDIA driver exposes only CUDA ${host_mm} -> torch.cuda will be UNAVAILABLE."
+    echo "    The MLIP still builds and runs on CPU (this is validation=tier1_cpu_driver_skew); GPU inference"
+    echo "    needs a newer NVIDIA driver providing CUDA ${env_major}.x. See AGENTS.md hard constraints (bucket E)."
+  fi
+}
+
 # If no env names were given, target every recipe.
 if [ "${#REQUESTED[@]}" -eq 0 ]; then
   TARGETS=("${ALL_ENVS[@]}")
@@ -245,6 +274,11 @@ if [ "$DRY_RUN" -eq 1 ]; then
       if [ -e "$prestage" ]; then
         echo "    then: python3 $prestage  (pre-stage upstream weights before first use)"
       fi
+      prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
+      if [ -e "$prepare" ]; then
+        echo "    then: $ENVS_DIR/$env_name/bin/python $prepare --target-root $OH_MY_MLIP_HOME/models/$env_name  (prepare weights with the env interpreter)"
+      fi
+      warn_driver_skew "$env_name" "$recipe"
     else
       echo "  SKIP '$env_name': no recipe at $recipe"
     fi
@@ -261,35 +295,6 @@ fi
 # ── Real install path ──
 # shellcheck source=/dev/null
 source "$OH_MY_MLIP_HOME/env.sh"
-
-# ── Driver <-> CUDA-runtime preflight (bucket E) ──
-# A recipe pins torch==X.Y.Z+cuNNN; that cuNNN (e.g. cu130 = CUDA 13.0) is the CUDA
-# RUNTIME the wheel needs, which in turn needs a host NVIDIA driver new enough to
-# expose that CUDA version. If the host driver is too old (e.g. host CUDA 12.9 vs a
-# +cu130 build) the MLIP still BUILDS and runs on CPU, but torch.cuda is unavailable
-# so GPU inference fails at load with a cryptic "driver too old". Warn up front and
-# name the tier1_cpu_driver_skew reality instead of letting it crash later. Non-fatal
-# (CPU still works). cuNNN already encodes major*10+minor, so int("130")=130 and a
-# host "12.9" -> 12*10+9 = 129 compare directly.
-warn_driver_skew() {
-  local env_name="$1" recipe="$2"
-  local cu env_cu host_mm host_cu env_major env_minor
-  cu="$(grep -oE 'torch==[0-9.]+\+cu[0-9]+' "$recipe" 2>/dev/null | grep -oE 'cu[0-9]+' | head -1)"
-  [ -n "$cu" ] || return 0                       # CPU-only recipe / no pinned torch wheel
-  env_cu="${cu#cu}"
-  command -v nvidia-smi >/dev/null 2>&1 || return 0
-  host_mm="$(nvidia-smi 2>/dev/null | grep -oE 'CUDA Version: [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -1)"
-  [ -n "$host_mm" ] || return 0
-  host_cu="$(( ${host_mm%.*} * 10 + ${host_mm#*.} ))"
-  if [ "$env_cu" -gt "$host_cu" ]; then
-    env_major="$(( env_cu / 10 ))"
-    env_minor="$(( env_cu % 10 ))"
-    echo "  WARNING driver skew for '$env_name': recipe torch is +$cu (needs CUDA ${env_major}.${env_minor} runtime),"
-    echo "    but the host NVIDIA driver exposes only CUDA ${host_mm} -> torch.cuda will be UNAVAILABLE."
-    echo "    The MLIP still builds and runs on CPU (this is validation=tier1_cpu_driver_skew); GPU inference"
-    echo "    needs a newer NVIDIA driver providing CUDA ${env_major}.x. See AGENTS.md hard constraints (bucket E)."
-  fi
-}
 
 install_one() {
   local env_name="$1"
