@@ -51,6 +51,7 @@
   },
   "SevenNet": {
     "env": "sevennet",
+    "repo": "https://github.com/MDIL-SNU/SevenNet",
     "python": "${OH_MY_MLIP_HOME}/envs/sevennet/bin/python",
     "default_version": "SevenNet-MF-OMPA",
     "model_source": "bundled in package (sevenn/pretrained_potentials)",
@@ -77,6 +78,7 @@
   },
   "MACE": {
     "env": "mace",
+    "repo": "https://github.com/ACEsuit/mace",
     "python": "${OH_MY_MLIP_HOME}/envs/mace/bin/python",
     "default_version": "MACE-MPA-0",
     "model_source": "mace-foundations (downloaded by name via mace_mp)",
@@ -98,6 +100,7 @@
   },
   "NequIP": {
     "env": "nequip",
+    "repo": "https://github.com/mir-group/nequip",
     "python": "${OH_MY_MLIP_HOME}/envs/nequip/bin/python",
     "default_version": "NequIP-OAM-XL",
     "model_source": "${OH_MY_MLIP_HOME}/models/compiled/{sm86,sm89}/ (compiled .pt2, recompiled/reselected on user GPU)",
@@ -125,6 +128,7 @@
   },
   "Allegro": {
     "env": "allegro",
+    "repo": "https://github.com/mir-group/allegro",
     "python": "${OH_MY_MLIP_HOME}/envs/allegro/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/compiled/{sm86,sm89}/ (compiled .pt2, recompiled/reselected on user GPU)",
     "note": "arch-pinned. HOST-VERIFIED tier-2 (RTX 4060 Ti sm89, 2026-06-30): import is cuequivariance_torch (NOT openequivariance — Allegro is a cueq-backed model). nequip-compile produced models/compiled/sm89/Allegro-OAM-L_sm89.nequip.pt2 (aotinductor, torch 2.8.0+cu128, NO oeq modifier), single_point.py Allegro energy=-16.384536 eV, torch.cuda.memory_allocated 8.5MB/max 101MB. The cueq ops ship as wheels (cuequivariance-ops-cu12) so there is no runtime JIT/ninja step; the provider's per-env PATH injection + env.sh CPATH still apply harmlessly. NequIPCalculator ASE path is from_compiled_model ONLY; the per-arch .pt2 is reselected/recompiled on the user GPU, never shipped.",
@@ -159,6 +163,7 @@
   },
   "Nequix": {
     "env": "nequix",
+    "repo": "https://github.com/atomicarchitects/nequix",
     "python": "${OH_MY_MLIP_HOME}/envs/nequix/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/nequix/",
     "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30) via the JAX backend: NequixCalculator(model_path=...nequix-mp-1.nqx, backend='jax', use_kernel=False) energy=-16.378962 eV on jax.devices()=[CudaDevice(id=0)]. KEY: nequix is a PyPI package (`pip install nequix`) whose DEFAULT backend is jax with the native .nqx checkpoint; OpenEquivariance is OPTIONAL (use_kernel=False -> e3nn-jax tensor products, no oeq build needed). Earlier torch-backend attempts failed because the published .nqx is JAX-native (torch.load can't deserialize it) and oeq 0.6.4 sdist won't build — both AVOIDED by the jax+use_kernel=False path. The local weight MUST keep the .nqx extension (a .pt name makes the loader attempt a torch->jax conversion needing torch e3nn).",
@@ -172,6 +177,7 @@
   },
   "DeePMD": {
     "env": "deepmd",
+    "repo": "https://github.com/deepmodeling/deepmd-kit",
     "python": "${OH_MY_MLIP_HOME}/envs/deepmd/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/deepmd/",
     "import": ["from deepmd.calculator import DP"],
@@ -186,6 +192,7 @@
   },
   "ORB": {
     "env": "orb",
+    "repo": "https://github.com/orbital-materials/orb-models",
     "python": "${OH_MY_MLIP_HOME}/envs/orb/bin/python",
     "model_source": "name-based auto-download (shared HF_HOME cache)",
     "note": "Confirmed: orb_v3_conservative_inf_omat + precision='float32-high' (matches jumoon reference exactly). conservative+inf is CPU-neighbor-list heavy; speed varies with host CPU load.",
@@ -198,6 +205,7 @@
   },
   "GRACE": {
     "env": "grace",
+    "repo": "https://github.com/ICAMS/grace-tensorpotential",
     "python": "${OH_MY_MLIP_HOME}/envs/grace/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/grace/GRACE-2L-OAM/",
     "import": ["from tensorpotential.calculator import TPCalculator"],
@@ -212,6 +220,7 @@
   },
   "MatterSim": {
     "env": "mattersim",
+    "repo": "https://github.com/microsoft/mattersim",
     "python": "${OH_MY_MLIP_HOME}/envs/mattersim/bin/python",
     "model_source": "bundled in package",
     "import": ["from mattersim.forcefield import MatterSimCalculator"],
@@ -223,6 +232,7 @@
   },
   "CHGNet": {
     "env": "chgnet",
+    "repo": "https://github.com/CederGroupHub/chgnet",
     "python": "${OH_MY_MLIP_HOME}/envs/chgnet/bin/python",
     "model_source": "bundled in package",
     "import": ["from chgnet.model import CHGNet, CHGNetCalculator"],
@@ -234,6 +244,7 @@
   },
   "AlphaNet": {
     "env": "alphanet",
+    "repo": "https://github.com/zmyybc/AlphaNet",
     "python": "${OH_MY_MLIP_HOME}/envs/alphanet/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/alphanet/ (ckpt + config)",
     "note": "verify ckpt_path and config json filename (jumoon pretrained alex_0410.ckpt + oma.json). GPU single-point not yet re-verified for this public edition -> validation=gpu_pending.",
@@ -248,6 +259,7 @@
   },
   "Eqnorm": {
     "env": "eqnorm",
+    "repo": "https://github.com/yzchen08/eqnorm",
     "python": "${OH_MY_MLIP_HOME}/envs/eqnorm/bin/python",
     "model_source": "name-based (eqnorm-mptrj)",
     "import": ["from eqnorm.calculator import EqnormCalculator"],
@@ -261,6 +273,7 @@
   },
   "fairchemv1": {
     "env": "fairchemv1",
+    "repo": "https://github.com/facebookresearch/fairchem",
     "python": "${OH_MY_MLIP_HOME}/envs/fairchemv1/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/fairchem/ (OCP checkpoint)",
     "note": "eSEN-30M-OAM works only via fairchem v1 OCPCalculator. Checkpoint esen_30m_oam.pt.",
@@ -289,6 +302,7 @@
   },
   "UMA": {
     "env": "uma",
+    "repo": "https://github.com/facebookresearch/fairchem",
     "python": "${OH_MY_MLIP_HOME}/envs/uma/bin/python",
     "default_version": "UMA-s-1p2-OMAT",
     "model_source": "name-based auto-download from Hugging Face (gated; requires accepting the Meta FAIR UMA license and using the user's own HF_TOKEN)",
@@ -320,6 +334,7 @@
   },
   "PET": {
     "env": "pet",
+    "repo": "https://github.com/metatensor/metatrain",
     "python": "${OH_MY_MLIP_HOME}/envs/pet/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/pet/pet-oam-xl-v1.0.0.pt (exported from the HF lab-cosmo/upet .ckpt via `mtt export`; the repo publishes only a .ckpt)",
     "status": "clone + D3(.so) + load + GPU single-point verified (MetatomicCalculator, .pt exported from .ckpt).",
@@ -336,6 +351,7 @@
   },
   "EquFlash": {
     "env": "equflash",
+    "repo": "https://github.com/SamsungDS/GGNN",
     "python": "${OH_MY_MLIP_HOME}/envs/equflash/bin/python",
     "default_version": "EquFlashV2",
     "model_source": "${OH_MY_MLIP_HOME}/models/equflash/ (figshare)",
@@ -370,6 +386,7 @@
   },
   "MatRIS": {
     "env": "matris",
+    "repo": "https://github.com/HPC-AI-Team/MatRIS",
     "python": "${OH_MY_MLIP_HOME}/envs/matris/bin/python",
     "model_source": "name-based auto-download to ~/.cache/matris (pre-fetched MatRIS_10M_OAM.pth.tar via figshare)",
     "torch": "2.12.1+cu130",
@@ -384,6 +401,7 @@
   },
   "DPA4": {
     "env": "dpa4",
+    "repo": "https://github.com/deepmodeling/deepmd-kit",
     "python": "${OH_MY_MLIP_HOME}/envs/dpa4/bin/python",
     "model_source": "${OH_MY_MLIP_HOME}/models/dpa4/dpa-4.0.1-pro-mptrj.pt (matbench-discovery dpa-4.0.1-pro-mptrj)",
     "torch": "2.11.0+cu130",
@@ -401,6 +419,7 @@
   },
   "TACE": {
     "env": "tace",
+    "repo": "https://github.com/xvzemin/tace",
     "python": "${OH_MY_MLIP_HOME}/envs/tace/bin/python",
     "model_source": "HF xvzemin/tace-foundations auto-download to ~/.cache/tace (TACE-OAM-L.pt pre-fetched)",
     "torch": "2.11.0+cu130",
