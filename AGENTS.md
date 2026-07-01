@@ -19,17 +19,26 @@ These are non-negotiable and override convenience:
    **only on this local WSL host**. **NEVER** install, build, compile, or delete
    on remote servers (e.g. 147 / 114) — their login nodes are blocked and SLURM
    is a bottleneck. The setup sweep is a local-WSL operation, full stop.
-2. **Success = ASE energy + forces on the GPU, not "install succeeded".** A model
+2. **ONE ENV AT A TIME — never parallelize installs/builds.** Build, compile, and
+   verify exactly one env end-to-end before starting the next. **NEVER** run two
+   `install.sh` / `conda env create` / pip-into-env builds concurrently: parallel
+   builds race on the shared conda/pip package cache and the env prefix, contend
+   for disk and host/GPU memory, and stack driver-touching compiles (D3 `.so`,
+   NequIP/Allegro `.pt2`) that destabilize each other. `install.sh` and
+   `scripts/sweep_local.py` are serial by design (one env, in order, prefix
+   removed after its attempt); do not defeat that with background `&`, `xargs -P`,
+   or multiple concurrent shells.
+3. **Success = ASE energy + forces on the GPU, not "install succeeded".** A model
    is only DONE when `run_examples/single_point.py <model>` actually returns
    energy and forces (GPU-backed). `install.sh` exit-0 / the `.omm_ready`
    sentinel is necessary but **not** sufficient.
-3. **Self-healing loop.** The agent autonomously installs → compiles → verifies,
+4. **Self-healing loop.** The agent autonomously installs → compiles → verifies,
    retrying with *different* strategies (see §8 error-class policy) until ASE
    works, or the same error signature repeats (deterministic stall stop via
    `scripts/setup_guardrail.py`). Bounded disk; clean up each env after testing.
-4. **Driven by a fresh Codex agent.** The autonomous install/compile/verify loop
+5. **Driven by a fresh Codex agent.** The autonomous install/compile/verify loop
    is handed to a fresh Codex agent (independent perspective, separate runtime).
-5. **End vision — omm embeds in the session like OMC.** The Claude Code plugin
+6. **End vision — omm embeds in the session like OMC.** The Claude Code plugin
    (`.claude-plugin/` + `skills/`) is the point: drop into any session and
    `/oh-my-mlip:setup <model>` makes MLIP install trivial. Keep that the north star.
 
