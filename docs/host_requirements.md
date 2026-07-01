@@ -27,7 +27,7 @@ reference to compare. See `docs/equiv_results.md` for the full per-model numbers
 | chgnet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
 | deepmd | clean | 3.10.19 | 2.8.0 | cu128 | 570+ | ✅ matched (1.5e-07 eV/atom) | needs pip `mpich` |
 | dpa4 | candidate | 3.11.15 | 2.11.0 | cu130 | 580+ (CUDA 13) | ✅ matched (CPU) (2.2e-07 eV/atom) | needs CUDA-13 driver for GPU; ran CPU on CUDA-12 box; pip `mpich` |
-| eqnorm | clean | 3.11.13 | 2.6.0 | cu118 | 450+ | ✅ matched (0.0 (all bit-identical)) | runs on GPU; pkg auto-dl 202-blocks on some nets → 1-line curl recovery (see note) |
+| eqnorm | clean | 3.11.13 | 2.6.0 | cu118 | 450+ | ✅ matched (0.0 (all bit-identical)) | runs on GPU; pkg auto-dl can 202-block on some nets → install.sh auto-prestages the weight (scripts/prestage_eqnorm_weights.py) |
 | equiformer_v3 | candidate | 3.11.15 | 2.7.1 | cu128 | 570+ | ✅ matched (0.0 (all bit-identical)) | vendored-fairchem editable build; owner-pin sha pending |
 | fairchemv1 | clean | 3.11.13 | 2.4.1 | cu121 | 525+ | ✅ matched (0.0 (all bit-identical)) | gated weights (HF token) |
 | grace | clean | 3.11.11 | (TF) | — | — | ✅ matched (machine precision (TensorFlow)) | TF-only; no GPU driver floor for inference |
@@ -41,7 +41,7 @@ reference to compare. See `docs/equiv_results.md` for the full per-model numbers
 | allegro | candidate | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (2.9e-07 eV/atom via AOT .pt2) | needs cueq-ops kernels + a per-arch .pt2 (nequip-compile on the user GPU) |
 | alphanet | candidate | 3.11.13 | 2.1.2 | cu121 | 525+ | ⚠ version drift (public HEAD ≠ /TGM) | owner must pin the exact commit (gas energies drift 0.24 eV/atom) |
 | equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ✅ matched (9.8e-07 eV/atom, multi-pass) | needs a 2-pass install (fairchem --no-deps) + nvalchemi-toolkit-ops; install.sh multi-pass pending |
-| matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | not in /TGM (no ref) | builds+runs (CPU here; GPU needs CUDA-13 driver); pkg auto-dl can write 0-byte on some nets |
+| matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | not in /TGM (no ref) | builds+runs (CPU here; GPU needs CUDA-13 driver); install.sh auto-prestages the weight (scripts/prestage_matris_weights.py) |
 | nequip | candidate | 3.11.13 | 2.9.1 | cu128 | 570+ | ✅ matched (3.8e-07 eV/atom via AOT .pt2) | oeq JIT needs ninja + nvrtc.h on CPATH; + a per-arch .pt2 (nequip-compile) |
 | nequix | candidate | 3.10.20 | 2.10.0 | cu126 | 525+ | ✅ builds+imports (no ref) | needs ninja + nvrtc.h on CPATH; extjax(JAX) accel build still fails (optional); not in /TGM |
 

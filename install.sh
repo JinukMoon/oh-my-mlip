@@ -293,6 +293,20 @@ install_one() {
   echo "  installing catbench into '$env_name' ..."
   "$prefix/bin/pip" install catbench==1.1.2
 
+  # Pre-stage upstream weights whose in-package downloader can 202-block on some
+  # networks. A few frameworks (eqnorm, matris) fetch their checkpoint from a
+  # plain figshare.com URL *inside their own package* into ~/.cache/<pkg>/ and
+  # then skip re-download if the file "exists" (even a 0-byte one). If a
+  # scripts/prestage_<env>_weights.py helper exists, run it now (pure stdlib,
+  # env-independent) to stage the file via the working ndownloader subdomain
+  # before the user ever builds a calculator. Non-fatal: on failure the
+  # framework still falls back to its own download on first use.
+  prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
+  if [ -e "$prestage" ]; then
+    echo "  pre-staging weights for '$env_name' via $(basename "$prestage") ..."
+    python3 "$prestage" || echo "  (weight pre-stage skipped/failed; framework will retry its own download on first use)"
+  fi
+
   # Trigger first-run D3 compile so the user does not pay the cost mid-workflow.
   if [ "$NVCC_OK" -eq 1 ]; then
     echo "  triggering first-run D3 compile for '$env_name' ..."
