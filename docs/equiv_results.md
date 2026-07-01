@@ -59,7 +59,7 @@ Our deterministically-rebuilt SevenNet env reproduces the validated hub. Env del
 
 ## GRACE (TensorFlow backend) — CROSS-BACKEND THESIS PROVEN ✅
 
-The non-PyTorch proof (가치와계획 north-star #2). The earlier torch-bundled recipe
+The non-PyTorch proof (project-vision north-star #2). The earlier torch-bundled recipe
 dead-ended (`tensorflow[and-cuda]` ↔ `torch+cu121` nvrtc conflict). The official
 GRACE docs (gracemaker.readthedocs.io) confirm **GRACE is TensorFlow-ONLY — no
 PyTorch dependency**; /TGM only carried torch for the optional D3. Dropping torch
