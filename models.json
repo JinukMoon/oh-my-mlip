@@ -73,7 +73,7 @@
         "inference": ["calc = SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=True)"]},
       "SevenNet-Omni": {"mlip_name": "SevenNet-Omni", "training_set": ["OMat24", "sAlex", "MPtrj"],
         "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-omni", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
-        "inference": ["calc = SevenNetCalculator('7net-omni', modal='mpa', enable_oeq=True)"]}
+        "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-07-01): single_point.py SevenNet --version SevenNet-Omni energy=-16.384132 eV (torch 2.7.1+cu126, cuda_available=True).", "inference": ["calc = SevenNetCalculator('7net-omni', modal='mpa', enable_oeq=True)"]}
     }
   },
   "MACE": {
@@ -91,9 +91,9 @@
       "MACE-MH-1-OMAT": {"mlip_name": "MACE-MH-1-OMAT", "training_set": ["OMAT24", "MPtrj", "SPICE", "OC20", "OMOL", "RGD1", "MATPES"],
         "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89",
         "weights_sha256": "a522eb7f59c7879963d41586528f4980baf33e086c94aa92e3eafdeccad3be47", "weights_size": 59208139,
-        "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='omat_pbe')"]},
+        "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-07-01): single_point.py MACE --version MACE-MH-1-OMAT energy=-14.969970 eV (torch 2.7.1+cu126, cuda_available=True); head='omat_pbe', weight 'mh-1' auto-downloads.", "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='omat_pbe')"]},
       "MACE-MH-1-OC20": {"mlip_name": "MACE-MH-1-OC20", "training_set": ["OMAT24", "MPtrj", "SPICE", "OC20", "OMOL", "RGD1", "MATPES"],
-        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89", "note": "MACE-MH-1 is multi-head; the OC20/catalysis head is 'oc20_usemppbe' (PBE surfaces), not 'oc20'.",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "mh-1", "weights_source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mh_1", "validation": "validated_sm89", "note": "MACE-MH-1 is multi-head; the OC20/catalysis head is 'oc20_usemppbe' (PBE surfaces), not 'oc20'. tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-07-01): single_point.py MACE --version MACE-MH-1-OC20 energy=-12.935509 eV (torch 2.7.1+cu126).",
         "weights_sha256": "a522eb7f59c7879963d41586528f4980baf33e086c94aa92e3eafdeccad3be47", "weights_size": 59208139,
         "inference": ["calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='oc20_usemppbe')"]}
     }
@@ -172,7 +172,7 @@
       "Nequix-MP-1": {"mlip_name": "Nequix-MP-1", "training_set": ["MPtrj"],
         "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://github.com/atomicarchitects/nequix/raw/7c2854de8e754b1a60274c7d9d2e014989ed632e/models/nequix-mp-1.nqx", "validation": "validated_sm89",
         "weights_sha256": "1647af8e627e1afa11e2bfadeab0797326513a521afd7dd01606a96f56783eee", "weights_size": 2842366,
-        "inference": ["calc = NequixCalculator(model_path='${OH_MY_MLIP_HOME}/models/nequix/nequix-mp-1.nqx', backend='jax', use_kernel=False)"]}
+        "note": "tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-07-01): single_point.py Nequix energy=-16.378962 eV via the JAX backend (backend='jax', use_kernel=False -> e3nn-jax; OpenEquivariance omitted). NOT in /TGM -> no bit-exact reference; runs+energy on host is the oracle. Matches the recipe build_note.", "inference": ["calc = NequixCalculator(model_path='${OH_MY_MLIP_HOME}/models/nequix/nequix-mp-1.nqx', backend='jax', use_kernel=False)"]}
     }
   },
   "DeePMD": {
