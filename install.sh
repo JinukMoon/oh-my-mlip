@@ -296,6 +296,16 @@ fi
 # shellcheck source=/dev/null
 source "$OH_MY_MLIP_HOME/env.sh"
 
+# ── Thread caps for in-env prep steps (thread-limited-host safety) ──
+# Beta-test finding (login node with cgroup pids.max=100, 2026-07): install.sh
+# ran the weight-prep helpers (dp freeze / mtt export / grace_models) and the D3
+# warm-up with NO thread caps, so torch/TF/JAX thread pools overran the per-user
+# task limit mid-install and left weights unmaterialized (hit PET and GRACE).
+# Cap them uniformly: 4 BLAS/OMP threads + 1 inductor compile worker is plenty
+# for a one-shot prep step and harmless on unconstrained hosts.
+THREAD_CAPS=(env OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4
+  NUMEXPR_NUM_THREADS=4 TORCHINDUCTOR_COMPILE_THREADS=1)
+
 install_one() {
   local env_name="$1"
   local recipe="$ENVS_DIR/$env_name.yml"
@@ -366,14 +376,14 @@ install_one() {
   prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
   if [ -e "$prepare" ]; then
     echo "  preparing weights for '$env_name' via $(basename "$prepare") (env interpreter) ..."
-    "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name" \
+    "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name" \
       || echo "  (weight prepare skipped/failed; inference will fail until $(basename "$prepare") succeeds)"
   fi
 
   # Trigger first-run D3 compile so the user does not pay the cost mid-workflow.
   if [ "$NVCC_OK" -eq 1 ]; then
     echo "  triggering first-run D3 compile for '$env_name' ..."
-    "$prefix/bin/python" - <<'PYEOF' || echo "  (D3 warm-up skipped/failed; D3 will retry on first real use)"
+    "${THREAD_CAPS[@]}" "$prefix/bin/python" - <<'PYEOF' || echo "  (D3 warm-up skipped/failed; D3 will retry on first real use)"
 try:
     from ase.build import bulk
     from catbench.dispersion import DispersionCorrection

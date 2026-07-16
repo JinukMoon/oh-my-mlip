@@ -17,6 +17,7 @@ GRACE_CACHE=<target_root> (weights_cache_env) and passes the model name.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,21 @@ def _find_saved_model_root(base: Path) -> Path | None:
     for pb in base.rglob("saved_model.pb"):
         return pb.parent
     return None
+
+def _cache_roots() -> list[Path]:
+    """Places grace_models may have written the SavedModel instead of cwd.
+
+    Beta-test finding (grace_models 0.5.3, RTX A4500 host, 2026-07): the CLI
+    ignores the working directory and downloads into ~/.cache/grace/<name>/...,
+    so the in-target flatten search found nothing and the weight had to be
+    copied manually. $GRACE_CACHE (when set) takes precedence."""
+    roots: list[Path] = []
+    env_cache = os.environ.get("GRACE_CACHE")
+    if env_cache:
+        roots.append(Path(env_cache).expanduser())
+    roots.append(Path.home() / ".cache" / "grace")
+    return roots
+
 
 def _grace_models_cmd() -> str:
     # When fetch.py invokes this with the grace env interpreter, grace_models
@@ -65,7 +81,21 @@ def main() -> int:
 
     root = _find_saved_model_root(target)
     if root is None:
-        print(f"[prepare_grace] saved_model.pb not found anywhere under {target}", file=sys.stderr)
+        # grace_models >=0.5.3 ignores cwd; look in its cache dirs before
+        # giving up, preferring the <cache>/<name> subtree.
+        for base in _cache_roots():
+            if not base.is_dir():
+                continue
+            root = _find_saved_model_root(base / args.name) or _find_saved_model_root(base)
+            if root is not None:
+                print(f"[prepare_grace] found SavedModel in cache: {root}")
+                break
+    if root is None:
+        print(
+            f"[prepare_grace] saved_model.pb not found under {target} or "
+            f"{[str(r) for r in _cache_roots()]}",
+            file=sys.stderr,
+        )
         return 1
     if root == target:
         return 0
@@ -80,13 +110,15 @@ def main() -> int:
             else:
                 dest.unlink()
         shutil.move(str(entry), str(dest))
-    # prune now-empty nested dirs between target and the old root
+    # prune now-empty nested dirs between target and the old root (only when
+    # the old root actually lived under target; a cache-dir root is left as-is)
     try:
-        nested_top = root
-        while nested_top != target and nested_top.parent != target:
-            nested_top = nested_top.parent
-        if nested_top != target and nested_top.exists() and not any(nested_top.iterdir()):
-            shutil.rmtree(nested_top)
+        if target in root.parents:
+            nested_top = root
+            while nested_top != target and nested_top.parent != target:
+                nested_top = nested_top.parent
+            if nested_top != target and nested_top.exists() and not any(nested_top.iterdir()):
+                shutil.rmtree(nested_top)
     except OSError:
         pass
 
