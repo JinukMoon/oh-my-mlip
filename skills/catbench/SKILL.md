@@ -1,6 +1,6 @@
 ---
 name: catbench
-description: Run the full-roster catbench adsorption benchmarking pipeline across oh-my-mlip models. Triggers on requests to benchmark, compare, or evaluate MLIPs on catalysis/adsorption tasks via oh-my-mlip catbench.
+description: Run the full-roster catbench adsorption benchmarking pipeline across oh-my-mlip models. Triggers on requests to benchmark, compare, or evaluate MLIPs on catalysis/adsorption tasks — including generic phrasing like "benchmark several machine-learning potentials on my adsorption dataset" — even when "oh-my-mlip" or "catbench" is not named. Do NOT trigger on literature-only comparison questions with no dataset/compute intent.
 argument-hint: "[--dataset PATH] [--models MODEL1,MODEL2,...] [--d3]"
 ---
 
