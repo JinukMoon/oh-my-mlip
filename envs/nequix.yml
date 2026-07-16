@@ -2,8 +2,12 @@
 # build_note: nequix: HOST tier-2 GPU PASS (RTX 4060 Ti sm89, 2026-06-30) via the JAX backend — NequixCalculator(...nequix-mp-1.nqx, backend='jax', use_kernel=False) energy=-16.378962 eV on jax CudaDevice. nequix is JAX-native; OpenEquivariance is OPTIONAL and is INTENTIONALLY OMITTED here (its 0.6.4 sdist won't build on this host; use_kernel=False uses e3nn-jax instead). The single conda env create installs cleanly now that oeq is removed.
 # oh-my-mlip env recipe: Nequix (nequix, JAX-based)
 #
-# Pins mirror the validated internal setup:
-#   python 3.10.20 / torch 2.10.0+cu126.
+# Pins mirror the validated internal setup (torch/jax), with python bumped
+# 3.10.20 -> 3.11.13 (host-reverified 2026-07-16, energy identical):
+#   python 3.11.13 / torch 2.10.0+cu126.
+# WHY 3.11: cp310 torch wheels on download.pytorch.org route to
+# download-r2.pytorch.org, which some site firewalls TLS-block (beta-test
+# finding, 2026-07); cp311+ wheels are served by the primary host.
 # install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
 # tarballs are planned but not yet published; do not assume any are hosted.)
 #
@@ -28,7 +32,7 @@ channels:
   - conda-forge
   - nvidia
 dependencies:
-  - python=3.10.20
+  - python=3.11.13
   - pip
   # CUDA 12.6 toolchain (provides nvcc for D3 and for openequivariance's build)
   - cuda-nvcc=12.6.*

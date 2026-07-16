@@ -1,8 +1,13 @@
 # build_status: clean
 # oh-my-mlip env recipe: DeePMD-kit (deepmd-kit)
 #
-# Pins mirror the validated internal setup:
-#   python 3.10.19 / torch 2.8.0+cu128.
+# Pins mirror the validated internal setup (torch), with python bumped 3.10.19
+# -> 3.11.13 (host-reverified 2026-07-16, energy bit-identical):
+#   python 3.11.13 / torch 2.8.0+cu128.
+# WHY 3.11: cp310 torch wheels on download.pytorch.org route to
+# download-r2.pytorch.org, which some site firewalls TLS-block (beta-test
+# finding, 2026-07); cp311+ wheels are served by the primary host and install
+# everywhere. Same torch build, same cu128 binary.
 # install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
 # tarballs are planned but not yet published; do not assume any are hosted.)
 #
@@ -24,7 +29,7 @@ channels:
   - conda-forge
   - nvidia
 dependencies:
-  - python=3.10.19
+  - python=3.11.13
   - pip
   # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.8.*
