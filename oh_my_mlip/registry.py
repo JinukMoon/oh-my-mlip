@@ -226,6 +226,7 @@ ENV_RUN_ALLOWLIST: frozenset[str] = frozenset(
         "PYTORCH_CUDA_ALLOC_CONF",
         "OMP_NUM_THREADS",
         "MKL_NUM_THREADS",
+        "MAX_JOBS",
         "CUDA_VISIBLE_DEVICES",
         "CUDA_LAUNCH_BLOCKING",
         "PYTHONUTF8",
