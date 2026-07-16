@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ __all__ = [
     "list_models",
     "list_versions",
     "resolve",
+    "detect_host_arch",
     "parse_env_run",
     "ENV_RUN_ALLOWLIST",
 ]
@@ -42,6 +44,43 @@ __all__ = [
 
 class RegistryError(Exception):
     """Raised on malformed registry data or a disallowed env_run token."""
+
+# ── Host GPU arch detection (stdlib-only; no torch) ─────────────────────────
+# `resolve()` uses this when the caller does not pass an explicit arch for an
+# arch-pinned model. Beta-test finding (RTX A4500 / sm86 host, 2026-07): the
+# launcher spawned workers with --model only, so resolve() silently defaulted
+# to sm89 and the sm86 host could never verify Allegro/NequIP through the
+# public launcher. Detecting the host compute capability here makes every
+# layer (resolve / get_calculator / Worker / run) host-correct by construction.
+_HOST_ARCH_UNSET = object()
+_host_arch_cache: Any = _HOST_ARCH_UNSET
+
+
+def detect_host_arch() -> str | None:
+    """Return the host GPU arch as ``"sm<major><minor>"`` (e.g. ``sm86``,
+    ``sm89``) via ``nvidia-smi --query-gpu=compute_cap``, or ``None`` when no
+    GPU / no nvidia-smi / unparseable output. stdlib-only and cached for the
+    process lifetime (this module must import and run on GPU-less hosts)."""
+    global _host_arch_cache
+    if _host_arch_cache is not _HOST_ARCH_UNSET:
+        return _host_arch_cache
+    arch: str | None = None
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip().splitlines()
+        if out:
+            m = re.match(r"^(\d+)\.(\d+)$", out[0].strip())
+            if m:
+                arch = f"sm{m.group(1)}{m.group(2)}"
+    except Exception:  # noqa: BLE001 - any failure means "unknown host arch"
+        arch = None
+    _host_arch_cache = arch
+    return arch
+
 
 
 # ── repo-root / file location ────────────────────────────────────────────────
@@ -286,7 +325,9 @@ def resolve(
     else its sole version when there is only one, else raises ``RegistryError``
     (genuinely ambiguous: several versions and no default). For arch-pinned
     models pass ``arch`` (``"sm86"``/``"sm89"``) to pick the matching
-    ``inference_<arch>`` block; defaults to ``sm89`` when omitted.
+    ``inference_<arch>`` block; when omitted the host GPU arch is auto-detected
+    (``detect_host_arch()``, via nvidia-smi compute_cap), falling back to
+    ``sm89`` on GPU-less hosts.
     """
     data = models if models is not None else load_models()
     home_path = home()
@@ -321,9 +362,12 @@ def resolve(
     vinfo = versions[version]
 
     arch_pinned = bool(vinfo.get("arch_pinned", False))
-    # inference: arch-specific block for arch-pinned models, else plain.
+    # inference: arch-specific block for arch-pinned models, else plain. The
+    # arch actually used is returned as spec["arch"] so callers (Worker) can
+    # propagate it explicitly to the in-env worker process.
+    use_arch: str | None = None
     if arch_pinned:
-        use_arch = arch or "sm89"
+        use_arch = arch or detect_host_arch() or "sm89"
         inference = vinfo.get(f"inference_{use_arch}") or vinfo.get("inference")
         if not inference:
             raise RegistryError(
@@ -350,6 +394,7 @@ def resolve(
         "env_run": env_run,
         "env_run_raw": env_run_raw,
         "arch_pinned": arch_pinned,
+        "arch": use_arch,
         "gated": bool(vinfo.get("gated", False)),
         "license_url": vinfo.get("license_url"),
         "weights": vinfo.get("weights", "bundled"),

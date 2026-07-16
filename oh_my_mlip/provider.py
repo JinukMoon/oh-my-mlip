@@ -149,6 +149,19 @@ class Worker:
         if env_bin:
             existing = child_env.get("PATH", "")
             child_env["PATH"] = env_bin + (os.pathsep + existing if existing else "")
+        # Prepend the env's own lib dir to LD_LIBRARY_PATH (conda-activate-
+        # equivalent for the LOADER). Beta-test finding (Fedora-36 host, 2026-07):
+        # GRACE/TACE scipy imports need CXXABI_1.3.15, which the old system
+        # libstdc++ lacks; the env ships a new-enough libstdc++ but — since we
+        # never `conda activate` — it was not on the loader path. env_run still
+        # wins below (DPA4/DeePMD's LD_LIBRARY_PATH="" override is applied after
+        # this prepend). Only applied when the lib dir actually exists.
+        env_lib = os.path.join(os.path.dirname(env_bin), "lib") if env_bin else ""
+        if env_lib and os.path.isdir(env_lib):
+            existing_ld = child_env.get("LD_LIBRARY_PATH", "")
+            child_env["LD_LIBRARY_PATH"] = env_lib + (
+                os.pathsep + existing_ld if existing_ld else ""
+            )
         # env_run is already parsed + allowlisted by registry.resolve().
         child_env.update(self.spec["env_run"])
         child_env.setdefault("OH_MY_MLIP_HOME", registry.home())
@@ -161,6 +174,12 @@ class Worker:
         if self.version:
             cmd += ["--version", self.version]
         cmd += ["--device", self.device]
+        # Arch-pinned models: pass the resolved arch explicitly so the in-env
+        # worker resolves the SAME inference variant as the supervisor. Without
+        # this the worker re-resolves with arch=None (host auto-detect), and a
+        # caller-forced arch (Worker(..., arch="sm86")) would be silently lost.
+        if self.spec.get("arch"):
+            cmd += ["--arch", self.spec["arch"]]
         if self.apply_d3:
             cmd.append("--apply-d3")
         return cmd
@@ -375,6 +394,7 @@ def run(
     apply_d3: bool = False,
     *,
     version: str | None = None,
+    arch: str | None = None,
 ) -> dict:
     """One-shot cross-env single point: spawn the model's worker, send one
     request, return the ``results`` dict, tear the worker down.
@@ -393,6 +413,7 @@ def run(
         version=version,
         device=device,
         apply_d3=apply_d3,
+        arch=arch,
     )
     worker.start()
     try:

@@ -58,6 +58,7 @@ def main() -> int:
     ap.add_argument("--version", default=None, help="specific version (default: the framework's default_version, e.g. MACE -> MACE-MPA-0)")
     ap.add_argument("--structure", default=None, help="path to a structure file (POSCAR/cif/xyz); read inside the worker. Default: a demo fcc Cu cell")
     ap.add_argument("--d3", action="store_true", help="apply D3 dispersion correction")
+    ap.add_argument("--arch", default=None, help="sm86/sm89 for arch-pinned models (NequIP/Allegro); default: host GPU auto-detect")
     args = ap.parse_args()
 
     atoms = {"file": args.structure} if args.structure else _demo_structure()
@@ -66,6 +67,7 @@ def main() -> int:
             args.model,
             atoms,
             version=args.version,
+            arch=args.arch,
             properties=("energy", "forces"),
             apply_d3=args.d3,
         )

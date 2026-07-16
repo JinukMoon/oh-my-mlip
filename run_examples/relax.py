@@ -80,13 +80,14 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=50)
     ap.add_argument("--fmax", type=float, default=0.05)
     ap.add_argument("--d3", action="store_true")
+    ap.add_argument("--arch", default=None, help="sm86/sm89 for arch-pinned models; default: host GPU auto-detect")
     args = ap.parse_args()
 
     atoms = _load_atoms()
 
     # One persistent env process backs an ASE calculator adapter for the whole relaxation.
     try:
-        with Worker(args.model, version=args.version, apply_d3=args.d3) as worker:
+        with Worker(args.model, version=args.version, apply_d3=args.d3, arch=args.arch) as worker:
             atoms.calc = _WorkerCalculator(worker)
             opt = BFGS(atoms)
             opt.run(fmax=args.fmax, steps=args.steps)

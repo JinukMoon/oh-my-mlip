@@ -5,7 +5,7 @@ FROZEN JSONL WIRE CONTRACT (proven on MACE + SevenNet in v1)
 One worker process == one conda env == one model. The worker is launched as::
 
     <env>/bin/python -m oh_my_mlip._worker --model MACE [--version ...]
-                                           [--device cuda] [--apply-d3]
+                                           [--device cuda] [--arch sm86|sm89] [--apply-d3]
 
 It then speaks line-delimited JSON (JSONL) over stdin/stdout. Every message is
 exactly one JSON object on one line. The lifecycle is:
@@ -181,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", required=True)
     parser.add_argument("--version", default=None)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--arch", default=None, help="sm86/sm89 for arch-pinned models (default: host auto-detect)")
     parser.add_argument("--apply-d3", action="store_true")
     args = parser.parse_args(argv)
 
@@ -194,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 version=args.version,
                 device=args.device,
                 apply_d3=args.apply_d3,
+                arch=args.arch,
             )
     except Exception as exc:  # noqa: BLE001 - handshake failure
         _emit(sys.stdout, {"ready": False, "error": repr(exc)})

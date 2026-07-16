@@ -115,15 +115,53 @@ def test_resolve_gated_uma():
     assert spec["weights"] == "on-demand-hf"
 
 
-def test_resolve_arch_pinned_nequip():
+def test_resolve_arch_pinned_nequip(monkeypatch):
     spec86 = resolve("NequIP", "NequIP-OAM-XL", arch="sm86")
     spec89 = resolve("NequIP", "NequIP-OAM-XL", arch="sm89")
     assert spec86["arch_pinned"] is True
+    assert spec86["arch"] == "sm86" and spec89["arch"] == "sm89"
     assert any("sm86" in line for line in spec86["inference"])
     assert any("sm89" in line for line in spec89["inference"])
-    # default arch is sm89
-    spec_default = resolve("NequIP", "NequIP-OAM-XL")
-    assert any("sm89" in line for line in spec_default["inference"])
+    # arch omitted -> host auto-detect (beta-test fix: an sm86 host must not
+    # silently get the sm89 artifact); monkeypatch detect for determinism.
+    monkeypatch.setattr(reg, "detect_host_arch", lambda: "sm86")
+    spec_auto = resolve("NequIP", "NequIP-OAM-XL")
+    assert spec_auto["arch"] == "sm86"
+    assert any("sm86" in line for line in spec_auto["inference"])
+    # GPU-less host (detect -> None) falls back to sm89.
+    monkeypatch.setattr(reg, "detect_host_arch", lambda: None)
+    spec_fallback = resolve("NequIP", "NequIP-OAM-XL")
+    assert spec_fallback["arch"] == "sm89"
+    assert any("sm89" in line for line in spec_fallback["inference"])
+
+
+def test_resolve_non_arch_pinned_has_no_arch():
+    spec = resolve("MACE", "MACE-MPA-0")
+    assert spec["arch_pinned"] is False
+    assert spec["arch"] is None
+
+
+def test_detect_host_arch_parses_compute_cap(monkeypatch):
+    class _R:
+        def __init__(self, out):
+            self.stdout = out
+
+    monkeypatch.setattr(reg, "_host_arch_cache", reg._HOST_ARCH_UNSET)
+    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R("8.6\n"))
+    assert reg.detect_host_arch() == "sm86"
+    # cached for the process lifetime: a changed mock must NOT change the result
+    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R("8.9\n"))
+    assert reg.detect_host_arch() == "sm86"
+
+
+def test_detect_host_arch_no_gpu_returns_none(monkeypatch):
+    monkeypatch.setattr(reg, "_host_arch_cache", reg._HOST_ARCH_UNSET)
+
+    def _boom(*a, **k):
+        raise FileNotFoundError("nvidia-smi")
+
+    monkeypatch.setattr(reg.subprocess, "run", _boom)
+    assert reg.detect_host_arch() is None
 
 
 def test_resolve_unknown_raises():
@@ -226,6 +264,32 @@ def _make_popen(stdout_lines, captured):
     return _popen
 
 
+def test_worker_arch_flag_in_cmd_for_arch_pinned():
+    # Beta-test fix: the launcher must propagate the resolved arch to the
+    # in-env worker; an sm86 caller-forced arch was previously silently lost.
+    captured = {}
+    handshake = json.dumps({"ready": True, "model": "NequIP"}) + "\n"
+    w = provider.Worker(
+        "NequIP", version="NequIP-OAM-XL", arch="sm86",
+        _popen=_make_popen([handshake], captured),
+    )
+    w.start()
+    cmd = captured["proc"].cmd
+    assert "--arch" in cmd
+    assert cmd[cmd.index("--arch") + 1] == "sm86"
+
+
+def test_worker_no_arch_flag_for_non_arch_pinned():
+    captured = {}
+    handshake = json.dumps({"ready": True, "model": "MACE"}) + "\n"
+    w = provider.Worker(
+        "MACE", version="MACE-MPA-0",
+        _popen=_make_popen([handshake], captured),
+    )
+    w.start()
+    assert "--arch" not in captured["proc"].cmd
+
+
 def test_worker_apply_d3_flag_in_cmd():
     captured = {}
     handshake = json.dumps({"ready": True, "model": "MACE"}) + "\n"
@@ -263,6 +327,26 @@ def test_worker_env_run_applied_as_subprocess_env():
     w.start()
     assert captured["proc"].env.get("LD_LIBRARY_PATH") == ""
     assert captured["proc"].env.get("OH_MY_MLIP_HOME")
+
+
+def test_worker_env_prepends_env_lib_when_present(tmp_path):
+    # Beta-test fix (Fedora-36 CXXABI): the worker child env must have the
+    # env's own lib dir first on LD_LIBRARY_PATH when that dir exists on disk.
+    bin_dir = tmp_path / "envs" / "mace" / "bin"
+    lib_dir = tmp_path / "envs" / "mace" / "lib"
+    bin_dir.mkdir(parents=True)
+    lib_dir.mkdir()
+    py = bin_dir / "python"
+    py.write_text("")
+    captured = {}
+    handshake = json.dumps({"ready": True, "model": "MACE"}) + "\n"
+    w = provider.Worker(
+        "MACE", version="MACE-MPA-0", python_exe=str(py),
+        _popen=_make_popen([handshake], captured),
+    )
+    w.start()
+    ld = captured["proc"].env.get("LD_LIBRARY_PATH", "")
+    assert ld.split(os.pathsep)[0] == str(lib_dir)
 
 
 def test_worker_routes_by_id_not_fifo(monkeypatch):
