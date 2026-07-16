@@ -373,6 +373,13 @@ def resolve(
             raise RegistryError(
                 f"{model}/{version}: no inference for arch {use_arch!r}"
             )
+        # ${OMM_ARCH} template: a generic `inference` block may parameterize the
+        # compiled-artifact path on the arch token, so ANY host arch (sm86, sm89,
+        # sm120, ...) resolves without a hand-added inference_<arch> block — the
+        # per-arch .pt2 is then materialized by the first-run compile flow
+        # (nequip-compile targets whatever GPU is present). Explicit
+        # inference_<arch> blocks still win when present (host-verified paths).
+        inference = [line.replace("${OMM_ARCH}", use_arch) for line in inference]
     else:
         inference = vinfo.get("inference")
         if not inference:

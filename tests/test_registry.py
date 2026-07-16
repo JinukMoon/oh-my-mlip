@@ -141,6 +141,24 @@ def test_resolve_non_arch_pinned_has_no_arch():
     assert spec["arch"] is None
 
 
+def test_resolve_unknown_arch_uses_template():
+    # No hand-added inference_sm120 block exists; the generic ${OMM_ARCH}
+    # template must resolve ANY host arch (the per-arch .pt2 is then produced
+    # by the first-run compile flow on that GPU).
+    for model, ver in (
+        ("NequIP", "NequIP-OAM-XL"),
+        ("NequIP", "NequIP-OAM-L"),
+        ("Allegro", "Allegro-OAM-L"),
+    ):
+        spec = resolve(model, ver, arch="sm120")
+        assert spec["arch"] == "sm120"
+        assert any("compiled/sm120/" in line for line in spec["inference"]), spec["inference"]
+        assert not any("${OMM_ARCH}" in line for line in spec["inference"])
+        # explicit blocks still win for the two host-verified arches
+        spec89 = resolve(model, ver, arch="sm89")
+        assert any("compiled/sm89/" in line for line in spec89["inference"])
+
+
 def test_detect_host_arch_parses_compute_cap(monkeypatch):
     class _R:
         def __init__(self, out):
