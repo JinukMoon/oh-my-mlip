@@ -17,6 +17,11 @@
 #                Default: all recipes.
 #     --dry-run  print the plan and exit WITHOUT downloading/installing anything
 #                (the no-network / contributor inspection path).
+#     --status   inspect the install state of each target env and exit (ready /
+#                partial / broken / not installed); changes nothing. An env
+#                without the .omm_ready sentinel is NEVER duplicate-built: the
+#                real install verifies its imports and adopts it (resuming the
+#                post-install steps) or removes and rebuilds it if broken.
 #     --with-accel  opt-in (default OFF): also PRINT the curated GPU compile/accel
 #                commands (NequIP/Allegro/SevenNet) for each targeted env. These
 #                are upstream-doc, GPU-UNVERIFIED recipes (see docs/compile.md);
@@ -35,15 +40,24 @@ export OH_MY_MLIP_HOME="${OH_MY_MLIP_HOME:-$SCRIPT_DIR}"
 ENVS_DIR="$OH_MY_MLIP_HOME/envs"
 
 DRY_RUN=0
+STATUS=0
 WITH_ACCEL=0
 REQUESTED=()
+
+# catbench ships in EVERY env (D3 dispersion + adsorption benchmarking are
+# pre-wired). PINNED, not floating: a new catbench release could pull deps that
+# shift the validated torch stack. Bump deliberately (single knob here) and
+# re-verify; override for testing a release candidate without editing:
+#   OMM_CATBENCH_VERSION=1.2.0 ./install.sh <env>
+CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.2}"
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --status) STATUS=1 ;;
     --with-accel) WITH_ACCEL=1 ;;
     -h|--help)
-      sed -n '2,28p' "${BASH_SOURCE[0]:-$0}"
+      sed -n '2,33p' "${BASH_SOURCE[0]:-$0}"
       exit 0
       ;;
     -*)
@@ -201,6 +215,35 @@ warn_driver_skew() {
   fi
 }
 
+# ── Existing-env import verification (adopt-or-heal support) ──
+# Runs the framework's registered `import` lines (models.json) inside an
+# EXISTING env interpreter. Used when a prefix exists without the .omm_ready
+# sentinel (interrupted install): a passing import means the env is real and
+# must be ADOPTED, not duplicate-built; a failure means broken -> rebuild.
+verify_env_imports() {
+  local env_name="$1" prefix="$2" imports tmpf rc
+  imports="$(python3 - "$env_name" "$OH_MY_MLIP_HOME/models.json" <<'PY'
+import json
+import sys
+
+env, path = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as fh:
+    data = json.load(fh)
+for info in data.values():
+    if isinstance(info, dict) and info.get("env") == env:
+        print("\n".join(info.get("import", [])))
+        break
+PY
+)" || return 1
+  [ -n "$imports" ] || return 0   # no registered imports -> interpreter presence is enough
+  tmpf="$(mktemp)"
+  printf '%s\n' "$imports" > "$tmpf"
+  rc=0
+  timeout 180 "$prefix/bin/python" "$tmpf" >/dev/null 2>&1 || rc=$?
+  rm -f "$tmpf"
+  return "$rc"
+}
+
 # If no env names were given, target every recipe.
 if [ "${#REQUESTED[@]}" -eq 0 ]; then
   TARGETS=("${ALL_ENVS[@]}")
@@ -269,7 +312,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
       else
         echo "  would create env '$env_name' from $recipe -> $ENVS_DIR/$env_name"
       fi
-      echo "    then: $ENVS_DIR/$env_name/bin/pip install catbench==1.1.2"
+      echo "    then: $ENVS_DIR/$env_name/bin/pip install catbench==${CATBENCH_PIN}"
       prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
       if [ -e "$prestage" ]; then
         echo "    then: python3 $prestage  (pre-stage upstream weights before first use)"
@@ -289,6 +332,25 @@ if [ "$DRY_RUN" -eq 1 ]; then
   done
   echo "  would: source $OH_MY_MLIP_HOME/env.sh"
   echo "  would: trigger first-run D3 compile per env (if nvcc present)"
+  exit 0
+fi
+
+if [ "$STATUS" -eq 1 ]; then
+  echo
+  echo "[--status] Installed-env inspection (nothing is changed)."
+  for env_name in "${TARGETS[@]}"; do
+    prefix="$ENVS_DIR/$env_name"
+    if [ -e "$prefix/.omm_ready" ]; then
+      state="ready       (built + post-steps done; install.sh will skip)"
+    elif [ -x "$prefix/bin/python" ]; then
+      state="partial     (env exists, no sentinel; install.sh will verify imports and ADOPT or rebuild — never duplicate)"
+    elif [ -e "$prefix" ]; then
+      state="broken      (prefix without interpreter; install.sh will remove + rebuild)"
+    else
+      state="not installed (install.sh will build from the recipe)"
+    fi
+    printf '  %-14s %s\n' "$env_name" "$state"
+  done
   exit 0
 fi
 
@@ -326,6 +388,28 @@ install_one() {
   # newer than the host driver can expose — the env will run CPU-only here.
   warn_driver_skew "$env_name" "$recipe"
 
+  # Adopt-or-heal: a prefix WITHOUT the sentinel is an interrupted install
+  # (built but post-steps unfinished) or a broken build. Never duplicate-build
+  # over it and never crash into conda's "prefix already exists" — verify the
+  # framework imports inside the EXISTING interpreter: on success ADOPT the env
+  # (skip the build, resume the post-install steps below); on failure remove it
+  # and rebuild from the recipe.
+  local skip_build=0
+  if [ -x "$prefix/bin/python" ]; then
+    echo "  '$env_name' env exists without sentinel — verifying imports (adopt-or-heal) ..."
+    if verify_env_imports "$env_name" "$prefix"; then
+      echo "  imports OK — adopting the existing env; resuming post-install steps (no rebuild)."
+      skip_build=1
+    else
+      echo "  imports FAILED — removing the broken env and rebuilding from the recipe."
+      "$CONDA_BIN" env remove -p "$prefix" -y >/dev/null 2>&1 || true
+      rm -rf "$prefix"
+    fi
+  elif [ -e "$prefix" ]; then
+    echo "  '$env_name' prefix exists but has no interpreter (partial build) — removing and rebuilding."
+    rm -rf "$prefix"
+  fi
+
   # Multi-pass build sidecar: a few envs cannot be built by a single
   # `conda env create` (e.g. equflash — fairchem-core 1.10 vs torch 2.9.1 is a
   # pip ResolutionImpossible that only a documented multi-pass pip resolves). If
@@ -333,12 +417,24 @@ install_one() {
   # with PREFIX as $1); otherwise the single-pass recipe path is used. Either way
   # install.sh still owns the catbench + D3 warm-up + sentinel steps below.
   local build_sidecar="$ENVS_DIR/$env_name.build.sh"
-  if [ -e "$build_sidecar" ]; then
-    echo "  building env '$env_name' via multi-pass sidecar $build_sidecar ..."
-    bash "$build_sidecar" "$prefix"
-  else
-    echo "  creating env '$env_name' from $recipe ..."
-    "$CONDA_BIN" env create --prefix "$prefix" --file "$recipe"
+  if [ "$skip_build" -eq 0 ]; then
+    # Explicit failure checks: install_one is invoked as `install_one || rc=1`,
+    # and bash SUPPRESSES `set -e` inside a function called in such a context —
+    # without these guards a failed build would fall through the post-steps and
+    # could even write the ready sentinel (observed in a fixture simulation).
+    if [ -e "$build_sidecar" ]; then
+      echo "  building env '$env_name' via multi-pass sidecar $build_sidecar ..."
+      bash "$build_sidecar" "$prefix" || {
+        echo "  build sidecar FAILED for '$env_name' — no sentinel written." >&2
+        return 1
+      }
+    else
+      echo "  creating env '$env_name' from $recipe ..."
+      "$CONDA_BIN" env create --prefix "$prefix" --file "$recipe" || {
+        echo "  conda env create FAILED for '$env_name' — no sentinel written." >&2
+        return 1
+      }
+    fi
   fi
 
   # Install catbench as a post-create step (WITH its deps). catbench is
@@ -348,8 +444,11 @@ install_one() {
   # real-build test confirmed catbench 1.1.2 does NOT downgrade the pinned
   # torch+cuXXX wheel, while '--no-deps' would drop catbench's real runtime deps
   # (requests, xlsxwriter, ...) and break 'from catbench.adsorption import ...'.
-  echo "  installing catbench into '$env_name' ..."
-  "$prefix/bin/pip" install catbench==1.1.2
+  echo "  installing catbench (==${CATBENCH_PIN}) into '$env_name' ..."
+  "$prefix/bin/pip" install "catbench==${CATBENCH_PIN}" || {
+    echo "  catbench install FAILED for '$env_name' — no sentinel written." >&2
+    return 1
+  }
 
   # Pre-stage upstream weights whose in-package downloader can 202-block on some
   # networks. A few frameworks (eqnorm, matris) fetch their checkpoint from a
