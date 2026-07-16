@@ -49,7 +49,7 @@ REQUESTED=()
 # shift the validated torch stack. Bump deliberately (single knob here) and
 # re-verify; override for testing a release candidate without editing:
 #   OMM_CATBENCH_VERSION=1.2.0 ./install.sh <env>
-CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.2}"
+CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.3}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -380,8 +380,17 @@ install_one() {
   fi
 
   if [ -e "$sentinel" ]; then
-    echo "  '$env_name' already installed (sentinel present) — skipping."
-    return 0
+    # Trust but verify: a sentinel can LIE — observed on this host when an old
+    # install.sh (pre fail-safe guards) wrote it after a killed build (the env
+    # had no torch/fairchem yet was marked ready). Re-verify the registered
+    # imports; a stale sentinel is removed and the env falls through to
+    # adopt-or-heal below instead of being trusted blindly.
+    if verify_env_imports "$env_name" "$prefix"; then
+      echo "  '$env_name' already installed (sentinel present + imports verified) — skipping."
+      return 0
+    fi
+    echo "  '$env_name' sentinel present but imports FAIL — stale sentinel; removing it and re-entering adopt-or-heal." >&2
+    rm -f "$sentinel"
   fi
 
   # Preflight: warn now (before the long build) if this recipe's CUDA runtime is
