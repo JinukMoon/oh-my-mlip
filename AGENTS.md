@@ -285,6 +285,7 @@ taxonomy.
 |---|---|
 | **GPU arch mismatch** (`sm86` ↔ `sm89`; e.g. wrong `.pt2` loaded for host) | Reselect the arch-matched compiled artifact (`models/compiled/{sm86,sm89}/`) or recompile for the host arch via `scripts/compile_nequip.sh`. Do NOT delete the mismatched artifact first — rename to avoid a re-fetch race. |
 | **Transient network / partial weight download** (connection reset, incomplete HF tarball, partial `.nequip.zip`) | Re-fetch the artifact. Clean the partial file before retrying so the fetch does not resume a corrupt state. |
+| **`pypi.nvidia.com` unreachable** (torch `+cuNNN` recipes: the `nvidia-*-cu12` wheels resolve through the PyTorch index to pypi.nvidia.com; when that host times out, the pip stage of `conda env create` fails for EVERY torch env even though identical wheels exist on pypi.org) | Sideload the nvidia wheels from pypi.org into the partial env, then re-run `install.sh` (adopt-or-heal completes the rest). Host-proven 2026-07-17: read the exact pins from `https://pypi.org/pypi/torch/<X.Y.Z>/json` `requires_dist` (pypi's default torch X.Y.Z is the same cuNNN binary), `pip install --index-url https://pypi.org/simple <nvidia pins>` with the env's pip, then `./install.sh <env>`. Diagnose with `pip install --dry-run -r <pip-block>` — a ConnectTimeout to pypi.nvidia.com is this class. |
 
 ### HALT-AND-REPORT — do NOT auto-retry; surface an actionable message and stop
 
