@@ -211,22 +211,19 @@ Step 1 -- Install:
   exported). Capture stdout and stderr.
 
 Step 2 -- Check guardrail:
-  After each attempt (success or failure), call:
-    `python $OH_MY_MLIP_HOME/scripts/setup_guardrail.py \
-        --free-disk-gb <ceiling> \
-        --error-sig "<normalized_stderr_signature>" \
-        --attempt <n>`
-  The helper returns structured JSON: `{status: "ok"|"stalled"|"guardrail_halt",
-  message: "..."}`.
-  - `guardrail_halt`: stop unconditionally; surface the message.
-  - `stalled`: same normalized error signature has recurred >= N=2 times; stop
-    and report.
+  Capture the attempt's raw stderr to a file, then call the combined gate.
+  The SCRIPT owns stderr normalization — never pre-normalize, summarize, or
+  hash the stderr yourself before passing it:
+    `python3 $OH_MY_MLIP_HOME/scripts/setup_guardrail.py gate \
+        --state <state-file> --ceiling-gb 30 --stderr-file <stderr-file>`
+  The helper prints ONE JSON verdict and always exits 0 — parse the JSON,
+  not the exit code. Verdicts:
+  - `guardrail_halt` (disk headroom below ceiling; highest priority) and
+    `wallclock_halt`: stop unconditionally; surface the message.
+  - `stalled` (same normalized signature recurred >= 2) and
+    `stalled_cumulative` (attempt cap): stop and switch to the docs-request
+    path (AGENTS.md §8).
   - `ok`: continue.
-
-  NOTE: `scripts/setup_guardrail.py` is added by a later story (Phase 1 step 3
-  in the plan). Until it exists, the agent must enforce the same bounds manually:
-  halt on the same stderr signature repeating twice; check `df -h` against a
-  30 GB headroom default before each attempt.
 
 Step 3 -- On install failure: recover.
   - Read the traceback.
@@ -257,7 +254,7 @@ Step 4 -- On install success: verify.
 
 Step 5 -- Declare success.
   Report: model name, env path, energy value, forces shape, GPU PID confirmed.
-  The guardrail helper (when present) will have already confirmed disk headroom
+  The guardrail helper will have already confirmed disk headroom
   and absence of a stall signature.
 </Self_Healing_Loop>
 
