@@ -128,6 +128,22 @@ def test_unknown_target_recorded_not_crashing(tmp_path, monkeypatch):
     assert driver.target_status([l for l in lines if l.get("target") == "Alpha"]) == "verified"
 
 
+def test_disk_floor_records_skipped_disk_and_stops(tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_fake-token-for-gating-only")
+    home = _home(tmp_path)
+    ledger = tmp_path / "ledger.jsonl"
+    install = _script(tmp_path / "fake_install.sh", "exit 0")
+    verify = _script(tmp_path / "fake_verify.sh", 'echo \'{"pass": true, "degraded": false}\'')
+    # Absurdly high floor: every target must be recorded skipped_disk, none run.
+    driver.sweep(["Alpha", "Beta"], home, ledger, [install], [verify],
+                 min_free_gb=10**9)
+    lines = [json.loads(ln) for ln in ledger.read_text().splitlines()]
+    phases = [(l.get("target"), l["phase"]) for l in lines if l.get("target")]
+    assert phases == [("Alpha", "skipped_disk"), ("Beta", "skipped_disk")]
+    rep = driver.report(ledger)
+    assert "skipped_disk: 2" in rep
+
+
 def test_ledger_runid_monotonic(tmp_path):
     sweep_dir = tmp_path / ".sweep"
     sweep_dir.mkdir()

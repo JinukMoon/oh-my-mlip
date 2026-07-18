@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -103,11 +104,25 @@ def last_json_line(stdout: str) -> dict | None:
 
 
 def sweep(targets: list[str], home: Path, ledger: Path,
-          install_cmd: list[str] | None, verify_cmd: list[str] | None) -> None:
+          install_cmd: list[str] | None, verify_cmd: list[str] | None,
+          min_free_gb: float = 10.0) -> None:
     append(ledger, {"seq": 0, "phase": "plan", "targets": targets, "at": utc_now()})
     token_missing = token_source() == "none"
     seq = 0
-    for target in targets:
+    for idx, target in enumerate(targets):
+        # Disk floor precheck: below min_free_gb every further install is a
+        # guaranteed noisy failure, so record THIS and all remaining targets
+        # as skipped_disk (honest ledger, no silent truncation) and stop.
+        free_gb = shutil.disk_usage(home).free / 1024**3
+        if free_gb < min_free_gb:
+            for remaining in targets[idx:]:
+                seq += 1
+                append(ledger, {"seq": seq, "target": remaining,
+                                "env": find_env(remaining, home),
+                                "phase": "skipped_disk", "returncode": None,
+                                "stderr_tail": f"free disk {free_gb:.1f} GB < {min_free_gb:.1f} GB floor",
+                                "verdict": None})
+            break
         env_name = find_env(target, home)
         if env_name is None:
             seq += 1
@@ -146,6 +161,8 @@ def target_status(records: list[dict]) -> str:
         return "not_attempted"
     if any(r["phase"] == "skipped_gated" for r in records):
         return "skipped_gated"
+    if any(r["phase"] == "skipped_disk" for r in records):
+        return "skipped_disk"
     verifies = [r for r in records if r["phase"] == "verify"]
     if verifies:
         verdict = verifies[-1].get("verdict") or {}

@@ -169,6 +169,21 @@ def test_predicate_agrees_with_install_sh(tmp_path, monkeypatch, pin, host_mm, e
 # Witness-output parsing
 # ---------------------------------------------------------------------------
 
+def test_stream_process_quiet_keeps_stdout_clean(tmp_path, capsys):
+    rc, _elapsed, stdout, _stderr, _gpu = common.stream_process(
+        ["/bin/sh", "-c", "echo streamed-witness-line"],
+        env=dict(os.environ),
+        log_path=tmp_path / "log.txt",
+        stderr_path=tmp_path / "err.txt",
+        collect=True,
+        quiet=True,
+    )
+    assert rc == 0
+    assert "streamed-witness-line" in stdout          # still collected
+    assert "streamed-witness-line" in (tmp_path / "log.txt").read_text()  # still logged
+    assert capsys.readouterr().out == ""              # but OUR stdout stays clean
+
+
 def test_verify_output_ok_parses_witness_lines():
     stdout = "energy (eV) : -16.386652\nmax|force| : 0.031245\n"
     assert common.verify_output_ok(stdout, "") == (True, True)

@@ -153,6 +153,7 @@ def main() -> int:
         monitor_gpu=not skew["skew"],
         cwd=home,
         gpu_sample_seconds=0.2,
+        quiet=args.json,
     )
 
     verdict = decide_verdict(skew, rc, bool(gpu.get("seen")), parse_witness_json(stdout), stderr)

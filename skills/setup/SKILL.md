@@ -179,8 +179,11 @@ Batch execution (deterministic driver, complete-then-batch-recover):
     `python3 $OH_MY_MLIP_HOME/scripts/setup_sweep.py --targets <M1,M2,...>`
   The driver enforces what used to be prose rules: sequential one-env-at-a-
   time execution, `skipped_gated` bookkeeping for gated targets without a
-  token, never stopping on a failed target, and one JSONL ledger line per
-  phase under `.sweep/`. Do NOT iterate install.sh over targets yourself.
+  token, never stopping on a failed target, a 10 GB disk-floor check before
+  each target (below it, this and all remaining targets are recorded
+  `skipped_disk` and the sweep ends — guaranteed failures are not attempted),
+  and one JSONL ledger line per phase under `.sweep/`. Do NOT iterate
+  install.sh over targets yourself.
 - After the sweep completes, run the recovery pass: for each ledger entry
   whose status is `failed`, work that ONE target through the
   <Self_Healing_Loop> (Steps 1-4; the guardrail bounds still apply per

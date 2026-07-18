@@ -174,7 +174,11 @@ def stream_process(
     monitor_gpu: bool = False,
     cwd: Path | None = None,
     gpu_sample_seconds: float = 0.5,
+    quiet: bool = False,
 ) -> tuple[int, float, str, str, dict]:
+    # quiet=True suppresses the live echo to OUR stdout (file logs and
+    # collection are unaffected) — used by machine-output callers like
+    # `setup_verify.py --json` whose stdout must stay parseable.
     start = time.monotonic()
     gpu = {"seen": False, "max_mem_mb": 0, "samples": []}
     collected_stdout: list[str] = []
@@ -202,8 +206,9 @@ def stream_process(
             with write_lock:
                 log_file.write(line)
                 log_file.flush()
-                sys.stdout.write(line)
-                sys.stdout.flush()
+                if not quiet:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
                 if is_stderr:
                     stderr_file.write(line)
                     stderr_file.flush()
