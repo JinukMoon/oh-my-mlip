@@ -117,10 +117,18 @@ Survey-plan-approve gate (applies to `all` targets ONLY):
   it. Never open with "not enough disk, what do you want to do?" — that
   question, asked pre-survey, is exactly the failure mode this design
   prevents (its numbers are wrong until the survey has run).
-- From the survey output, present one plan table — per env: ready (will
-  skip) / partial (will adopt-or-heal) / missing (will build), plus gated
-  models (skipped without a token), exclusions, and the survey's disk
-  verdict (`disk.fits`).
+- RENDER BEFORE ASKING: the survey table must be shown to the user as
+  visible output BEFORE the approval question appears — never summarized
+  away into the question options. Show, in this order: (1) the resolved
+  `OH_MY_MLIP_HOME` (so a fresh-clone-vs-existing-hub mixup is visible at a
+  glance), (2) the per-env table — ready (will skip) / partial (will
+  adopt-or-heal) / missing (will build) — plus gated models (skipped
+  without a token) and exclusions, (3) the survey's disk verdict
+  (`disk.fits`). The approval question comes AFTER this table and must
+  restate the counts in its text ("N ready — skipped, M to build, K gated").
+  A question whose options mention installing models the table shows as
+  `ready` is a contract violation — ready envs are never proposed for
+  install.
 - If the post-survey budget still does not fit the free space, that is part
   of the SAME plan-approval question, not a separate upfront alarm: show how
   many envs fit, and let the selection UI (below) drive which ones make the
