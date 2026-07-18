@@ -12,6 +12,18 @@ exit-0 alone is not sufficient, and `scripts/verify_compile.py` is a JSON-shape
 lint, not a compute witness.
 </Endpoint>
 
+<Deterministic_First>
+Every fact this skill needs that CAN be computed by code IS computed by a
+script, and the agent must use the script instead of re-deriving the fact:
+survey/plan numbers -> `scripts/setup_survey.py`; stop conditions ->
+`scripts/setup_guardrail.py`; install state transitions -> `install.sh`;
+the compute witness -> `run_examples/single_point.py`. The agent's own job is
+exactly three things: render script output, drive the approval UI, and reason
+about failures. Prose ordering promises are not trusted — where ordering
+matters, it is enforced by making one script compute all the dependent facts
+atomically.
+</Deterministic_First>
+
 <Bootstrap>
 Preconditions to establish before the loop:
 
@@ -96,18 +108,19 @@ Target resolution:
   the user sees what was left out.
 
 Survey-plan-approve gate (applies to `all` targets ONLY):
-- The `install.sh --status` survey is the FIRST action — before any disk
-  check, any question, any judgment. Without it every downstream number is
-  wrong: envs already `ready` cost ZERO new disk, so "is there enough space?"
-  cannot be answered until the survey says how many envs will actually be
-  built. Never open with "not enough disk, what do you want to do?" — that
-  question, asked pre-survey, is exactly the failure mode this ordering rule
-  exists to prevent.
-- After the survey, present one plan table — per env: ready (will skip) /
-  partial (will adopt-or-heal) / missing (will build), plus gated models
-  (skipped without a token), exclusions, and the disk budget vs free space
-  where the budget counts ONLY the envs that will actually be built
-  (~10 GB x missing/broken; ready envs count zero).
+- The survey is ONE deterministic command and it is the FIRST action:
+  `python3 $OH_MY_MLIP_HOME/scripts/setup_survey.py`
+  It computes ATOMICALLY every fact the plan needs — per-env state, the disk
+  budget counting ONLY envs that will actually be built (ready envs cost
+  zero), leak-safe token availability, and the gated list. The agent renders
+  this output; it must NOT recompute, reorder, or partially re-derive any of
+  it. Never open with "not enough disk, what do you want to do?" — that
+  question, asked pre-survey, is exactly the failure mode this design
+  prevents (its numbers are wrong until the survey has run).
+- From the survey output, present one plan table — per env: ready (will
+  skip) / partial (will adopt-or-heal) / missing (will build), plus gated
+  models (skipped without a token), exclusions, and the survey's disk
+  verdict (`disk.fits`).
 - If the post-survey budget still does not fit the free space, that is part
   of the SAME plan-approval question, not a separate upfront alarm: show how
   many envs fit, and let the selection UI (below) drive which ones make the
@@ -129,9 +142,9 @@ Survey-plan-approve gate (applies to `all` targets ONLY):
     agents) fall back to a text plan + text approval.
   After approval the sweep runs to completion with zero further prompts (the
   <Endpoint> zero-prompt contract applies from approval onward).
-- Token check for gated targets: while surveying, detect whether an HF token
-  is already available (the `fetch.py` resolution order: `HF_TOKEN` env →
-  standard `huggingface_hub` cache/`HF_TOKEN_PATH` → `OMM_HF_TOKEN_FILE`).
+- Token check for gated targets: the survey output already reports it
+  (`token.available` / `token.source`, probed in the `fetch.py` resolution
+  order without ever reading the token value).
   If gated models are in scope and NO token is found, the plan must include a
   token request that spells out the LITERAL commands and URLs for the user to
   run/visit (sourced from `docs/hf_token.md`, not paraphrased): the
@@ -173,8 +186,9 @@ Entry condition: bootstrap complete, conda present, model is not gated.
 
 Step 0 -- Take stock FIRST (always, for every target):
   Before any install attempt, check the target's install state:
-  `bash $OH_MY_MLIP_HOME/install.sh --status` (read-only; reports
-  ready / partial / broken / not installed per env).
+  `python3 $OH_MY_MLIP_HOME/scripts/setup_survey.py --table <model>`
+  (read-only; reports ready / partial / broken / not installed per env, with
+  state rules identical to `install.sh --status`).
   - `ready` -> do NOT install. Jump straight to Step 4 (verify). If the
     verification passes, report "already installed and verified" and stop —
     the whole call cost one single-point run. If it fails, fall into Step 1
