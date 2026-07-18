@@ -3,8 +3,8 @@
 [![CI (GPU-free)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml/badge.svg)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> One convention for reaching many MLIP frameworks — without solving a single
-> conda environment by hand.
+> oh-my-mlip won't pick the best MLIP for you — but you'll never solve a conda
+> environment by hand again.
 
 **One registry, many MLIPs.** 20 machine-learning interatomic-potential
 frameworks (31 model variants) catalogued behind one convention. Each framework
@@ -54,6 +54,21 @@ Zero manual steps. Details:
 [`docs/claude_plugin.md`](docs/claude_plugin.md). (Tool-calling agents can use
 the [MCP server](#mcp-server) instead.)
 
+### Updating
+
+The plugin has no version pins — **every push to `main` is a new version**
+(identified by its git commit). Third-party marketplaces have auto-update
+**off** by default in Claude Code, so either enable it once
+(`/plugin` → Marketplaces → **Enable auto-update**) or pull updates explicitly:
+
+```
+/plugin update oh-my-mlip@oh-my-mlip
+```
+
+Updates never apply to a running session — run `/reload-plugins` (or start a
+new session) to load the new version. A manually cloned hub updates with plain
+`git pull`.
+
 ### Manual quickstart (no agent required)
 
 `oh_my_mlip` is **path-importable, not a pip package**. `source env.sh` once per
@@ -98,6 +113,29 @@ print(out["energy"], out["forces"][0])
 | `get_calculator(model, ...)` | intra-env | build an ASE `Calculator` from inside that model's own env |
 | `run(model, atoms, ...)` | cross-env | one-shot compute; spawns the right env interpreter |
 | `Worker` / `WorkerPool` | cross-env | persistent per-env worker for many repeated calls |
+
+## Why oh-my-mlip?
+
+The name is a promise, in the [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh)
+sense: a framework whose whole job is removing setup pain. Excellent
+neighboring tools exist, and nearly all of them **assume the hard part — a
+working environment for each framework — is already solved**:
+
+- **Evaluation suites** (mlipx, MLIP Arena, mlipaudit) benchmark models you
+  have already installed.
+- **Reimplementation stacks** (e.g. JAX rewrites of popular architectures)
+  unify frameworks by rewriting them — the opposite strategy; oh-my-mlip only
+  ever packages the real upstream code, so you compute with the authors' own
+  implementation.
+- **Single-backend unifiers** standardize on one tensor stack; oh-my-mlip
+  isolates instead (one env per framework), so PyTorch, TensorFlow, and JAX
+  frameworks ride along unchanged and never fight over CUDA pins.
+
+oh-my-mlip is the layer those tools stand on: curated, validated envs behind
+one registry, with an agent that does the installing — plus
+[catbench](https://github.com/JinukMoon/catbench) pre-wired the moment an env
+exists. Your favorite MLIP tool is welcome on top of it
+([Contributing](#contributing)).
 
 ## Supported MLIPs
 
