@@ -102,21 +102,32 @@ Survey-plan-approve gate (applies to `all` targets ONLY):
   without a token), exclusions, and the disk budget vs free space.
 - Then STOP and ask for approval. This is the one deliberate human checkpoint
   in an `all` sweep — a full-registry install is a 100+ GB, multi-hour
-  commitment the user should see before it starts. Offer the decision as a
-  short structured choice where the interface supports it (a full per-model
-  checkbox list does not fit typical agent question UIs): (a) install
-  everything in the plan, (b) only what is missing/broken, (c) let the user
-  name exclusions. After approval the sweep runs to completion with zero
-  further prompts (the <Endpoint> zero-prompt contract applies from approval
-  onward).
+  commitment the user should see before it starts. This is an agent-first
+  hub, so use the host agent's NATIVE interactive question UI whenever one
+  exists (in Claude Code, the structured question tool with selectable
+  options) — not a plain-text "reply yes" prompt:
+  - Question 1 (single-select): (a) install everything in the plan,
+    (b) only what is missing/broken, (c) choose models to exclude.
+  - If (c): follow up with MULTI-SELECT questions listing the pending models
+    as options, batched to fit the UI's per-question option limit (batch by
+    a sensible grouping — e.g. gated / large-disk / the rest); each answer
+    marks exclusions. Free-text answers ("skip everything except MACE") are
+    always honored too.
+  - Only when no interactive question UI exists (plain MCP callers, other
+    agents) fall back to a text plan + text approval.
+  After approval the sweep runs to completion with zero further prompts (the
+  <Endpoint> zero-prompt contract applies from approval onward).
 - Token check for gated targets: while surveying, detect whether an HF token
   is already available (the `fetch.py` resolution order: `HF_TOKEN` env →
   standard `huggingface_hub` cache/`HF_TOKEN_PATH` → `OMM_HF_TOKEN_FILE`).
   If gated models are in scope and NO token is found, the plan must include a
-  token request with the exact setup steps from `docs/hf_token.md`: accept
-  the license at each model's `license_url`, create a READ token, then run
-  `huggingface-cli login` **in the user's own terminal** (or point
-  `HF_TOKEN_PATH` at a file outside the repo).
+  token request that spells out the LITERAL commands and URLs for the user to
+  run/visit (sourced from `docs/hf_token.md`, not paraphrased): the
+  `license_url` of each gated model in scope, the token-creation page
+  (huggingface.co/settings/tokens, role: read), and the exact command to run
+  **in the user's own terminal**:
+  `huggingface-cli login`
+  (alternative: `export HF_TOKEN_PATH=/path/outside/repo/token`).
   **Tell the user explicitly: NEVER paste the token into this chat.** Anything
   typed here lands in the conversation transcript and logs; the token must
   reach the machine out-of-band (the interactive `huggingface-cli login`
