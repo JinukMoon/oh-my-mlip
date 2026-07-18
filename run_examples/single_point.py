@@ -20,6 +20,7 @@ docs/arch_first_run_compile.md). For gated models (e.g. UMA) export HF_TOKEN and
 accept the upstream license first (see docs/gated_models.md).
 """
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -59,6 +60,8 @@ def main() -> int:
     ap.add_argument("--structure", default=None, help="path to a structure file (POSCAR/cif/xyz); read inside the worker. Default: a demo fcc Cu cell")
     ap.add_argument("--d3", action="store_true", help="apply D3 dispersion correction")
     ap.add_argument("--arch", default=None, help="sm86/sm89 for arch-pinned models (NequIP/Allegro); default: host GPU auto-detect")
+    ap.add_argument("--device", default="cuda", choices=("cuda", "cpu"), help="compute device passed to the worker (default: cuda)")
+    ap.add_argument("--json", action="store_true", help="print one JSON object instead of the human lines (machine consumers, e.g. scripts/setup_verify.py)")
     args = ap.parse_args()
 
     atoms = {"file": args.structure} if args.structure else _demo_structure()
@@ -69,6 +72,7 @@ def main() -> int:
             version=args.version,
             arch=args.arch,
             properties=("energy", "forces"),
+            device=args.device,
             apply_d3=args.d3,
         )
     except WorkerError as exc:
@@ -76,9 +80,20 @@ def main() -> int:
         # message, not a raw traceback.
         print(f"[oh-my-mlip] {exc}", file=sys.stderr)
         return 1
+    fmax = max((sum(c * c for c in f) ** 0.5 for f in out["forces"]), default=0.0)
+    if args.json:
+        # NOTE: no realized-device claim here — the launcher only knows what it
+        # REQUESTED. GPU use is attributed by PID sampling in setup_verify.py.
+        print(json.dumps({
+            "model": args.model,
+            "d3": args.d3,
+            "energy_ev": out["energy"],
+            "fmax_ev_a": fmax,
+            "forces_shape": [len(out["forces"]), 3],
+        }))
+        return 0
     print(f"model      : {args.model}{' +D3' if args.d3 else ''}")
     print(f"energy (eV): {out['energy']:.6f}")
-    fmax = max((sum(c * c for c in f) ** 0.5 for f in out["forces"]), default=0.0)
     print(f"max|force| : {fmax:.6f} eV/A")
     return 0
 
