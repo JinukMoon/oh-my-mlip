@@ -159,6 +159,19 @@ through <Gated_Model_Gate> and the full <Self_Healing_Loop>):
 <Self_Healing_Loop>
 Entry condition: bootstrap complete, conda present, model is not gated.
 
+Step 0 -- Take stock FIRST (always, for every target):
+  Before any install attempt, check the target's install state:
+  `bash $OH_MY_MLIP_HOME/install.sh --status` (read-only; reports
+  ready / partial / broken / not installed per env).
+  - `ready` -> do NOT install. Jump straight to Step 4 (verify). If the
+    verification passes, report "already installed and verified" and stop —
+    the whole call cost one single-point run. If it fails, fall into Step 1
+    (install.sh's adopt-or-heal will repair the env, never duplicate it).
+  - `partial` / `broken` / `not installed` -> proceed to Step 1; say which
+    state was found so the user knows why an install is happening.
+  This ordering is what makes repeated setup calls cheap and honest: the
+  answer to "is it already there?" always comes before any mutation.
+
 Step 1 -- Install:
   Run `bash $OH_MY_MLIP_HOME/install.sh <model>` (with `OH_MY_MLIP_HOME`
   exported). Capture stdout and stderr.
