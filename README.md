@@ -59,11 +59,14 @@ the [MCP server](#mcp-server) instead.)
 The plugin has no version pins — **every push to `main` is a new version**
 (identified by its git commit). Third-party marketplaces have auto-update
 **off** by default in Claude Code, so either enable it once
-(`/plugin` → Marketplaces → **Enable auto-update**) or pull updates explicitly:
+(`/plugin` → Marketplaces → **Enable auto-update**) or pull updates explicitly,
+from your terminal:
 
+```bash
+claude plugin update oh-my-mlip@oh-my-mlip
 ```
-/plugin update oh-my-mlip@oh-my-mlip
-```
+
+(or in-session: `/plugin` → **Installed** → oh-my-mlip → Update.)
 
 Updates never apply to a running session — run `/reload-plugins` (or start a
 new session) to load the new version. A manually cloned hub updates with plain
