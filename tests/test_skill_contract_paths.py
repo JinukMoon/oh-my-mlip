@@ -5,10 +5,11 @@ scripts — the Deterministic_First split. A rename under scripts/ or
 run_examples/ would today fail at agent runtime on a user's machine, not in
 CI. This guard makes every referenced path a CI-checked fact.
 
-Forward direction only for now (every referenced path exists). The inverse
-guard — every load-bearing script is referenced by at least one skill — is
-added once the setup_verify/setup_sweep wiring lands (plan Step 6), so no
-commit ever ships a red test.
+Both directions:
+  * forward — every referenced path exists (rename drift);
+  * inverse — every load-bearing deterministic script is referenced by at
+    least one skill contract (orphaning drift: a script the contracts no
+    longer point at silently stops being part of the agent surface).
 
 GPU-free, stdlib-only.
 """
@@ -49,6 +50,25 @@ def test_all_referenced_script_paths_exist():
     assert not missing, (
         "skill contracts reference paths that do not exist "
         "(rename drift):\n" + "\n".join(missing)
+    )
+
+
+LOAD_BEARING = [
+    "scripts/setup_survey.py",
+    "scripts/setup_guardrail.py",
+    "scripts/setup_verify.py",
+    "scripts/setup_sweep.py",
+]
+
+
+def test_load_bearing_scripts_are_referenced_by_a_skill():
+    all_refs: set[str] = set()
+    for skill in SKILL_FILES:
+        all_refs |= _extract_refs(skill.read_text())
+    orphaned = [s for s in LOAD_BEARING if s not in all_refs]
+    assert not orphaned, (
+        "load-bearing scripts no longer referenced by any skill contract "
+        "(orphaning drift):\n" + "\n".join(orphaned)
     )
 
 

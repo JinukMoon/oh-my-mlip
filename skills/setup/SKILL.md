@@ -17,6 +17,8 @@ Every fact this skill needs that CAN be computed by code IS computed by a
 script, and the agent must use the script instead of re-deriving the fact:
 survey/plan numbers -> `scripts/setup_survey.py`; stop conditions ->
 `scripts/setup_guardrail.py`; install state transitions -> `install.sh`;
+the verify verdict -> `scripts/setup_verify.py`; batch sweeps + the final
+report -> `scripts/setup_sweep.py` (JSONL ledger is the only report source);
 the compute witness -> `run_examples/single_point.py`. The agent's own job is
 exactly three things: render script output, drive the approval UI, and reason
 about failures. Prose ordering promises are not trusted — where ordering
@@ -172,21 +174,23 @@ Survey-plan-approve gate (applies to `all` targets ONLY):
 - Single-model and explicitly-listed targets do NOT get this gate: naming the
   models IS the approval; proceed zero-prompt as always.
 
-Batch rules (the per-model contract is unchanged — each target still goes
-through <Gated_Model_Gate> and the full <Self_Healing_Loop>):
-- Run targets SEQUENTIALLY, one env at a time — never parallel conda solves
-  (disk and GPU contention corrupt the error signal the loop depends on).
-- Gated models inside a batch are SKIPPED with the <Gated_Model_Gate> notice
-  recorded, not a batch halt. A single-target gated request still halts as
-  specified there.
-- Scale the disk precheck: budget ~10 GB per remaining env against the free
-  space before starting each target; if the budget no longer fits, stop the
-  batch and report which targets were not attempted.
-- A target whose loop ends in `stalled`/`guardrail_halt` fails ONLY that
-  target; continue with the next one.
-- Final report: one line per target — verified (energy + GPU PID) / skipped
-  (gated / disk) / failed (last error signature) — so a partial sweep is
-  honest about what is and is not usable.
+Batch execution (deterministic driver, complete-then-batch-recover):
+- After approval, run the sweep DRIVER once:
+    `python3 $OH_MY_MLIP_HOME/scripts/setup_sweep.py --targets <M1,M2,...>`
+  The driver enforces what used to be prose rules: sequential one-env-at-a-
+  time execution, `skipped_gated` bookkeeping for gated targets without a
+  token, never stopping on a failed target, and one JSONL ledger line per
+  phase under `.sweep/`. Do NOT iterate install.sh over targets yourself.
+- After the sweep completes, run the recovery pass: for each ledger entry
+  whose status is `failed`, work that ONE target through the
+  <Self_Healing_Loop> (Steps 1-4; the guardrail bounds still apply per
+  target). Recovery reasoning stays agent-owned (AGENTS.md §8).
+- Finish with `python3 $OH_MY_MLIP_HOME/scripts/setup_sweep.py report`.
+  The final report comes STRICTLY from the ledger — never compose it from
+  memory of what happened; targets absent from the ledger appear as
+  `not_attempted` (no silent truncation).
+- A single-target gated request still halts per <Gated_Model_Gate>; inside a
+  batch the driver's `skipped_gated` recording replaces the halt.
 </Multi_Target>
 
 <Self_Healing_Loop>
@@ -241,19 +245,24 @@ Step 3 -- On install failure: recover.
     retrying.
   - Otherwise return to Step 1.
 
-Step 4 -- On install success: verify.
+Step 4 -- On install success: verify with ONE command.
   Run:
-    `$OH_MY_MLIP_HOME/envs/<env>/bin/python \
-        $OH_MY_MLIP_HOME/run_examples/single_point.py <model>`
-  AND assert GPU is in active use:
-    `nvidia-smi --query-compute-apps=pid --format=csv,noheader`
-  Confirm the Python process PID appears in the nvidia-smi output.
-
-  Both conditions must hold. If only one holds, treat as failure and return to
-  Step 3 with a descriptive error signature (e.g. "gpu_not_used").
+    `python3 $OH_MY_MLIP_HOME/scripts/setup_verify.py <model> --json`
+  It preflights the driver-skew predicate to choose the device, runs the
+  single_point witness, samples GPU PIDs with descendant attribution (the
+  compute PID is a worker grandchild — do not run nvidia-smi yourself), and
+  prints ONE JSON verdict:
+  `{pass, device, degraded, reason, energy_ev, fmax_ev_a, forces_shape,
+  gpu_pid_confirmed}` — exit 0 iff `pass`. Render the verdict; NEVER
+  re-judge it or run a second GPU check.
+  - `pass:true, degraded:false` -> verified on GPU.
+  - `pass:true, degraded:true` -> pass-with-caveat: report device=cpu and
+    the verdict's computed reason (legitimate driver skew, AGENTS.md §1.9).
+  - `pass:false` -> return to Step 3 using `reason` as the error signature.
 
 Step 5 -- Declare success.
-  Report: model name, env path, energy value, forces shape, GPU PID confirmed.
+  Report the verdict fields as-is: model name, env path, energy_ev,
+  forces_shape, device, degraded (with reason when true), gpu_pid_confirmed.
   The guardrail helper will have already confirmed disk headroom
   and absence of a stall signature.
 </Self_Healing_Loop>
