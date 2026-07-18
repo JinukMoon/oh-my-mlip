@@ -684,4 +684,12 @@ def _conda_unpack(install_dir: Path) -> None:
             f"conda-unpack shim missing under {install_dir}; the tarball is not "
             f"a relocatable conda-pack env. Build locally with install.sh instead."
         )
-    subprocess.run([str(unpack)], check=True, cwd=str(install_dir))
+    # Invoke the shim VIA THE ENV'S OWN INTERPRETER: the shim's shebang is
+    # `/usr/bin/env python`, and a bare `python` does not exist on many hosts
+    # (python3-only distros) — running it directly fails with
+    # "/usr/bin/env: 'python': No such file or directory" (host-proven
+    # 2026-07-18 on the WSL box during the tarball relocation e2e).
+    env_python = install_dir / "bin" / "python"
+    if not env_python.exists():
+        raise FetchError(f"env interpreter missing under {install_dir}/bin")
+    subprocess.run([str(env_python), str(unpack)], check=True, cwd=str(install_dir))
