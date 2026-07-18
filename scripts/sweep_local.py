@@ -11,20 +11,16 @@ The sweep is intentionally conservative:
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,22 +50,8 @@ GPU_SAMPLE_SECONDS = 0.5
 # machinery lives in scripts/_setup_common.py so the setup oracle, the sweep
 # driver, and this sweep share ONE implementation.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _setup_common import (  # noqa: E402
-    command_display,
-    is_descendant_or_self,
-    is_python_pid,
-    parent_pid,
-    parse_mem_mb,
-    read_proc_text,
-    utc_now,
-    verify_output_ok,
-)
-from _setup_common import sample_gpu as _shared_sample_gpu  # noqa: E402
+from _setup_common import utc_now, verify_output_ok  # noqa: E402
 from _setup_common import stream_process as _shared_stream_process  # noqa: E402
-
-
-def sample_gpu(root_pid: int, gpu: dict) -> None:
-    _shared_sample_gpu(root_pid, gpu, cwd=ROOT)
 
 
 def stream_process(
@@ -556,6 +538,14 @@ def cleanup_entry(env_name: str, env: dict[str, str]) -> None:
 
 
 def main() -> int:
+    # Safety: this script MUTATES the hub (installs envs, DELETES each prefix
+    # after its attempt). A bare "--help" probe must never start that. Bare
+    # invocation still runs (sweep_watchdog.sh compatibility).
+    if any(arg in ("-h", "--help") for arg in sys.argv[1:]):
+        print(__doc__)
+        print("Bare invocation runs the full install/verify/DELETE sweep "
+              "(scripts/sweep_config.json order). There are no other flags.")
+        return 0
     ensure_dirs()
     config = load_json(CONFIG_PATH)
     ceiling_gb = float(config.get("host", {}).get("disk_ceiling_gb", 30))

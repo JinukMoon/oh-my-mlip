@@ -13,10 +13,7 @@ GPU-free: fake install/verify shell scripts stand in for the real ones.
 """
 import importlib.util
 import json
-import os
 import stat
-import subprocess
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

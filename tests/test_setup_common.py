@@ -14,9 +14,7 @@ Pins the three facts the plan makes load-bearing:
 GPU-free, stdlib-only.
 """
 import importlib.util
-import json
 import os
-import re
 import stat
 import subprocess
 from pathlib import Path
