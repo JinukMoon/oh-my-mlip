@@ -50,9 +50,47 @@ CUMULATIVE_MAX = 5
 WALLCLOCK_MAX_S = None
 GPU_SAMPLE_SECONDS = 0.5
 
+# Shared deterministic core (extracted 2026-07-18): the proc/GPU/parse
+# machinery lives in scripts/_setup_common.py so the setup oracle, the sweep
+# driver, and this sweep share ONE implementation.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _setup_common import (  # noqa: E402
+    command_display,
+    is_descendant_or_self,
+    is_python_pid,
+    parent_pid,
+    parse_mem_mb,
+    read_proc_text,
+    utc_now,
+    verify_output_ok,
+)
+from _setup_common import sample_gpu as _shared_sample_gpu  # noqa: E402
+from _setup_common import stream_process as _shared_stream_process  # noqa: E402
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+def sample_gpu(root_pid: int, gpu: dict) -> None:
+    _shared_sample_gpu(root_pid, gpu, cwd=ROOT)
+
+
+def stream_process(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    log_path: Path,
+    stderr_path: Path,
+    collect: bool = False,
+    monitor_gpu: bool = False,
+) -> tuple[int, float, str, str, dict]:
+    return _shared_stream_process(
+        command,
+        env=env,
+        log_path=log_path,
+        stderr_path=stderr_path,
+        collect=collect,
+        monitor_gpu=monitor_gpu,
+        cwd=ROOT,
+        gpu_sample_seconds=GPU_SAMPLE_SECONDS,
+    )
 
 
 def log(message: str) -> None:
@@ -290,196 +328,6 @@ def record_attempt(stderr_file: Path, state_file: Path, env: dict[str, str]) -> 
     return run_json(command, env=env)
 
 
-def command_display(command: Iterable[str]) -> str:
-    return " ".join(str(part) for part in command)
-
-
-def stream_process(
-    command: list[str],
-    *,
-    env: dict[str, str],
-    log_path: Path,
-    stderr_path: Path,
-    collect: bool = False,
-    monitor_gpu: bool = False,
-) -> tuple[int, float, str, str, dict]:
-    start = time.monotonic()
-    gpu = {"seen": False, "max_mem_mb": 0, "samples": []}
-    collected_stdout: list[str] = []
-    collected_stderr: list[str] = []
-    stop_monitor = threading.Event()
-    write_lock = threading.Lock()
-
-    with log_path.open("a", encoding="utf-8", errors="replace") as log_file, stderr_path.open(
-        "w", encoding="utf-8", errors="replace"
-    ) as stderr_file:
-        log_file.write(f"\n[{utc_now()}] $ {command_display(command)}\n")
-        log_file.flush()
-        proc = subprocess.Popen(
-            command,
-            cwd=str(ROOT),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            errors="replace",
-            bufsize=1,
-        )
-
-        def emit(line: str, *, is_stderr: bool) -> None:
-            with write_lock:
-                log_file.write(line)
-                log_file.flush()
-                sys.stdout.write(line)
-                sys.stdout.flush()
-                if is_stderr:
-                    stderr_file.write(line)
-                    stderr_file.flush()
-                if collect:
-                    if is_stderr:
-                        collected_stderr.append(line)
-                    else:
-                        collected_stdout.append(line)
-
-        def pump(pipe, *, is_stderr: bool) -> None:
-            try:
-                for line in pipe:
-                    emit(line, is_stderr=is_stderr)
-            finally:
-                pipe.close()
-
-        def monitor() -> None:
-            while not stop_monitor.is_set():
-                sample_gpu(proc.pid, gpu)
-                stop_monitor.wait(GPU_SAMPLE_SECONDS)
-            sample_gpu(proc.pid, gpu)
-
-        threads = [
-            threading.Thread(target=pump, args=(proc.stdout,), kwargs={"is_stderr": False}),
-            threading.Thread(target=pump, args=(proc.stderr,), kwargs={"is_stderr": True}),
-        ]
-        for thread in threads:
-            thread.daemon = True
-            thread.start()
-
-        monitor_thread = None
-        if monitor_gpu:
-            monitor_thread = threading.Thread(target=monitor)
-            monitor_thread.daemon = True
-            monitor_thread.start()
-
-        rc = proc.wait()
-        stop_monitor.set()
-        for thread in threads:
-            thread.join()
-        if monitor_thread is not None:
-            monitor_thread.join()
-        elapsed = time.monotonic() - start
-        log_file.write(f"[{utc_now()}] returncode={rc} seconds={elapsed:.1f}\n")
-        log_file.flush()
-
-    return (
-        rc,
-        elapsed,
-        "".join(collected_stdout),
-        "".join(collected_stderr),
-        gpu,
-    )
-
-
-def read_proc_text(path: Path) -> str:
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return ""
-    return data.replace(b"\x00", b" ").decode("utf-8", errors="replace")
-
-
-def is_python_pid(pid: int) -> bool:
-    comm = read_proc_text(Path("/proc") / str(pid) / "comm").strip().lower()
-    cmdline = read_proc_text(Path("/proc") / str(pid) / "cmdline").lower()
-    blob = f"{comm} {cmdline}"
-    return "python" in blob
-
-
-def parent_pid(pid: int) -> int | None:
-    try:
-        stat = (Path("/proc") / str(pid) / "stat").read_text(
-            encoding="utf-8", errors="replace"
-        )
-    except OSError:
-        return None
-    end = stat.rfind(")")
-    if end == -1:
-        return None
-    rest = stat[end + 2 :].split()
-    if len(rest) < 2:
-        return None
-    try:
-        return int(rest[1])
-    except ValueError:
-        return None
-
-
-def is_descendant_or_self(pid: int, root_pid: int) -> bool:
-    current = pid
-    seen: set[int] = set()
-    while current > 1 and current not in seen:
-        if current == root_pid:
-            return True
-        seen.add(current)
-        parent = parent_pid(current)
-        if parent is None:
-            return False
-        current = parent
-    return False
-
-
-def parse_mem_mb(text: str) -> int:
-    match = re.search(r"(\d+)", text)
-    return int(match.group(1)) if match else 0
-
-
-def sample_gpu(root_pid: int, gpu: dict) -> None:
-    if shutil.which("nvidia-smi") is None:
-        return
-    try:
-        proc = subprocess.run(
-            [
-                "nvidia-smi",
-                "--query-compute-apps=pid,used_memory",
-                "--format=csv,noheader",
-            ],
-            cwd=str(ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            errors="replace",
-            timeout=5,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return
-    if proc.returncode != 0:
-        return
-    for row in csv.reader(proc.stdout.splitlines()):
-        if len(row) < 2:
-            continue
-        try:
-            pid = int(row[0].strip())
-        except ValueError:
-            continue
-        if not is_descendant_or_self(pid, root_pid):
-            continue
-        if not is_python_pid(pid):
-            continue
-        mem = parse_mem_mb(row[1])
-        gpu["seen"] = True
-        gpu["max_mem_mb"] = max(int(gpu.get("max_mem_mb", 0)), mem)
-        samples = gpu.setdefault("samples", [])
-        if len(samples) < 10:
-            samples.append({"pid": pid, "used_memory_mb": mem})
-
-
 def looks_gated_error(text: str) -> bool:
     lower = text.lower()
     needles = [
@@ -562,13 +410,6 @@ def validate_hf_token(env: dict[str, str]) -> tuple[bool, str]:
         return False, f"HF token validation failed: HTTP {exc.code}"
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         return False, f"HF token validation failed: {exc}"
-
-
-def verify_output_ok(stdout: str, stderr: str) -> tuple[bool, bool]:
-    combined = stdout + "\n" + stderr
-    energy_ok = re.search(r"energy\s*\(eV\)\s*:\s*[-+0-9.eE]+", combined) is not None
-    force_ok = re.search(r"max\|force\|\s*:\s*[-+0-9.eE]+", combined) is not None
-    return energy_ok, force_ok
 
 
 def install_env(entry: dict, env: dict[str, str]) -> tuple[str, str, float, list[str]]:

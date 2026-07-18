@@ -42,11 +42,8 @@ from pathlib import Path
 PER_ENV_GB = 10
 
 
-def resolve_home() -> Path:
-    home = os.environ.get("OH_MY_MLIP_HOME") or os.environ.get("OMM_HOME")
-    if home and Path(home).is_dir():
-        return Path(home).resolve()
-    return Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _setup_common import resolve_home  # noqa: E402
 
 
 def env_state(prefix: Path) -> str:
