@@ -96,10 +96,22 @@ Target resolution:
   the user sees what was left out.
 
 Survey-plan-approve gate (applies to `all` targets ONLY):
-- Before installing ANYTHING, take stock: run `install.sh --status` and read
-  the registry. Present one plan table — per env: ready (will skip) / partial
-  (will adopt-or-heal) / missing (will build), plus gated models (skipped
-  without a token), exclusions, and the disk budget vs free space.
+- The `install.sh --status` survey is the FIRST action — before any disk
+  check, any question, any judgment. Without it every downstream number is
+  wrong: envs already `ready` cost ZERO new disk, so "is there enough space?"
+  cannot be answered until the survey says how many envs will actually be
+  built. Never open with "not enough disk, what do you want to do?" — that
+  question, asked pre-survey, is exactly the failure mode this ordering rule
+  exists to prevent.
+- After the survey, present one plan table — per env: ready (will skip) /
+  partial (will adopt-or-heal) / missing (will build), plus gated models
+  (skipped without a token), exclusions, and the disk budget vs free space
+  where the budget counts ONLY the envs that will actually be built
+  (~10 GB x missing/broken; ready envs count zero).
+- If the post-survey budget still does not fit the free space, that is part
+  of the SAME plan-approval question, not a separate upfront alarm: show how
+  many envs fit, and let the selection UI (below) drive which ones make the
+  cut.
 - Then STOP and ask for approval. This is the one deliberate human checkpoint
   in an `all` sweep — a full-registry install is a 100+ GB, multi-hour
   commitment the user should see before it starts. This is an agent-first
