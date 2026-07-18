@@ -14,16 +14,19 @@ skills are thin pointers only.
 
 ## Installation
 
-### From the marketplace (recommended)
+### From this repo as a marketplace (recommended)
 
-In Claude Code, run:
+The repo itself is a self-serve Claude Code marketplace
+(`.claude-plugin/marketplace.json` at the repo root). In Claude Code, run:
 
 ```
-/plugin install oh-my-mlip
+/plugin marketplace add JinukMoon/oh-my-mlip
+/plugin install oh-my-mlip@oh-my-mlip
 ```
 
-Claude Code resolves this via `.claude-plugin/marketplace.json` in the repo
-(or the hosted marketplace entry once listed).
+No hosted registry is required — `marketplace add <owner>/<repo>` resolves the
+marketplace manifest straight from GitHub, and `install` then pulls the plugin
+defined by its `plugins[].source`.
 
 ### Local install
 

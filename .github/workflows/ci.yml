@@ -127,19 +127,23 @@ jobs:
             --tb=short \
             -p no:cacheprovider
 
-  # ── Deferred: GPU smoke test (non-blocking) ───────────────────────────────────
-  # This job is commented out. Uncomment and configure a self-hosted GPU runner
-  # when the human-gated compute checkpoint has been completed (conda-pack tarballs
-  # built + published to HF, binding end-to-end test on a foreign host passed).
-  #
-  # gpu-smoke-test:
-  #   name: GPU smoke test (self-hosted, non-blocking)
-  #   runs-on: [self-hosted, gpu]
-  #   needs: gpu-free-ci
-  #   continue-on-error: true   # non-blocking: PR can merge if GPU runner absent
-  #   steps:
-  #     - uses: actions/checkout@v5
-  #     - name: Run single-point smoke test
-  #       run: |
-  #         python run_examples/single_point.py --model MACE --version MACE-MPA-0
-  #         python run_examples/single_point.py --model SevenNet --version SevenNet-MF-OMPA
+  # ── GPU smoke test (self-hosted, non-blocking) ────────────────────────────────
+  # Runs on the maintainer's registered self-hosted GPU runner (labels:
+  # self-hosted + gpu). The runner's .env provides OH_MY_MLIP_HOME pointing at
+  # the live hub (built envs + weight caches), so the freshly checked-out code
+  # is smoke-tested against real envs. Non-blocking: continue-on-error keeps
+  # PRs mergeable when the runner is offline.
+  gpu-smoke-test:
+    name: GPU smoke test (self-hosted, non-blocking)
+    runs-on: [self-hosted, gpu]
+    needs: gpu-free-ci
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: MACE single-point on GPU (hub env)
+        run: |
+          "$OH_MY_MLIP_HOME/envs/mace/bin/python" run_examples/single_point.py MACE
+      - name: SevenNet single-point on GPU (hub env)
+        run: |
+          "$OH_MY_MLIP_HOME/envs/sevennet/bin/python" run_examples/single_point.py SevenNet
