@@ -1,5 +1,8 @@
 # oh-my-mlip
 
+[![CI (GPU-free)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml/badge.svg)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 > One convention for reaching many MLIP frameworks — without solving a single
 > conda environment by hand.
 
@@ -7,7 +10,8 @@
 frameworks (31 model variants) catalogued behind one convention. Each framework
 lives in its own validated conda env, built from a curated recipe, with
 [catbench](https://github.com/JinukMoon/catbench) adsorption benchmarking
-pre-wired and an **agent-native** surface (`AGENTS.md` + an MCP server).
+pre-wired and an **agent-native** surface (`AGENTS.md` + a Claude Code plugin +
+an MCP server).
 
 `oh-my-mlip` is a **convenience layer**, not a model and not a benchmark verdict.
 It removes the one thing that actually stops people from using many MLIP
@@ -44,6 +48,20 @@ out = oh_my_mlip.run("MACE", atoms, properties=("energy", "forces"))
 print(out["energy"], out["forces"][0])
 ```
 
+### Or let an agent do everything (Claude Code plugin)
+
+The repo doubles as a self-serve Claude Code marketplace. Two commands, once:
+
+```
+/plugin marketplace add JinukMoon/oh-my-mlip
+/plugin install oh-my-mlip@oh-my-mlip
+```
+
+After that, `/oh-my-mlip:setup MACE` (or just asking in natural language —
+"relax this POSCAR with an MLIP") clones the hub if needed, builds the env,
+runs any first-use GPU compilation, and verifies energy + forces on your GPU
+before reporting back. Details: [`docs/claude_plugin.md`](docs/claude_plugin.md).
+
 ### API surface (small and stable)
 
 | Call | Layer | Use |
@@ -56,9 +74,13 @@ print(out["energy"], out["forces"][0])
 
 ## Supported MLIPs
 
-20 frameworks / 31 model variants. On the maintainer's GPU (RTX 4060 Ti, sm89) the
-**whole roster builds and computes energy + forces** — most on the GPU, a few
-(dpa4/tace/matris) on CPU where their build needs a newer CUDA driver. Separately,
+20 frameworks / 31 model variants, install-verified on **two independent hosts**:
+the maintainer's RTX 4060 Ti (sm89, CUDA 12.x driver) and a third-party
+RTX A4500 login node (sm86, CUDA 13.0 driver) where 27/31 variants — including
+the CUDA-13-only trio (dpa4/tace/matris) — computed energy + forces on the GPU
+from a fresh clone. On a CUDA-12 driver that trio runs CPU-only and says so up
+front. Every push also runs a **GPU smoke test** (MACE + SevenNet single-points
+on a self-hosted runner) alongside the GPU-free CI. Separately,
 17/20 envs also **bit-reproduce** our internal `/TGM` reference (the rest run fine
 but aren't in that reference set, or are a public build that drifts). Per-model
 state, gated flag, and licenses: [`docs/model_status.md`](docs/model_status.md),
@@ -94,19 +116,27 @@ equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
 
 - **Envs build from recipes.** `install.sh <model>` builds the env on the current
   host from a curated recipe (`envs/<env>.yml`, plus a `.build.sh` sidecar where a
-  framework needs a pinned side-install). Recipes for the full roster are
-  host-verified on the maintainer's GPU (RTX 4060 Ti, sm89); per-model caveats
-  live in `models.json` and [`docs/model_status.md`](docs/model_status.md).
+  framework needs a pinned side-install). Re-runs are safe by construction:
+  `install.sh --status` inspects install state, an interrupted env is
+  import-verified and **adopted or rebuilt — never duplicated**, and a ready
+  sentinel is only trusted after its imports re-verify. Per-model caveats live in
+  `models.json` and [`docs/model_status.md`](docs/model_status.md).
 - **Weights are never hosted here.** They download from each framework's official
   channel on first run — by name to a shared cache, from an official URL, or from
   Hugging Face with *your* own token for gated models. oh-my-mlip redistributes no
   weights.
 - **Arch-pinned artifacts compile on your GPU.** The D3 CUDA kernel and the
-  NequIP/Allegro AOT `.pt2` are compiled/reselected for your compute capability on
-  first run — never shipped. See [`docs/arch_first_run_compile.md`](docs/arch_first_run_compile.md).
+  NequIP/Allegro AOT `.pt2` are compiled/reselected for your compute capability
+  (auto-detected — sm86/sm89/anything newer) on first run — never shipped. See
+  [`docs/arch_first_run_compile.md`](docs/arch_first_run_compile.md).
 - **Self-healing install loop.** A bounded, agent-driven setup loop with hard
   stop conditions (disk headroom, signature stall, cumulative-attempt cap,
   wall-clock) — the policy is the single source of truth in `AGENTS.md` §8.
+- **Relocatable env tarballs (rolling out).** The conda-pack pipeline is
+  validated end-to-end — a packed env unpacked at a foreign prefix reproduces
+  the source env's energy bit-identically — and per-env tarballs are being
+  published to the Hugging Face Hub via `dist_manifest.json` (recipes remain
+  the always-available fallback).
 
 ## Gated models
 
