@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Install an oh-my-mlip MLIP model environment and verify energy+force on GPU with zero human intervention. Triggers on requests to "install", "set up", "setup", or "get working" any MLIP model (MACE, SevenNet, NequIP, Allegro, ORB, UMA, etc.) via oh-my-mlip. Also triggers when a user wants to run a model for the first time and the env is not yet materialized. Also triggers on GENERIC natural-language intent to use a machine-learning interatomic potential — "set up an MLIP", "install an ML potential / machine-learned force field / foundation interatomic potential" — even when no specific model and no "oh-my-mlip" is named; in that case list the registry roster (oh_my_mlip.list_models()) and confirm the model choice (MACE is the quickstart default). Also triggers on requests to install SEVERAL models or ALL models at once — "install everything", "set up all the MLIPs", "MACE and SevenNet and ORB" — see <Multi_Target>. Also triggers on ROSTER questions — "which MLIPs can I install", "list the available models", "what does oh-my-mlip support" — answered as a pure registry read with no install (see <Roster_Listing>). Works from ANY working directory: the skill never assumes the current directory is the oh-my-mlip repo (see <Bootstrap>). Do NOT trigger on purely informational MLIP discussion (papers, theory, definitions) with no install/run/roster intent.
-argument-hint: "<model … | all>  e.g. MACE-MPA-0 · MACE SevenNet ORB · all"
+argument-hint: "<model … | all | all except <model …>>  e.g. MACE-MPA-0 · MACE SevenNet ORB · all · all except UMA eSEN"
 ---
 
 <Endpoint>
@@ -61,6 +61,10 @@ If `gated: true`:
 - Do NOT proceed to install. Do NOT retry automatically.
 - Explain what the user must do (accept license, create HF read token, make it
   available via `huggingface-cli login` or `HF_TOKEN`), then stop.
+- **Never ask for, accept, or echo the token value in the chat** — instruct
+  the user to run `huggingface-cli login` in their own terminal instead, and
+  warn them not to paste the token into the conversation (it would persist in
+  the transcript and logs).
 </Gated_Model_Gate>
 
 <Roster_Listing>
@@ -86,6 +90,43 @@ Target resolution:
 - `all` (or natural-language "everything") — the target list is every model
   family in `models.json` (one representative version per env; `install.sh`
   with no argument builds every recipe).
+- Exclusions — `all except UMA eSEN` / `all --except UMA eSEN` (or natural
+  language "everything except ...") resolves `all` first, then removes the
+  named families from the target list. Report the exclusions in the plan so
+  the user sees what was left out.
+
+Survey-plan-approve gate (applies to `all` targets ONLY):
+- Before installing ANYTHING, take stock: run `install.sh --status` and read
+  the registry. Present one plan table — per env: ready (will skip) / partial
+  (will adopt-or-heal) / missing (will build), plus gated models (skipped
+  without a token), exclusions, and the disk budget vs free space.
+- Then STOP and ask for approval. This is the one deliberate human checkpoint
+  in an `all` sweep — a full-registry install is a 100+ GB, multi-hour
+  commitment the user should see before it starts. Offer the decision as a
+  short structured choice where the interface supports it (a full per-model
+  checkbox list does not fit typical agent question UIs): (a) install
+  everything in the plan, (b) only what is missing/broken, (c) let the user
+  name exclusions. After approval the sweep runs to completion with zero
+  further prompts (the <Endpoint> zero-prompt contract applies from approval
+  onward).
+- Token check for gated targets: while surveying, detect whether an HF token
+  is already available (the `fetch.py` resolution order: `HF_TOKEN` env →
+  standard `huggingface_hub` cache/`HF_TOKEN_PATH` → `OMM_HF_TOKEN_FILE`).
+  If gated models are in scope and NO token is found, the plan must include a
+  token request with the exact setup steps from `docs/hf_token.md`: accept
+  the license at each model's `license_url`, create a READ token, then run
+  `huggingface-cli login` **in the user's own terminal** (or point
+  `HF_TOKEN_PATH` at a file outside the repo).
+  **Tell the user explicitly: NEVER paste the token into this chat.** Anything
+  typed here lands in the conversation transcript and logs; the token must
+  reach the machine out-of-band (the interactive `huggingface-cli login`
+  prompt is the leak-safe path). The agent must never ask for the token value,
+  never echo it, and never write it into any file inside the repo. The user
+  can say "token is set" afterwards and the sweep re-checks and proceeds.
+- The user may approve a subset ("skip the last three") — treat that as an
+  exclusion list and restate the final targets in one line before starting.
+- Single-model and explicitly-listed targets do NOT get this gate: naming the
+  models IS the approval; proceed zero-prompt as always.
 
 Batch rules (the per-model contract is unchanged — each target still goes
 through <Gated_Model_Gate> and the full <Self_Healing_Loop>):

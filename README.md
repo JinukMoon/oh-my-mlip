@@ -39,10 +39,13 @@ any project; the hub itself lives in `~/.oh-my-mlip` (or `$OH_MY_MLIP_HOME`).
 From then on, in any Claude Code session:
 
 ```
-/oh-my-mlip:setup MACE               # one model
-/oh-my-mlip:setup MACE SevenNet ORB  # several models, one command
-/oh-my-mlip:setup all                # the whole registry (gated models are
-                                     # skipped with instructions)
+/oh-my-mlip:setup MACE                  # one model — zero prompts
+/oh-my-mlip:setup MACE SevenNet ORB     # several models, one command
+/oh-my-mlip:setup all                   # full registry: surveys what is already
+                                        # installed, presents the plan (disk,
+                                        # gated models, token setup if needed),
+                                        # then starts after your approval
+/oh-my-mlip:setup all except UMA eSEN   # full sweep minus models you name
 ```
 
 Natural language works too — "which MLIPs can I install?" lists the registry
