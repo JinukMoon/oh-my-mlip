@@ -1,7 +1,7 @@
 ---
 name: setup
-description: Install an oh-my-mlip MLIP model environment and verify energy+force on GPU with zero human intervention. Triggers on requests to "install", "set up", "setup", or "get working" any MLIP model (MACE, SevenNet, NequIP, Allegro, ORB, UMA, etc.) via oh-my-mlip. Also triggers when a user wants to run a model for the first time and the env is not yet materialized. Also triggers on GENERIC natural-language intent to use a machine-learning interatomic potential — "set up an MLIP", "install an ML potential / machine-learned force field / foundation interatomic potential" — even when no specific model and no "oh-my-mlip" is named; in that case list the registry roster (oh_my_mlip.list_models()) and confirm the model choice (MACE is the quickstart default). Do NOT trigger on purely informational MLIP discussion (papers, theory, definitions) with no install/run intent.
-argument-hint: "<model name e.g. MACE-MPA-0>"
+description: Install an oh-my-mlip MLIP model environment and verify energy+force on GPU with zero human intervention. Triggers on requests to "install", "set up", "setup", or "get working" any MLIP model (MACE, SevenNet, NequIP, Allegro, ORB, UMA, etc.) via oh-my-mlip. Also triggers when a user wants to run a model for the first time and the env is not yet materialized. Also triggers on GENERIC natural-language intent to use a machine-learning interatomic potential — "set up an MLIP", "install an ML potential / machine-learned force field / foundation interatomic potential" — even when no specific model and no "oh-my-mlip" is named; in that case list the registry roster (oh_my_mlip.list_models()) and confirm the model choice (MACE is the quickstart default). Also triggers on requests to install SEVERAL models or ALL models at once — "install everything", "set up all the MLIPs", "MACE and SevenNet and ORB" — see <Multi_Target>. Also triggers on ROSTER questions — "which MLIPs can I install", "list the available models", "what does oh-my-mlip support" — answered as a pure registry read with no install (see <Roster_Listing>). Works from ANY working directory: the skill never assumes the current directory is the oh-my-mlip repo (see <Bootstrap>). Do NOT trigger on purely informational MLIP discussion (papers, theory, definitions) with no install/run/roster intent.
+argument-hint: "<model … | all>  e.g. MACE-MPA-0 · MACE SevenNet ORB · all"
 ---
 
 <Endpoint>
@@ -16,6 +16,9 @@ lint, not a compute witness.
 Preconditions to establish before the loop:
 
 1. Locate or clone the repo.
+   - The current working directory plays NO role in resolution: the plugin is
+     installed user-scope, so this skill must behave identically from any
+     folder. Never assume cwd is (or contains) the oh-my-mlip repo.
    - If `$OH_MY_MLIP_HOME` is set and the path exists, use it.
    - If `$OMM_HOME` is set and the path exists, use it as `OH_MY_MLIP_HOME`.
    - Otherwise clone `https://github.com/JinukMoon/oh-my-mlip.git` into
@@ -59,6 +62,47 @@ If `gated: true`:
 - Explain what the user must do (accept license, create HF read token, make it
   available via `huggingface-cli login` or `HF_TOKEN`), then stop.
 </Gated_Model_Gate>
+
+<Roster_Listing>
+"Which models can I install?" is answered WITHOUT installing anything.
+
+- Resolve the repo per <Bootstrap> step 1 (clone is cheap; no conda, no GPU,
+  no env build is needed for a listing).
+- Read `models.json` and report per model: name, framework, `gated`, and the
+  per-model validation status. `docs/model_status.md` is the human-readable
+  rendering of the same registry if the user wants the full table.
+- If Python is available, `oh_my_mlip.list_models()` is the one-liner
+  (pure registry read); otherwise read `models.json` directly.
+- End the listing by offering the install step (`/oh-my-mlip:setup <model>`
+  or `all`), and flag gated models as requiring the user's own HF token.
+</Roster_Listing>
+
+<Multi_Target>
+The skill accepts one model, several models, or `all`.
+
+Target resolution:
+- Several names (`MACE SevenNet ORB`) — resolve each via the registry, keep
+  the given order. `install.sh` natively accepts the same multi-target list.
+- `all` (or natural-language "everything") — the target list is every model
+  family in `models.json` (one representative version per env; `install.sh`
+  with no argument builds every recipe).
+
+Batch rules (the per-model contract is unchanged — each target still goes
+through <Gated_Model_Gate> and the full <Self_Healing_Loop>):
+- Run targets SEQUENTIALLY, one env at a time — never parallel conda solves
+  (disk and GPU contention corrupt the error signal the loop depends on).
+- Gated models inside a batch are SKIPPED with the <Gated_Model_Gate> notice
+  recorded, not a batch halt. A single-target gated request still halts as
+  specified there.
+- Scale the disk precheck: budget ~10 GB per remaining env against the free
+  space before starting each target; if the budget no longer fits, stop the
+  batch and report which targets were not attempted.
+- A target whose loop ends in `stalled`/`guardrail_halt` fails ONLY that
+  target; continue with the next one.
+- Final report: one line per target — verified (energy + GPU PID) / skipped
+  (gated / disk) / failed (last error signature) — so a partial sweep is
+  honest about what is and is not usable.
+</Multi_Target>
 
 <Self_Healing_Loop>
 Entry condition: bootstrap complete, conda present, model is not gated.

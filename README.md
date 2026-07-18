@@ -22,17 +22,35 @@ upstream frameworks (MACE, SevenNet, NequIP, ORB, UMA, …).
 ## Quickstart — let an agent do everything (Claude Code)
 
 This is an **agent-first** hub, and the agent path is the quickstart. The repo
-doubles as a self-serve Claude Code marketplace — two commands, once:
+doubles as a self-serve Claude Code marketplace — two commands, once
+(enter them one at a time; the first is the marketplace source, the second is
+the install):
 
 ```
 /plugin marketplace add JinukMoon/oh-my-mlip
+```
+
+```
 /plugin install oh-my-mlip@oh-my-mlip
 ```
 
-From then on, `/oh-my-mlip:setup MACE` — or just asking in natural language
-("relax this POSCAR with an MLIP") — clones the hub if needed, builds the env,
-runs any first-use GPU compilation, and verifies energy + forces on your GPU
-before reporting back. Zero manual steps. Details:
+The plugin installs at **user scope** — the skills work from any directory, in
+any project; the hub itself lives in `~/.oh-my-mlip` (or `$OH_MY_MLIP_HOME`).
+From then on, in any Claude Code session:
+
+```
+/oh-my-mlip:setup MACE               # one model
+/oh-my-mlip:setup MACE SevenNet ORB  # several models, one command
+/oh-my-mlip:setup all                # the whole registry (gated models are
+                                     # skipped with instructions)
+```
+
+Natural language works too — "which MLIPs can I install?" lists the registry
+roster (a pure read, nothing is installed), and "relax this POSCAR with an
+MLIP" or "install every MLIP you support" routes to the same skills. Each
+setup clones the hub if needed, builds the env, runs any first-use GPU
+compilation, and verifies energy + forces on your GPU before reporting back.
+Zero manual steps. Details:
 [`docs/claude_plugin.md`](docs/claude_plugin.md). (Tool-calling agents can use
 the [MCP server](#mcp-server) instead.)
 
@@ -51,6 +69,12 @@ python -c "import oh_my_mlip; print(oh_my_mlip.list_models())"
 
 # Build a model's env from its curated recipe (one-time, on your host).
 ./install.sh MACE
+
+# Several at once — or everything: no argument builds every recipe.
+# Budget ~5-10 GB of disk per env; gated envs need your own HF token
+# (docs/hf_token.md) and are skipped without one.
+./install.sh MACE SevenNet ORB
+./install.sh
 
 # Single-point energy + forces (spawns the right env interpreter for you).
 python run_examples/single_point.py MACE
