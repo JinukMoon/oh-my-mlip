@@ -19,7 +19,24 @@ frameworks at once: **the install / environment-solving layer.** It does not pic
 a model for you, and it never reimplements a model — it packages the real
 upstream frameworks (MACE, SevenNet, NequIP, ORB, UMA, …).
 
-## Quickstart
+## Quickstart — let an agent do everything (Claude Code)
+
+This is an **agent-first** hub, and the agent path is the quickstart. The repo
+doubles as a self-serve Claude Code marketplace — two commands, once:
+
+```
+/plugin marketplace add JinukMoon/oh-my-mlip
+/plugin install oh-my-mlip@oh-my-mlip
+```
+
+From then on, `/oh-my-mlip:setup MACE` — or just asking in natural language
+("relax this POSCAR with an MLIP") — clones the hub if needed, builds the env,
+runs any first-use GPU compilation, and verifies energy + forces on your GPU
+before reporting back. Zero manual steps. Details:
+[`docs/claude_plugin.md`](docs/claude_plugin.md). (Tool-calling agents can use
+the [MCP server](#mcp-server) instead.)
+
+### Manual quickstart (no agent required)
 
 `oh_my_mlip` is **path-importable, not a pip package**. `source env.sh` once per
 shell sets `OH_MY_MLIP_HOME`, the shared caches, and the D3/CUDA environment.
@@ -47,20 +64,6 @@ atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 out = oh_my_mlip.run("MACE", atoms, properties=("energy", "forces"))
 print(out["energy"], out["forces"][0])
 ```
-
-### Or let an agent do everything (Claude Code plugin)
-
-The repo doubles as a self-serve Claude Code marketplace. Two commands, once:
-
-```
-/plugin marketplace add JinukMoon/oh-my-mlip
-/plugin install oh-my-mlip@oh-my-mlip
-```
-
-After that, `/oh-my-mlip:setup MACE` (or just asking in natural language —
-"relax this POSCAR with an MLIP") clones the hub if needed, builds the env,
-runs any first-use GPU compilation, and verifies energy + forces on your GPU
-before reporting back. Details: [`docs/claude_plugin.md`](docs/claude_plugin.md).
 
 ### API surface (small and stable)
 
