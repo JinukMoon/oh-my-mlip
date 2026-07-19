@@ -143,20 +143,46 @@ def compute(calc, atoms, properties) -> dict:
     # because some hosts cannot attribute GPU use by PID (WSL driver 610.x
     # returns an empty nvidia-smi compute-apps list). Key absent = this env has
     # no torch (TF/JAX frameworks); honest "witness unavailable", not a claim.
+    mem = _gpu_witness_bytes()
+    if mem is not None:
+        results["gpu_mem_allocated_bytes"] = mem
+    return results
+
+
+def _gpu_witness_bytes() -> int | None:
+    """Realized GPU allocation from whichever backend this env actually has.
+
+    Tries torch, then TF (peak — TF releases 'current' after graph execution),
+    then JAX. Returns the first positive evidence; None = no backend could
+    witness (key stays absent — honest 'unavailable', never a claim).
+    """
     try:
         import torch
         if torch.cuda.is_available():
-            results["gpu_mem_allocated_bytes"] = int(torch.cuda.memory_allocated())
+            mem = int(torch.cuda.memory_allocated())
+            if mem > 0:
+                return mem
     except ImportError:
-        # TF-backend envs (GRACE): same realized-allocation witness via TF.
-        try:
-            import tensorflow as tf
-            if tf.config.list_physical_devices("GPU"):
-                info = tf.config.experimental.get_memory_info("GPU:0")
-                results["gpu_mem_allocated_bytes"] = int(info.get("current", 0))
-        except Exception:
-            pass  # witness unavailable in this env; key stays absent (honest)
-    return results
+        pass
+    try:
+        import tensorflow as tf
+        if tf.config.list_physical_devices("GPU"):
+            info = tf.config.experimental.get_memory_info("GPU:0")
+            mem = int(max(info.get("current", 0), info.get("peak", 0)))
+            if mem > 0:
+                return mem
+    except Exception:
+        pass
+    try:
+        import jax
+        for dev in jax.local_devices():
+            stats = dev.memory_stats() or {}
+            mem = int(stats.get("bytes_in_use", 0) or stats.get("peak_bytes_in_use", 0))
+            if mem > 0:
+                return mem
+    except Exception:
+        pass
+    return None
 
 
 def serve(calc, infile=sys.stdin, outfile=sys.stdout) -> None:

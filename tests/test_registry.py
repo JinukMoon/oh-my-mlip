@@ -38,7 +38,11 @@ def test_list_models_includes_mace_and_sevennet():
 
 
 # ── resolve: codegen dict + $OH_MY_MLIP_HOME expansion ───────────────────────
-def test_resolve_mace_codegen_dict():
+def test_resolve_mace_codegen_dict(monkeypatch):
+    # Neutralize per-machine local state (env adoptions + verified ledger) so
+    # the codegen contract is asserted against the tracked registry alone.
+    monkeypatch.setattr(reg, "local_env_map", lambda *a, **k: {})
+    monkeypatch.setattr(reg, "load_local_models", lambda *a, **k: {})
     spec = resolve("MACE", "MACE-MPA-0")
     assert spec["model"] == "MACE"
     assert spec["version"] == "MACE-MPA-0"
@@ -221,10 +225,11 @@ def test_parse_env_run_rejects_unsafe(bad):
 
 
 def test_dpa4_env_run_parses_from_registry():
-    # DPA4 carries env_run LD_LIBRARY_PATH="" in models.json -> must parse.
+    # DPA4 pins env_run LD_LIBRARY_PATH to the WSL driver mount (evicts the
+    # Intel oneAPI paths while keeping libcuda visible) -> must parse.
     spec = resolve("DPA4", "DPA-4.0.1-pro-MPtrj")
-    assert spec["env_run"] == {"LD_LIBRARY_PATH": ""}
-    assert spec["env_run_raw"] == 'LD_LIBRARY_PATH=""'
+    assert spec["env_run"] == {"LD_LIBRARY_PATH": "/usr/lib/wsl/lib"}
+    assert spec["env_run_raw"] == 'LD_LIBRARY_PATH="/usr/lib/wsl/lib"'
 
 
 # ── apply_d3 plumbing + Worker id-routing (mocked subprocess) ────────────────
@@ -308,7 +313,10 @@ def test_worker_no_arch_flag_for_non_arch_pinned():
     assert "--arch" not in captured["proc"].cmd
 
 
-def test_worker_apply_d3_flag_in_cmd():
+def test_worker_apply_d3_flag_in_cmd(monkeypatch):
+    # Hermetic vs per-machine env adoptions (cmd[0] asserts the hub path).
+    monkeypatch.setattr(reg, "local_env_map", lambda *a, **k: {})
+    monkeypatch.setattr(reg, "load_local_models", lambda *a, **k: {})
     captured = {}
     handshake = json.dumps({"ready": True, "model": "MACE"}) + "\n"
     w = provider.Worker(
@@ -343,7 +351,7 @@ def test_worker_env_run_applied_as_subprocess_env():
         _popen=_make_popen([handshake], captured),
     )
     w.start()
-    assert captured["proc"].env.get("LD_LIBRARY_PATH") == ""
+    assert captured["proc"].env.get("LD_LIBRARY_PATH") == "/usr/lib/wsl/lib"
     assert captured["proc"].env.get("OH_MY_MLIP_HOME")
 
 

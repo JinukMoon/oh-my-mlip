@@ -409,8 +409,8 @@
     "model_source": "${OH_MY_MLIP_HOME}/models/dpa4/dpa-4.0.1-pro-mptrj.pt (matbench-discovery dpa-4.0.1-pro-mptrj)",
     "torch": "2.11.0+cu130",
     "status": "env+ckpt+load OK (CPU). GPU single-point + D3 PENDING.",
-    "env_run": "LD_LIBRARY_PATH=\"\"",
-    "note": "MUST run with LD_LIBRARY_PATH='' (env_run) to avoid Intel oneAPI libfabric clash (FABRIC_1.8 not found). mpich required by 3.2.0b0 (no try/except skip).",
+    "env_run": "LD_LIBRARY_PATH=\"/usr/lib/wsl/lib\"",
+    "note": "env_run pins LD_LIBRARY_PATH to exactly /usr/lib/wsl/lib: it still evicts the Intel oneAPI libfabric paths that clash with mpich (FABRIC_1.8 not found — the original reason for clearing it), while keeping the WSL driver mount visible — with a fully EMPTY value, dpa4's neighbor kernel dlopens libcuda.so by env path and fails on WSL ('failed to compute neighbors: failed to load libcuda.so', host-proven 2026-07-19). On non-WSL hosts the path simply does not exist, which is equivalent to the old empty value. mpich required by 3.2.0b0 (no try/except skip).",
     "import": ["from deepmd.calculator import DP"],
     "versions": {
       "DPA-4.0.1-pro-MPtrj": {"mlip_name": "DPA-4.0.1-pro-MPtrj", "training_set": ["MPtrj"],

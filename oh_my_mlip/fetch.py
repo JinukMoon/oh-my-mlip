@@ -432,6 +432,16 @@ def _resolve_token(env: dict | None = None) -> dict:
         out["env"] = {"HF_TOKEN_PATH": omm}
         return out
 
+    # LAST resort — the passive `huggingface-cli login` cache: huggingface_hub
+    # resolves it automatically when token=None, so its presence IS
+    # authentication. It ranks below every EXPLICIT mechanism above (an
+    # explicitly pointed token file must never be shadowed by a stale cached
+    # login). HOME comes from `src` so explicit-env calls stay hermetic in tests.
+    home_dir = src.get("HOME")
+    if home_dir and (Path(home_dir) / ".cache" / "huggingface" / "token").is_file():
+        out["source"] = "hf_cache"
+        return out
+
     return out
 
 
