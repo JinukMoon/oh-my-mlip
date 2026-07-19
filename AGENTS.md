@@ -154,10 +154,17 @@ SevenNet-Omni". Do **not** use the catbench roster runner for this.
    `inference`, `arch_pinned`, and any `note`/`status`/`env_run`. **Honor
    `note`/`status`/`env_run` if present** — they encode special run conditions
    and validation state.
-2. If you only need a result, call **`run(model, atoms, ...)`** — it spawns the
-   correct env interpreter and returns `{"energy":..., "forces":...}`. If you
-   must emit a standalone script, write the `import` + `inference` lines verbatim
-   into `main.py` and run it with that model's `python` path.
+2. Two equal first-class ways to compute — pick by what the user needs:
+   - **One-shot result**: call **`run(model, atoms, ...)`** — it spawns the
+     correct env interpreter and returns `{"energy":..., "forces":...}`.
+   - **Calculator embedded in the USER'S OWN code** (MD loops, relax scripts,
+     custom pipelines — the most common real request): take `resolve(model)`'s
+     `import` + `inference` lines and paste them into the user's script
+     **VERBATIM — never edit a character**. These exact lines are what passed
+     equivalence validation; a "small improvement" to them is an unvalidated
+     model. The inference line creates `calc`; follow with
+     `atoms.calc = calc`. Execute the script with `spec["python"]` — never a
+     guessed interpreter or `conda activate`.
 3. **arch-pinned models** (`arch_pinned: true`, e.g. NequIP/Allegro): the
    `inference_sm86` / `inference_sm89` variant is selected by your host GPU
    (sm86 = A5000/A6000, sm89 = L40S). The matching `.pt2` is recompiled/reselected
@@ -285,6 +292,7 @@ taxonomy.
 |---|---|
 | **GPU arch mismatch** (`sm86` ↔ `sm89`; e.g. wrong `.pt2` loaded for host) | Reselect the arch-matched compiled artifact (`models/compiled/{sm86,sm89}/`) or recompile for the host arch via `scripts/compile_nequip.sh`. Do NOT delete the mismatched artifact first — rename to avoid a re-fetch race. |
 | **Transient network / partial weight download** (connection reset, incomplete HF tarball, partial `.nequip.zip`) | Re-fetch the artifact. Clean the partial file before retrying so the fetch does not resume a corrupt state. |
+| **Stale weight-fetch debris shadowing presence checks** (an earlier FAILED fetch left `tmp.tar.gz` / an empty or partial directory under `$OH_MY_MLIP_HOME/models/<framework>/`; later runs either treat weights as "present" or re-fetch forever, while a complete copy often already sits in the framework's upstream cache `~/.cache/<framework>/`) | Remove ONLY the debris under `models/<framework>/` (never touch upstream-cache real copies), then let `ensure_weights` re-run; when a complete upstream-cache copy exists, symlink it into the hub models path instead of re-downloading. NEVER hand-write a new filesystem-walking path resolver — weight resolution is owned by `oh_my_mlip/fetch.py`. (Host-proven 2026-07-19: GRACE `tmp.tar.gz` debris beside an intact `~/.cache/grace/GRACE-2L-OAM`.) |
 | **`pypi.nvidia.com` unreachable** (torch `+cuNNN` recipes: the `nvidia-*-cu12` wheels resolve through the PyTorch index to pypi.nvidia.com; when that host times out, the pip stage of `conda env create` fails for EVERY torch env even though identical wheels exist on pypi.org) | Sideload the nvidia wheels from pypi.org into the partial env, then re-run `install.sh` (adopt-or-heal completes the rest). Host-proven 2026-07-17: read the exact pins from `https://pypi.org/pypi/torch/<X.Y.Z>/json` `requires_dist` (pypi's default torch X.Y.Z is the same cuNNN binary), `pip install --index-url https://pypi.org/simple <nvidia pins>` with the env's pip, then `./install.sh <env>`. Diagnose with `pip install --dry-run -r <pip-block>` — a ConnectTimeout to pypi.nvidia.com is this class. |
 
 ### HALT-AND-REPORT — do NOT auto-retry; surface an actionable message and stop

@@ -118,6 +118,16 @@ def ensure_weights(
     return [str(path) for path in targets]
 
 
+def weight_targets(spec: dict) -> list[str]:
+    """Public: the absolute weight paths this spec's inference references
+    (empty for name-based upstream-cache loaders and arch-pinned models).
+    Used by setup_verify to freeze verified weight paths into
+    models.local.json (materialize-on-verify)."""
+    if spec.get("arch_pinned"):
+        return []
+    return [str(p) for p in _inference_weight_targets(spec)]
+
+
 def _inference_weight_targets(spec: dict) -> list[Path]:
     """Extract absolute ``.../models/...`` paths from registry inference code."""
     out: list[Path] = []

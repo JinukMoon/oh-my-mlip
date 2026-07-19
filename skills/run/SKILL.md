@@ -7,7 +7,11 @@ argument-hint: "<model name> [--relax] [--d3] [--structure PATH]"
 Defer entirely to `AGENTS.md §3A` (run branches — single-point / relax).
 
 Read `AGENTS.md §3A` now. Do not reproduce its content here; follow it verbatim.
-Key entry points: `oh_my_mlip.run()` for cross-env single calls; `Worker` for
-repeated calls; `resolve()` when emitting a standalone script.
+Key entry points — two first-class compute paths per §3A: `oh_my_mlip.run()`
+for cross-env one-shot results (`Worker` for repeated calls), and `resolve()`
+codegen when the calculator goes INTO the user's own script (paste the
+returned import/inference lines unmodified; execute with the returned
+interpreter). After a verification passes, `models.local.json` records the
+machine-verified interpreter/weights (exposed as `spec["local_verified"]`).
 
 If the model env is not yet materialized, run `/oh-my-mlip:setup <model>` first.

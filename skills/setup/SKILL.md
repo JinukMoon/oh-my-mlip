@@ -256,8 +256,14 @@ Step 4 -- On install success: verify with ONE command.
   compute PID is a worker grandchild — do not run nvidia-smi yourself), and
   prints ONE JSON verdict:
   `{pass, device, degraded, reason, energy_ev, fmax_ev_a, forces_shape,
-  gpu_pid_confirmed}` — exit 0 iff `pass`. Render the verdict; NEVER
-  re-judge it or run a second GPU check.
+  gpu_pid_confirmed, gpu_mem_bytes, local_record}` — exit 0 iff `pass`.
+  GPU proof is either independent witness: a sampled descendant PID OR the
+  worker's realized CUDA/TF allocation (`gpu_mem_bytes` — covers hosts whose
+  driver hides compute-apps PIDs). On pass the oracle also upserts the
+  machine-local verified ledger `models.local.json`
+  (`local_record: "recorded"`), which `resolve()` exposes as
+  `spec["local_verified"]`. Render the verdict; NEVER re-judge it or run a
+  second GPU check.
   - `pass:true, degraded:false` -> verified on GPU.
   - `pass:true, degraded:true` -> pass-with-caveat: report device=cpu and
     the verdict's computed reason (legitimate driver skew, AGENTS.md §1.9).

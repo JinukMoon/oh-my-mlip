@@ -93,6 +93,7 @@ def decide_verdict(
     stderr: str,
 ) -> dict:
     """Pure verdict assembly -- the whole decision table, unit-testable."""
+    gpu_mem = witness.get("gpu_mem_allocated_bytes") if witness else None
     verdict = {
         "pass": False,
         "device": "cpu" if skew["skew"] else "cuda",
@@ -102,6 +103,7 @@ def decide_verdict(
         "fmax_ev_a": witness.get("fmax_ev_a") if witness else None,
         "forces_shape": witness.get("forces_shape") if witness else None,
         "gpu_pid_confirmed": bool(gpu_seen),
+        "gpu_mem_bytes": gpu_mem,
     }
     if returncode != 0:
         verdict["reason"] = normalized_tail(stderr) or f"exit {returncode}"
@@ -113,7 +115,11 @@ def decide_verdict(
         verdict["pass"] = True
         verdict["reason"] = skew["reason"]
         return verdict
-    if not gpu_seen:
+    # GPU proof: either independent witness suffices — a sampled descendant
+    # PID (unavailable on hosts whose driver hides compute-apps, e.g. WSL
+    # 610.x) or the worker's realized CUDA allocation (unavailable in
+    # torch-less TF/JAX envs). Both absent => honest fail.
+    if not gpu_seen and not (gpu_mem and gpu_mem > 0):
         verdict["reason"] = "gpu_not_used"
         return verdict
     verdict["pass"] = True
@@ -157,6 +163,25 @@ def main() -> int:
     )
 
     verdict = decide_verdict(skew, rc, bool(gpu.get("seen")), parse_witness_json(stdout), stderr)
+
+    if verdict["pass"]:
+        # Materialize-on-verify: freeze the facts that just computed (exact
+        # interpreter, weight paths, evidence) into models.local.json so every
+        # later session resolves them deterministically — incremental upsert,
+        # so each newly installed model adds its own entry. A ledger-write
+        # failure is reported in the verdict but never flips a computed pass.
+        sys.path.insert(0, str(home))
+        try:
+            from oh_my_mlip.fetch import weight_targets
+            from oh_my_mlip.registry import record_local_verified
+            from oh_my_mlip.registry import resolve as registry_resolve
+            spec = registry_resolve(args.model)
+            weights = [w for w in weight_targets(spec) if Path(w).exists()]
+            record_local_verified(spec, verdict, weights, str(home))
+            verdict["local_record"] = "recorded"
+        except Exception as exc:
+            verdict["local_record"] = f"failed: {exc}"
+
     if args.json:
         print(json.dumps(verdict))
     else:

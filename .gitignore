@@ -57,3 +57,4 @@ cache/
 # internal ultragoal closure evidence
 .gjc_closure_artifacts/
 env_map.local.json
+models.local.json

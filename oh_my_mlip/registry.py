@@ -23,6 +23,7 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -140,6 +141,56 @@ def local_env_map(home_path: str | None = None) -> dict:
             "env_map.local.json must be a JSON object mapping env name -> prefix path"
         )
     return data
+
+
+def local_models_path(home_path: str | None = None) -> Path:
+    """Per-machine verified-model ledger (``models.local.json`` at hub root)."""
+    return Path(home_path or home()) / "models.local.json"
+
+
+def load_local_models(home_path: str | None = None) -> dict:
+    """Read the verified-model ledger. Absent file -> {}; invalid -> RegistryError.
+
+    Shape: {<version-key>: {model, env, python, device, degraded, energy_ev,
+    forces_shape, weights, verified_at}} — written by scripts/setup_verify.py
+    at the moment a verification PASSES (materialize-on-verify: the recorded
+    facts are the exact interpreter and weight paths that just computed).
+    """
+    path = local_models_path(home_path)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RegistryError(f"models.local.json is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RegistryError("models.local.json must be a JSON object keyed by version")
+    return data
+
+
+def record_local_verified(
+    spec: dict,
+    verdict: dict,
+    weights: list[str],
+    home_path: str | None = None,
+) -> None:
+    """Upsert one verified-model record (incremental: new installs append,
+    re-verifications overwrite their own entry, other entries untouched)."""
+    data = load_local_models(home_path)
+    data[spec["version"]] = {
+        "model": spec["model"],
+        "env": spec["env"],
+        "python": spec["python"],
+        "device": verdict.get("device"),
+        "degraded": bool(verdict.get("degraded")),
+        "energy_ev": verdict.get("energy_ev"),
+        "forces_shape": verdict.get("forces_shape"),
+        "weights": weights,
+        "verified_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    }
+    local_models_path(home_path).write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def models_json_path() -> Path:
@@ -436,7 +487,14 @@ def resolve(
     env_run_raw = info.get("env_run", "") or ""
     env_run = parse_env_run(env_run_raw)
 
+    # Materialize-on-verify: if this version has a verified local record
+    # (models.local.json, written by setup_verify on PASS), expose it — the
+    # recorded interpreter/weights are the exact artifacts that last computed
+    # successfully on THIS machine.
+    local_verified = load_local_models(home_path).get(version)
+
     return {
+        "local_verified": local_verified,
         "model": model,
         "version": version,
         "env": info["env"],

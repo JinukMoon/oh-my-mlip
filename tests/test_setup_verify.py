@@ -43,6 +43,22 @@ def test_verdict_gpu_not_used_is_fail():
     assert got["reason"] == "gpu_not_used"
 
 
+def test_verdict_gpu_mem_witness_passes_without_pid():
+    # Hosts whose driver hides compute-apps PIDs (WSL 610.x) still pass via
+    # the worker's realized CUDA allocation.
+    w = dict(WITNESS, gpu_mem_allocated_bytes=200_000_000)
+    got = oracle.decide_verdict(NO_SKEW, 0, False, w, "")
+    assert got["pass"] is True
+    assert got["gpu_pid_confirmed"] is False
+    assert got["gpu_mem_bytes"] == 200_000_000
+
+
+def test_verdict_zero_mem_and_no_pid_fails():
+    w = dict(WITNESS, gpu_mem_allocated_bytes=0)
+    got = oracle.decide_verdict(NO_SKEW, 0, False, w, "")
+    assert got["pass"] is False and got["reason"] == "gpu_not_used"
+
+
 def test_verdict_skew_cpu_is_degraded_pass():
     got = oracle.decide_verdict(SKEW, 0, False, WITNESS, "")
     assert got["pass"] is True

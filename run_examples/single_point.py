@@ -90,6 +90,8 @@ def main() -> int:
             "energy_ev": out["energy"],
             "fmax_ev_a": fmax,
             "forces_shape": [len(out["forces"]), 3],
+            # realized-GPU witness from the worker (None = no torch in env)
+            "gpu_mem_allocated_bytes": out.get("gpu_mem_allocated_bytes"),
         }))
         return 0
     print(f"model      : {args.model}{' +D3' if args.d3 else ''}")
