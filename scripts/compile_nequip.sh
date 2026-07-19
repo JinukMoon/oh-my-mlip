@@ -53,9 +53,13 @@ fi
 # Curated upstream-doc command (mirrors models.json NequIP.accel.compile_cmd).
 # torchscript .nequip.pth is the torch<2.10 fallback; this wrapper emits the
 # aotinductor .pt2 path.
+# OMM_COMPILE_MODIFIER selects the accel modifier: NequIP registers
+# enable_OpenEquivariance, Allegro registers enable_CuEquivariance (each env
+# only knows its own — host-proven 2026-07-19). Default stays the NequIP one.
+MODIFIER="${OMM_COMPILE_MODIFIER:-enable_OpenEquivariance}"
 CMD=(nequip-compile "$CKPT" "$OUT"
      --mode aotinductor --device cuda --target ase
-     --modifiers enable_OpenEquivariance)
+     --modifiers "$MODIFIER")
 
 echo "# NequIP/Allegro compile (upstream-doc, GPU-unverified)"
 echo "# requires: NVIDIA GPU + 'pip install openequivariance' (torch>=2.7, GCC9+)"
