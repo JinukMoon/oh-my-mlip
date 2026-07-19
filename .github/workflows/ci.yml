@@ -144,6 +144,11 @@ jobs:
       - name: MACE single-point on GPU (hub env)
         run: |
           "$OH_MY_MLIP_HOME/envs/mace/bin/python" run_examples/single_point.py MACE
-      - name: SevenNet single-point on GPU (hub env)
+      - name: SevenNet single-point on GPU (registry-resolved interpreter)
+        # Resolve the interpreter through the registry (honors env_map.local.json
+        # adoptions) instead of hardcoding the hub prefix — an adopted env has no
+        # envs/<env>/ directory in the hub.
         run: |
-          "$OH_MY_MLIP_HOME/envs/sevennet/bin/python" run_examples/single_point.py SevenNet
+          set -euo pipefail
+          PY="$(python3 -c "import sys, os; sys.path.insert(0, os.environ['OH_MY_MLIP_HOME']); from oh_my_mlip import resolve; print(resolve('SevenNet')['python'])")"
+          "$PY" run_examples/single_point.py SevenNet
