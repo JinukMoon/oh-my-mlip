@@ -26,6 +26,7 @@ persistent per-env worker), so GPU PID matching MUST walk /proc parent chains
 from __future__ import annotations
 
 import csv
+import json
 import os
 import re
 import shutil
@@ -44,6 +45,18 @@ def utc_now() -> str:
 
 def command_display(command: Iterable[str]) -> str:
     return " ".join(str(part) for part in command)
+
+
+def load_local_env_map(home: Path) -> dict:
+    """Adopted-env map (env_map.local.json at hub root; see scripts/adopt_env.py).
+
+    Scripts-side twin of oh_my_mlip.registry.local_env_map (the package cannot
+    import scripts/ and vice versa); same file, same shape: {env: prefix}.
+    """
+    path = home / "env_map.local.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def resolve_home() -> Path:

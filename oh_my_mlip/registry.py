@@ -113,6 +113,35 @@ def _expand(value: Any, home_path: str) -> Any:
     return value
 
 
+def local_env_map(home_path: str | None = None) -> dict:
+    """Adopted-env overrides: ``env_map.local.json`` at the hub root.
+
+    Maps env name -> existing interpreter PREFIX (bring-your-own-env; e.g. a
+    conda named env under ~/miniconda3/envs). Per-machine and untracked;
+    absence means no overrides. Written by ``scripts/adopt_env.py`` after the
+    registry imports verified inside that interpreter. Invalid content raises
+    RegistryError — never silently ignored.
+    """
+    root = home_path or home()
+    path = os.path.join(root, "env_map.local.json")
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise RegistryError(
+            f"env_map.local.json is not valid JSON: {exc}"
+        ) from exc
+    if not isinstance(data, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in data.items()
+    ):
+        raise RegistryError(
+            "env_map.local.json must be a JSON object mapping env name -> prefix path"
+        )
+    return data
+
+
 def models_json_path() -> Path:
     return _REPO_ROOT / "models.json"
 
@@ -387,6 +416,21 @@ def resolve(
             raise RegistryError(f"{model}/{version}: missing 'inference'")
 
     python = _expand(info["python"], home_path)
+    # Adopted-env override: env_map.local.json (untracked, per-machine) maps an
+    # env name to an EXISTING interpreter prefix (for example a conda named env
+    # under ~/miniconda3/envs). Written by scripts/adopt_env.py AFTER the
+    # registry imports verified inside that interpreter — the hub-prefix layout
+    # is an install-lifecycle convention, not a requirement of the resolver.
+    adopted = local_env_map(home_path).get(info["env"])
+    if adopted:
+        adopted_python = os.path.join(adopted, "bin", "python")
+        if not os.access(adopted_python, os.X_OK):
+            raise RegistryError(
+                f"env_map.local.json adopts env {info['env']!r} at {adopted!r}, "
+                f"but {adopted_python} is not an executable interpreter; "
+                f"re-run scripts/adopt_env.py or remove the stale entry"
+            )
+        python = adopted_python
     imports = _expand(list(info.get("import", [])), home_path)
     inference = _expand(list(inference), home_path)
     env_run_raw = info.get("env_run", "") or ""

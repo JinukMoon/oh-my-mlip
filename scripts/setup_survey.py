@@ -43,7 +43,7 @@ PER_ENV_GB = 10
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _setup_common import resolve_home  # noqa: E402
+from _setup_common import load_local_env_map, resolve_home  # noqa: E402
 
 
 def env_state(prefix: Path) -> str:
@@ -81,6 +81,7 @@ def survey(home: Path, targets: list[str]) -> dict:
     families = {k: v for k, v in registry.items() if not k.startswith("_")}
 
     wanted = {t.lower() for t in targets}
+    adopted_map = load_local_env_map(home)
     rows: list[dict] = []
     seen_envs: set[str] = set()
     for family, spec in families.items():
@@ -97,12 +98,20 @@ def survey(home: Path, targets: list[str]) -> dict:
                     row["gated"] = row["gated"] or gated
             continue
         seen_envs.add(env)
+        # An adopted env (env_map.local.json, import-verified at adopt time)
+        # counts as ready: it costs zero disk and needs no install.
+        adopted_prefix = adopted_map.get(env)
+        adopted = bool(
+            adopted_prefix
+            and os.access(Path(adopted_prefix) / "bin" / "python", os.X_OK)
+        )
         rows.append(
             {
                 "env": env,
                 "families": [family],
                 "gated": gated,
-                "state": env_state(home / "envs" / env),
+                "state": "ready" if adopted else env_state(home / "envs" / env),
+                "adopted": adopted,
             }
         )
 
@@ -137,10 +146,13 @@ def print_table(result: dict) -> None:
     print(f"oh-my-mlip setup survey — {result['home']}")
     print(f"{'env':<14} {'state':<14} gated  families")
     for row in result["envs"]:
+        state = row["state"] + ("*" if row.get("adopted") else "")
         print(
-            f"{row['env']:<14} {row['state']:<14} "
+            f"{row['env']:<14} {state:<14} "
             f"{'yes' if row['gated'] else 'no':<6} {', '.join(row['families'])}"
         )
+    if any(r.get("adopted") for r in result["envs"]):
+        print("(* adopted external env via env_map.local.json — zero disk, no install)")
     c, d, t = result["counts"], result["disk"], result["token"]
     print(
         f"\nready {c['ready']} · partial {c['partial']} · broken {c['broken']}"

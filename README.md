@@ -110,6 +110,23 @@ out = oh_my_mlip.run("MACE", atoms, properties=("energy", "forces"))
 print(out["energy"], out["forces"][0])
 ```
 
+### Bring your own envs (adopt, do not rebuild)
+
+Already have a working conda env for a framework? Adopt it instead of
+rebuilding — the resolver dispatches to any interpreter you register, after
+verifying the framework actually imports there:
+
+```bash
+python3 scripts/adopt_env.py MACE ~/miniconda3/envs/MACE
+python3 scripts/adopt_env.py --list
+```
+
+Adoptions live in `env_map.local.json` (per-machine, untracked). An adopted
+env counts as `ready` in the setup survey (zero disk, no install), and
+`oh_my_mlip.run()`, the Claude Code plugin, and the MCP server all use it
+from any folder. The hub-prefix layout under `envs/` is just the install
+lifecycle's default, not a requirement.
+
 ### API surface (small and stable)
 
 | Call | Layer | Use |
