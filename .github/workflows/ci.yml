@@ -141,14 +141,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - name: MACE single-point on GPU (hub env)
-        run: |
-          "$OH_MY_MLIP_HOME/envs/mace/bin/python" run_examples/single_point.py MACE
-      - name: SevenNet single-point on GPU (registry-resolved interpreter)
-        # Resolve the interpreter through the registry (honors env_map.local.json
-        # adoptions) instead of hardcoding the hub prefix — an adopted env has no
-        # envs/<env>/ directory in the hub.
-        run: |
-          set -euo pipefail
-          PY="$(python3 -c "import sys, os; sys.path.insert(0, os.environ['OH_MY_MLIP_HOME']); from oh_my_mlip import resolve; print(resolve('SevenNet')['python'])")"
-          "$PY" run_examples/single_point.py SevenNet
+      # Drive the project's OWN verify oracle instead of hand-resolving an
+      # interpreter: setup_verify.py resolves through the registry (honoring
+      # env_map.local.json adoptions — an adopted env has no envs/<env>/ dir in
+      # the hub), preflights driver skew, runs the single_point witness, proves
+      # GPU use (descendant PID or realized allocation), and exits 0 iff pass.
+      # Hardcoding "$OH_MY_MLIP_HOME/envs/<env>/bin/python" broke this job twice
+      # (adoption, then the disposable hub envs being reclaimed after packing).
+      - name: MACE GPU verdict (setup_verify oracle)
+        run: python3 scripts/setup_verify.py MACE --json
+      - name: SevenNet GPU verdict (setup_verify oracle)
+        run: python3 scripts/setup_verify.py SevenNet --json
