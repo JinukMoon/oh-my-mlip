@@ -15,22 +15,20 @@
     "placeholder_marker": "TODO-on-upload",
     "note": "Seeded for the v1-shipped envs only (MACE, SevenNet). sha256 / unpack_size_bytes / min_driver_version are filled by scripts/build_conda_pack.sh + scripts/publish_hf.py at upload time; until then they carry the literal 'TODO-on-upload' marker and the resolver must treat such entries as not-yet-publishable."
   },
-
   "mace": {
     "env": "mace",
-    "hf_repo": "TODO-on-upload",
-    "revision": "TODO-on-upload",
-    "sha256": "TODO-on-upload",
-    "unpack_size_bytes": "TODO-on-upload",
-    "min_driver_version": "TODO-on-upload"
+    "hf_repo": "JinukMoon/oh-my-mlip-env-mace",
+    "revision": "v1",
+    "sha256": "f282892147fa2be88c1db01c2c7b686458d26245a13bfdfcc70eb301c34e7e0a",
+    "unpack_size_bytes": 7136407504,
+    "min_driver_version": "525.60.13"
   },
-
   "sevennet": {
     "env": "sevennet",
-    "hf_repo": "TODO-on-upload",
-    "revision": "TODO-on-upload",
-    "sha256": "TODO-on-upload",
-    "unpack_size_bytes": "TODO-on-upload",
-    "min_driver_version": "TODO-on-upload"
+    "hf_repo": "JinukMoon/oh-my-mlip-env-sevennet",
+    "revision": "v1",
+    "sha256": "905f51062e4072e0cf2873e0234d80989519a0a11a3ecb48ab2df0b6c04649cc",
+    "unpack_size_bytes": 7226395973,
+    "min_driver_version": "525.60.13"
   }
 }
