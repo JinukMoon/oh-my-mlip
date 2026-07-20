@@ -14,24 +14,37 @@ if [ -z "${OH_MY_MLIP_HOME:-}" ]; then
   unset _OMM_SRC
 fi
 
-# ── 1) Shared model cache (name-based auto-download models: UMA/fairchem/MACE-mp etc.) ──
-export HF_HOME="${OH_MY_MLIP_HOME}/models/hf"            # one shared HuggingFace download cache
-# Redirecting HF_HOME also moves where huggingface_hub looks for the LOGIN
-# TOKEN ($HF_HOME/token) — silently turning a valid `huggingface-cli login`
-# into anonymous 401s on gated repos (host-proven 2026-07-20: facebook/UMA
-# fetch failed while the same login worked outside env.sh). Keep the standard
-# login visible via HF_TOKEN_PATH — a PATH export, never a token value; an
-# already-set HF_TOKEN_PATH is respected.
-if [ -z "${HF_TOKEN_PATH:-}" ] && [ -f "$HOME/.cache/huggingface/token" ]; then
-  export HF_TOKEN_PATH="$HOME/.cache/huggingface/token"
+# ── 1) Weight caches: FRAMEWORK-NATIVE by default; shared root is OPT-IN ──
+# Default: env.sh does NOT redirect any download cache. Every framework uses
+# its own upstream location (~/.cache/huggingface, ~/.cache/fairchem,
+# ~/.cache/torch, ~/.cache/mace, ...), which ADOPTS whatever the user already
+# downloaded and leaves `huggingface-cli login` token discovery untouched.
+# Why (both host-proven 2026-07-20): the old always-on redirect (a) forked the
+# user's existing caches — a 13 GB UMA re-download of byte-identical weights —
+# and (b) moved huggingface_hub's login-token lookup to $HF_HOME/token, so
+# every gated fetch under env.sh went out anonymous and 401'd despite a valid
+# login. The registry's verified ledger (models.local.json) records the real
+# resolved paths per model, so no central directory is needed for lookup.
+#
+# Building a SHARED hub (multi-user /TGM-style install, HPC home-quota
+# setups): set OMM_SHARED_CACHE_ROOT to an absolute path BEFORE sourcing
+# env.sh and every framework cache is explicitly redirected under it:
+if [ -n "${OMM_SHARED_CACHE_ROOT:-}" ]; then
+  export HF_HOME="${OMM_SHARED_CACHE_ROOT}/hf"
+  # HF_HOME moves huggingface_hub's LOGIN-TOKEN lookup to $HF_HOME/token; keep
+  # the standard login visible via HF_TOKEN_PATH — a PATH export, never a
+  # token value; an already-set HF_TOKEN_PATH is respected.
+  if [ -z "${HF_TOKEN_PATH:-}" ] && [ -f "$HOME/.cache/huggingface/token" ]; then
+    export HF_TOKEN_PATH="$HOME/.cache/huggingface/token"
+  fi
+  export FAIRCHEM_CACHE_DIR="${OMM_SHARED_CACHE_ROOT}/fairchem"  # UMA + eSEN. NOTE: fairchem reads FAIRCHEM_CACHE_DIR (NOT FAIRCHEM_CACHE)
+  export TORCH_HOME="${OMM_SHARED_CACHE_ROOT}/torch"             # torch.hub cache
+  export CACHED_PATH_CACHE_ROOT="${OMM_SHARED_CACHE_ROOT}/cached_path"  # ORB (orb_models uses cached_path)
 fi
 # NOTE: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are intentionally NOT forced here.
 #   The public edition fetches weights on first run (gated models need the user's HF_TOKEN).
 #   Set them to 1 yourself once everything is cached if you want to pin offline:
 #   export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1
-export FAIRCHEM_CACHE_DIR="${OH_MY_MLIP_HOME}/models/fairchem"  # UMA + eSEN. NOTE: fairchem reads FAIRCHEM_CACHE_DIR (NOT FAIRCHEM_CACHE)
-export TORCH_HOME="${OH_MY_MLIP_HOME}/models/torch"     # torch.hub cache
-export CACHED_PATH_CACHE_ROOT="${OH_MY_MLIP_HOME}/models/cached_path"  # ORB (orb_models uses cached_path)
 
 # ── 2) catbench D3 ──
 #   The arch-specific pair_d3.so (catbench/dispersion/cuda/pair_d3.so) is NOT baked into

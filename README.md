@@ -210,9 +210,14 @@ equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
   sentinel is only trusted after its imports re-verify. Per-model caveats live in
   `models.json` and [`docs/model_status.md`](docs/model_status.md).
 - **Weights are never hosted here.** They download from each framework's official
-  channel on first run — by name to a shared cache, from an official URL, or from
-  Hugging Face with *your* own token for gated models. oh-my-mlip redistributes no
-  weights.
+  channel on first run — into that framework's own native cache
+  (`~/.cache/huggingface`, `~/.cache/fairchem`, ...), so anything you already
+  downloaded is reused as-is and your `huggingface-cli login` keeps working for
+  gated models (fetched with *your* token). Building a shared multi-user hub?
+  Set `OMM_SHARED_CACHE_ROOT=/path` before sourcing `env.sh` to root every
+  framework cache under one explicit directory instead. Each successful
+  verification freezes the resolved interpreter/weight facts into the
+  per-machine ledger `models.local.json`. oh-my-mlip redistributes no weights.
 - **Arch-pinned artifacts compile on your GPU.** The D3 CUDA kernel and the
   NequIP/Allegro AOT `.pt2` are compiled/reselected for your compute capability
   (auto-detected — sm86/sm89/anything newer) on first run — never shipped. See
