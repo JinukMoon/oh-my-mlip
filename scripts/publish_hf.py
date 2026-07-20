@@ -12,12 +12,14 @@ dist_manifest.json pins, so the resolver fetches a reproducible, integrity-check
 artifact rather than a moving ``main``.
 
 Requires:
-  * ``HF_TOKEN`` exported with write access to the target repo (gated-model
-    weights are NEVER bundled here — only the relocatable env tarball).
+  * a WRITE-capable Hugging Face credential, resolved in the standard order
+    (``HF_TOKEN`` env -> ``HF_TOKEN_PATH`` -> ``huggingface-cli login``
+    cache; same unified order as fetch.py). Gated-model weights are NEVER
+    bundled here — only the relocatable env tarball.
   * ``huggingface_hub`` installed (guarded import below).
 
-Usage:
-  HF_TOKEN=hf_... python scripts/publish_hf.py \\
+Usage (after `huggingface-cli login` with a write token, or with HF_TOKEN set):
+  python scripts/publish_hf.py \\
       --env mace \\
       --tarball dist/mace.tar.gz \\
       --hf-repo <org>/oh-my-mlip-env-mace \\
@@ -26,7 +28,6 @@ Usage:
 """
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -65,11 +66,6 @@ def main() -> int:
         print(f"publish_hf: tarball not found: {args.tarball}", file=sys.stderr)
         return 1
 
-    token = os.environ.get("HF_TOKEN")
-    if not token:
-        print("publish_hf: HF_TOKEN not set (need write access to the repo).", file=sys.stderr)
-        return 1
-
     # Guarded heavy import: keep the module importable without huggingface_hub.
     try:
         from huggingface_hub import HfApi
@@ -77,12 +73,35 @@ def main() -> int:
         print("publish_hf: huggingface_hub not installed (pip install huggingface_hub).", file=sys.stderr)
         return 1
 
+    # Auth: defer to huggingface_hub's STANDARD resolution (HF_TOKEN env ->
+    # HF_TOKEN_PATH -> `huggingface-cli login` cache) — the same unified order
+    # as fetch.py. We never read a token value ourselves; the library resolves
+    # it, and we only probe that SOME write-capable credential exists.
+    api = HfApi()
+    try:
+        who = api.whoami()
+    except Exception as exc:
+        print(
+            "publish_hf: no usable Hugging Face credential (need WRITE "
+            "access): run `huggingface-cli login` with a write token, or set "
+            f"HF_TOKEN / HF_TOKEN_PATH. ({type(exc).__name__})",
+            file=sys.stderr,
+        )
+        return 1
+    role = (who.get("auth", {}).get("accessToken", {}) or {}).get("role")
+    if role == "read":
+        print(
+            "publish_hf: the resolved credential is READ-only; uploading "
+            "needs a WRITE token (create one at huggingface.co/settings/tokens "
+            "and re-run `huggingface-cli login`).",
+            file=sys.stderr,
+        )
+        return 1
+
     sha256 = _read_sidecar(args.tarball, ".sha256")
     unpack_size = _read_sidecar(args.tarball, ".unpack_size")
     min_driver = _read_sidecar(args.tarball, ".min_driver")
     path_in_repo = args.path_in_repo or args.tarball.name
-
-    api = HfApi(token=token)
     print(f"publish_hf: ensuring repo {args.hf_repo} exists ...")
     api.create_repo(repo_id=args.hf_repo, repo_type="model", exist_ok=True)
 

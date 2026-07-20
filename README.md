@@ -229,7 +229,11 @@ equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
   validated end-to-end — a packed env unpacked at a foreign prefix reproduces
   the source env's energy bit-identically — and per-env tarballs are being
   published to the Hugging Face Hub via `dist_manifest.json` (recipes remain
-  the always-available fallback).
+  the always-available fallback). Author side, a release is ONE deterministic
+  command with a hard pre-upload gate:
+  `scripts/release_env.sh <env> <model> <hf-repo> <revision>` (clean recipe
+  build → pack → unpack-and-compute relocation gate → publish + manifest pin;
+  a tarball that fails the gate is never uploaded).
 
 ## Gated models
 
