@@ -172,6 +172,7 @@ def _status_rows() -> list[dict[str, Any]]:
     """
     models = registry.load_models()
     shipped = set(models.get("_meta", {}).get("shipped_v1", []))
+    published = registry.published_envs()
     rows: list[dict[str, Any]] = []
     for framework, info in models.items():
         if framework.startswith("_"):
@@ -187,9 +188,11 @@ def _status_rows() -> list[dict[str, Any]]:
                     "validation": _VALIDATION_LABEL.get(code, code),
                     "validation_code": code,
                     "gated": bool(vinfo.get("gated", False)),
-                    "v1_tarball": "upload-pending"
-                    if framework in shipped
-                    else "Phase 2",
+                    "v1_tarball": f"published ({published[info['env']]})"
+                    if info.get("env") in published
+                    else (
+                        "upload-pending" if framework in shipped else "Phase 2"
+                    ),
                 }
             )
     return rows

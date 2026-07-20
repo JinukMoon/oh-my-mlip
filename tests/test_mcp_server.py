@@ -212,7 +212,13 @@ def test_model_status_tool_matches_status_table():
     uma = [r for r in rows if r["framework"] == "UMA"]
     assert uma and all(r["gated"] for r in uma)
     mace = [r for r in rows if r["framework"] == "MACE"]
-    assert all(r["v1_tarball"] == "upload-pending" for r in mace)
+    # Derived from dist_manifest.json: published (<rev>) once the tarball is
+    # live, upload-pending before that. Accept either so the test tracks the
+    # mechanism, not the current publication state.
+    assert all(
+        r["v1_tarball"].startswith(("published (", "upload-pending"))
+        for r in mace
+    )
     # validation labels are humanized
     assert any(r["validation"] == "validated (sm89)" for r in rows)
 

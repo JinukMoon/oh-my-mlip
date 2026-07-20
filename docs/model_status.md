@@ -14,12 +14,15 @@ How to read the columns:
   was run and recorded on that architecture; rows marked `gpu pending` are
   env/load-verified only (the env imports and the calculator builds, but the GPU
   single-point and/or D3 has not been verified yet).
-- **v1 tarball** marks the frameworks whose relocatable conda-pack distribution
-  is authored for v1 — **exactly MACE and SevenNet**, shown as `upload-pending`
-  because their tarballs are not yet uploaded (the build+publish and the binding
-  foreign-host end-to-end run are the deferred compute checkpoint). Everything
-  else is a `Phase 2` packaging target. This is kept distinct from the per-model
-  GPU validation state.
+- **v1 tarball** is derived from `dist_manifest.json`: `published (<rev>)`
+  means the relocatable conda-pack tarball is LIVE on the Hugging Face Hub
+  with a pinned revision + sha256 (MACE and SevenNet since 2026-07-20; the
+  full chain — pack, relocation gate, upload, and a fresh-home
+  `fetch_env` download reproducing the source energy bit-identically — is
+  host-verified). `upload-pending` marks v1-authored frameworks not yet
+  uploaded; everything else is a `Phase 2` packaging target
+  (`scripts/release_env.sh` is one command per env). This is kept distinct
+  from the per-model GPU validation state.
 - **Weights** is how a model's weights are obtained: `bundled` (inside the
   conda-pack tarball), `auto-download` (fetched by name to a shared cache on
   first run), or `on-demand-hf` (fetched from Hugging Face Hub, may be gated).
@@ -31,11 +34,11 @@ How to read the columns:
 <!-- STATUS_TABLE_DETAILED_START -->
 | Model | Framework | Weights | Validation | Gated | v1 tarball |
 |---|---|---|---|---|---|
-| SevenNet-MF-OMPA | SevenNet | bundled | validated (sm89) | no | upload-pending |
-| SevenNet-Omni | SevenNet | bundled | validated (sm89) | no | upload-pending |
-| MACE-MPA-0 | MACE | auto-download | validated (sm89) | no | upload-pending |
-| MACE-MH-1-OMAT | MACE | auto-download | validated (sm89) | no | upload-pending |
-| MACE-MH-1-OC20 | MACE | auto-download | validated (sm89) | no | upload-pending |
+| SevenNet-MF-OMPA | SevenNet | bundled | validated (sm89) | no | published (v1) |
+| SevenNet-Omni | SevenNet | bundled | validated (sm89) | no | published (v1) |
+| MACE-MPA-0 | MACE | auto-download | validated (sm89) | no | published (v1) |
+| MACE-MH-1-OMAT | MACE | auto-download | validated (sm89) | no | published (v1) |
+| MACE-MH-1-OC20 | MACE | auto-download | validated (sm89) | no | published (v1) |
 | NequIP-OAM-XL | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
 | NequIP-OAM-L | NequIP | on-demand-hf | validated (sm89) | no | Phase 2 |
 | Allegro-OAM-L | Allegro | on-demand-hf | validated (sm89) | no | Phase 2 |
@@ -59,7 +62,7 @@ How to read the columns:
 | PET-OAM-XL | PET | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlashV2 | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlash | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |
-| MatRIS-10M-OAM | MatRIS | auto-download | tier-1 CPU (driver skew) | no | Phase 2 |
-| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | tier-1 CPU (driver skew) | no | Phase 2 |
-| TACE-OAM-L | TACE | auto-download | tier-1 CPU (driver skew) | no | Phase 2 |
+| MatRIS-10M-OAM | MatRIS | auto-download | validated (sm89) | no | Phase 2 |
+| DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | validated (sm89) | no | Phase 2 |
+| TACE-OAM-L | TACE | auto-download | validated (sm89) | no | Phase 2 |
 <!-- STATUS_TABLE_DETAILED_END -->

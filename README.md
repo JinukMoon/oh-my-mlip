@@ -225,11 +225,13 @@ equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
 - **Self-healing install loop.** A bounded, agent-driven setup loop with hard
   stop conditions (disk headroom, signature stall, cumulative-attempt cap,
   wall-clock) — the policy is the single source of truth in `AGENTS.md` §8.
-- **Relocatable env tarballs (rolling out).** The conda-pack pipeline is
-  validated end-to-end — a packed env unpacked at a foreign prefix reproduces
-  the source env's energy bit-identically — and per-env tarballs are being
-  published to the Hugging Face Hub via `dist_manifest.json` (recipes remain
-  the always-available fallback). Author side, a release is ONE deterministic
+- **Relocatable env tarballs (LIVE for v1).** MACE and SevenNet tarballs are
+  published on the Hugging Face Hub with pinned revisions + sha256
+  (`dist_manifest.json`); `oh_my_mlip.fetch.fetch_env("MACE")` downloads,
+  integrity-checks, and unpacks one — host-verified end-to-end: a fresh-home
+  fetch reproduced the source env's energy bit-identically. Recipes remain
+  the always-available fallback and the path for Phase-2 envs. Author side,
+  a release is ONE deterministic
   command with a hard pre-upload gate:
   `scripts/release_env.sh <env> <model> <hf-repo> <revision>` (clean recipe
   build → pack → unpack-and-compute relocation gate → publish + manifest pin;

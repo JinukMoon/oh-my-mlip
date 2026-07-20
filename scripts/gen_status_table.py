@@ -38,6 +38,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from oh_my_mlip import registry  # noqa: E402  (stdlib-only module, not a heavy import)
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_JSON = _REPO_ROOT / "models.json"
 README = _REPO_ROOT / "README.md"
@@ -69,12 +72,13 @@ def _validation_label(code: str) -> str:
 def _detailed_rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
     """Build (Model, Framework, Weights, Validation, Gated, v1 tarball) rows in a
     stable order: registry framework order, then version order within each
-    framework. The `v1 tarball` column is taken from `_meta.shipped_v1` (the
-    frameworks whose conda-pack distribution is authored for v1 = MACE +
-    SevenNet); their tarballs are `upload-pending` the compute checkpoint, every
-    other framework is a Phase-2 target. This is kept distinct from the per-model
-    GPU `validation` state."""
+    framework. The `v1 tarball` column is derived from dist_manifest.json via
+    registry.published_envs() — `published (<rev>)` when the tarball is
+    actually live on the Hub, `upload-pending` for v1-authored frameworks
+    (`_meta.shipped_v1`) not yet uploaded, `Phase 2` otherwise. This is kept
+    distinct from the per-model GPU `validation` state."""
     shipped = set(models.get("_meta", {}).get("shipped_v1", []))
+    published = registry.published_envs()
     rows: list[tuple[str, str, str, str, str, str]] = []
     for framework, info in models.items():
         if framework.startswith("_"):
@@ -87,7 +91,9 @@ def _detailed_rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
                     vinfo.get("weights", "bundled"),
                     _validation_label(vinfo.get("validation", "unknown")),
                     "yes" if vinfo.get("gated", False) else "no",
-                    "upload-pending" if framework in shipped else "Phase 2",
+                    f"published ({published[info['env']]})"
+                    if info.get("env") in published
+                    else ("upload-pending" if framework in shipped else "Phase 2"),
                 )
             )
     return rows

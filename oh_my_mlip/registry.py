@@ -193,6 +193,31 @@ def record_local_verified(
     )
 
 
+def published_envs(home_path: str | None = None) -> dict:
+    """Envs whose conda-pack tarball is actually LIVE, from dist_manifest.json.
+
+    Returns {env: revision} for entries whose sha256 is a real pin (not the
+    'TODO-on-upload' placeholder). This is the single source of truth for
+    "published vs pending" — status tables and the MCP server derive their
+    tarball column from here instead of hardcoding it.
+    """
+    path = Path(home_path or home()) / "dist_manifest.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RegistryError(f"dist_manifest.json is not valid JSON: {exc}") from exc
+    out = {}
+    for env, entry in data.items():
+        if env.startswith("_") or not isinstance(entry, dict):
+            continue
+        sha = entry.get("sha256")
+        if sha and sha != "TODO-on-upload":
+            out[env] = entry.get("revision", "?")
+    return out
+
+
 def models_json_path() -> Path:
     return _REPO_ROOT / "models.json"
 
