@@ -16,6 +16,15 @@ fi
 
 # ── 1) Shared model cache (name-based auto-download models: UMA/fairchem/MACE-mp etc.) ──
 export HF_HOME="${OH_MY_MLIP_HOME}/models/hf"            # one shared HuggingFace download cache
+# Redirecting HF_HOME also moves where huggingface_hub looks for the LOGIN
+# TOKEN ($HF_HOME/token) — silently turning a valid `huggingface-cli login`
+# into anonymous 401s on gated repos (host-proven 2026-07-20: facebook/UMA
+# fetch failed while the same login worked outside env.sh). Keep the standard
+# login visible via HF_TOKEN_PATH — a PATH export, never a token value; an
+# already-set HF_TOKEN_PATH is respected.
+if [ -z "${HF_TOKEN_PATH:-}" ] && [ -f "$HOME/.cache/huggingface/token" ]; then
+  export HF_TOKEN_PATH="$HOME/.cache/huggingface/token"
+fi
 # NOTE: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are intentionally NOT forced here.
 #   The public edition fetches weights on first run (gated models need the user's HF_TOKEN).
 #   Set them to 1 yourself once everything is cached if you want to pin offline:
