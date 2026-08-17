@@ -175,6 +175,13 @@ state, gated flag, and licenses: [`docs/model_status.md`](docs/model_status.md),
 [`docs/model_licenses.md`](docs/model_licenses.md); driver/CUDA floors and the
 equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
 
+Want the explicit procedure rather than the wrapper — which pip packages each
+framework wants, the upstream command that fetches (and compiles) its
+checkpoint, and the calculator line that loads it? That is
+[`docs/recipes.md`](docs/recipes.md): upstream's own documented steps next to
+this repo's validated pin, one section per framework, generated from
+`models.json` so it cannot drift.
+
 <!-- STATUS_TABLE_START -->
 | Framework | Models |
 |---|---|

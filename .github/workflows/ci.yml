@@ -82,6 +82,14 @@ jobs:
       - name: Check status lists (README + docs/model_status.md) are in sync with models.json
         run: python scripts/gen_status_table.py --check
 
+      # ── 7'. Recipe book sync ─────────────────────────────────────────────────
+      # docs/recipes.md is generated from models.json + scripts/upstream_recipes.py.
+      # Fails if the committed doc is stale, or if a recipe hardcodes a sha256 the
+      # registry no longer records. The rendered doc is host-independent, so this
+      # check is meaningful on any clone.
+      - name: Check docs/recipes.md is in sync with models.json
+        run: python scripts/gen_recipes.py --check
+
       # ── 7a. Recipe determinism gate ──────────────────────────────────────────
       # Fails on bare pip requirements, range pins, or git installs without an
       # exact commit SHA. Candidate recipes may only document private file://
