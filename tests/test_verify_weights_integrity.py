@@ -60,6 +60,62 @@ def _mock_models(weights_sha256: str | None, size: int) -> dict:
     }
 
 
+# ── Directory (SavedModel tree) fingerprints ─────────────────────────────────
+
+def _savedmodel_tree(root: Path) -> Path:
+    """A stand-in for GRACE's multi-file TensorFlow SavedModel directory."""
+    (root / "variables").mkdir(parents=True)
+    (root / "assets").mkdir()
+    (root / "saved_model.pb").write_bytes(b"graph-def-bytes")
+    (root / "variables" / "variables.index").write_bytes(b"index")
+    (root / "variables" / "variables.data-00000-of-00001").write_bytes(b"weights")
+    return root
+
+
+def test_tree_digest_matches_for_a_directory_artifact(tmp_path):
+    """A directory target fingerprints via sha256_tree and reports MATCH.
+
+    GRACE loads a SavedModel DIRECTORY, so before 2026-08-17 it carried no
+    weights_sha256 at all — an unprotected model hiding behind 'not a single
+    artifact'. classify() now dispatches on is_dir().
+    """
+    mod = _load()
+    tree = _savedmodel_tree(tmp_path / "GRACE-2L-OAM")
+    digest, total = mod.sha256_tree(tree)
+    models = _mock_models(digest, total)
+
+    rows, rc = mod.run(models, model="Mock-1", file_path=tree)
+    assert rc == 0
+    assert rows[0][1] == mod.MATCH
+
+
+def test_tree_digest_is_stable_and_content_sensitive(tmp_path):
+    """Same bytes -> same digest; ANY edit/addition/removal -> different digest."""
+    mod = _load()
+    a = _savedmodel_tree(tmp_path / "a")
+    b = _savedmodel_tree(tmp_path / "b")
+    assert mod.sha256_tree(a) == mod.sha256_tree(b), "digest must not depend on the root path"
+
+    baseline = mod.sha256_tree(a)[0]
+    (a / "variables" / "variables.index").write_bytes(b"INDEX")   # edit
+    assert mod.sha256_tree(a)[0] != baseline
+    (a / "variables" / "variables.index").write_bytes(b"index")   # restore
+    assert mod.sha256_tree(a)[0] == baseline
+    (a / "assets" / "extra.txt").write_bytes(b"")                 # addition (0 bytes)
+    assert mod.sha256_tree(a)[0] != baseline, "a 0-byte added file must change the digest"
+
+
+def test_tree_digest_mismatch_exits_nonzero(tmp_path):
+    mod = _load()
+    tree = _savedmodel_tree(tmp_path / "GRACE-2L-OAM")
+    _, total = mod.sha256_tree(tree)
+    models = _mock_models("0" * 64, total)
+
+    rows, rc = mod.run(models, model="Mock-1", file_path=tree)
+    assert rc != 0
+    assert rows[0][1] == mod.MISMATCH
+
+
 # ── Mocked match / mismatch ───────────────────────────────────────────────────
 
 def test_matches_validated(tmp_path):
@@ -117,10 +173,13 @@ def test_real_registry_recorded_matches_declared_fingerprints():
     """run() must mark RECORDED exactly the versions that declare weights_sha256.
 
     Counted dynamically from models.json (not a magic number) so legitimately
-    dropping a fingerprint — e.g. deepmd/grace/PET, whose inference targets are
-    freeze/export-generated or multi-file and therefore not byte-reproducible —
-    does not require touching this guard. The point is that the verifier sees
-    every recorded fingerprint and no phantom ones.
+    dropping a fingerprint does not require touching this guard. The point is
+    that the verifier sees every recorded fingerprint and no phantom ones.
+
+    As of 2026-08-17 grace (tree digest) and deepmd (its DOWNLOADED source
+    checkpoint, not the derived frozen model) are fingerprinted; PET stays
+    pending because `mtt export` is byte-nonreproducible by construction, and
+    the gated UMA/bundled-weight variants have no artifact to pin here.
     """
     mod = _load()
     models = json.loads(MODELS_JSON.read_text(encoding="utf-8"))

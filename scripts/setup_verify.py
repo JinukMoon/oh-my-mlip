@@ -30,6 +30,12 @@ the reason (normalization imported from setup_guardrail -- never copied).
 Usage:
   python3 scripts/setup_verify.py MACE --json
   python3 scripts/setup_verify.py TACE --structure POSCAR
+  python3 scripts/setup_verify.py EquFlash --version EquFlash-v1   # non-default variant
+
+A bare name is resolved family-first (family -> its default_version), so a
+variant is only reachable by its own key or via ``--version``. Without the
+flag a family/variant name clash silently verifies the DEFAULT variant twice
+and reports it as full coverage; test_registry_integrity forbids new clashes.
 """
 from __future__ import annotations
 
@@ -129,12 +135,15 @@ def decide_verdict(
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("model", help="framework or version name from models.json")
+    ap.add_argument("--version", default=None,
+                    help="specific version, passed through to single_point.py. Required to reach a "
+                         "variant whose name is shadowed by its family key (family wins on a bare name)")
     ap.add_argument("--structure", default=None, help="structure file passed through to single_point.py")
     ap.add_argument("--json", action="store_true", help="print the verdict as JSON (agent path)")
     args = ap.parse_args()
 
     home = resolve_home()
-    env_name = find_env(args.model, home)
+    env_name = find_env(args.version or args.model, home)
     if env_name is None:
         verdict = {"pass": False, "reason": f"unknown model: {args.model}"}
         print(json.dumps(verdict) if args.json else f"FAIL: {verdict['reason']}")
@@ -142,6 +151,8 @@ def main() -> int:
 
     skew = predict_driver_skew(env_name, home)
     command = [sys.executable, str(home / "run_examples" / "single_point.py"), args.model, "--json"]
+    if args.version:
+        command += ["--version", args.version]
     if skew["skew"]:
         command += ["--device", "cpu"]
     if args.structure:
@@ -175,7 +186,7 @@ def main() -> int:
             from oh_my_mlip.fetch import weight_targets
             from oh_my_mlip.registry import record_local_verified
             from oh_my_mlip.registry import resolve as registry_resolve
-            spec = registry_resolve(args.model)
+            spec = registry_resolve(args.model, version=args.version)
             weights = [w for w in weight_targets(spec) if Path(w).exists()]
             record_local_verified(spec, verdict, weights, str(home))
             verdict["local_record"] = "recorded"

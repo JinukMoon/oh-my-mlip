@@ -196,6 +196,51 @@ def test_parse_env_run_accepts_allowlisted_tokens():
     assert result == {"LD_LIBRARY_PATH": "", "OMP_NUM_THREADS": "4"}
 
 
+# ── (b2) family / version key namespace must stay disjoint ───────────────────
+
+def test_no_version_key_shadows_a_family_key():
+    """No version key may equal ANY family key.
+
+    ``_resolve_family_and_version_name`` returns the family the moment the name
+    matches one, so a version sharing that name is unreachable by bare name and
+    resolves to the family's ``default_version`` instead — silently. The real
+    cost was measured on 2026-08-17: a 31-variant verify sweep addressed
+    ``EquFlash`` (family) where it meant the v1 variant, computed EquFlashV2
+    twice (identical -16.391567 eV), and reported 31/31 coverage while v1 was
+    never run. Renamed to ``EquFlash-v1``; this test keeps the namespace clean.
+    """
+    data = json.loads((REPO_ROOT / "models.json").read_text(encoding="utf-8"))
+    families = {k for k in data if not k.startswith("_")}
+    clashes = [
+        (family, version)
+        for family in families
+        for version in (data[family].get("versions") or {})
+        if version in families
+    ]
+    assert not clashes, (
+        "version key(s) shadowed by a family key — unreachable by bare name: "
+        + ", ".join(f"{f}.versions.{v} clashes with family {v!r}" for f, v in clashes)
+    )
+
+
+def test_every_version_is_reachable_by_its_own_bare_name():
+    """resolve(<version key>) must return exactly that version.
+
+    The positive twin of the shadowing test: it proves every one of the 31
+    variants can be addressed without knowing its family or passing version=.
+    """
+    from oh_my_mlip.registry import resolve
+
+    data = json.loads((REPO_ROOT / "models.json").read_text(encoding="utf-8"))
+    for family in (k for k in data if not k.startswith("_")):
+        for version in data[family].get("versions") or {}:
+            spec = resolve(version, models=data)
+            assert spec["version"] == version, (
+                f"resolve({version!r}) returned {spec['version']!r} "
+                f"(family {spec['model']!r}) — bare name is not addressable"
+            )
+
+
 # ── (c) gen_status_table --check fails on drift ───────────────────────────────
 
 def test_status_table_check_passes_on_current_readme():

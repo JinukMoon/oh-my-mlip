@@ -1,8 +1,25 @@
 #!/usr/bin/env python3
-"""verify_determinism.py - fail CI on nondeterministic pip requirements.
+"""verify_determinism.py - fail CI on nondeterministic recipe requirements.
 
-Checks every env recipe's pip block without importing torch, ase, conda, or any
-model package. A pip requirement is deterministic only when it is one of:
+Checks every env recipe's conda AND pip dependencies without importing torch,
+ase, conda, or any model package.
+
+A conda dependency is deterministic only when it is one of:
+
+  - pkg=version=build          (fully exact)
+  - pkg=maj.min.patch          (conda prefix-match on a complete version)
+  - pkg=maj.min[.*]            (SERIES pin — allowed only for SERIES_PIN_OK
+                                packages whose patch level is deliberately
+                                floated to follow the host toolchain)
+  - a bare package in BARE_OK  (the pip provider only)
+
+Bare packages and range constraints (>=, <=, ~=, >, <, !=) are failures. This
+half of the gate exists because pip pins alone did NOT make a rebuild
+reproducible: a floating conda ``- ase`` silently rode the newest release into
+the env and broke mattersim/eqnorm, and pinning ase per env was the fix — a
+hole this checker was blind to until 2026-08-17.
+
+A pip requirement is deterministic only when it is one of:
 
   - pkg==version
   - pkg @ git+...@<7-40 hex sha>
@@ -53,6 +70,25 @@ _WHEEL_URL_RE = re.compile(
     rf"^(?:{_PKG}\s*@\s*)?https?://\S+\.whl(?:[#?]\S*)?(?:\s*;.+)?$",
     re.IGNORECASE,
 )
+
+
+# ── conda dependency rules ───────────────────────────────────────────────────
+# `pip` is the provider entry that makes the pip block installable at all; its
+# own version does not select any model code, and every recipe declares it.
+BARE_OK = {"pip"}
+# Packages whose PATCH level is deliberately floated to track the host CUDA
+# toolchain. The major.minor pair is what the wheels are built against, and
+# that pair IS pinned — a patch bump inside the series is a compatible driver
+# component, not a model change.
+SERIES_PIN_OK = {"cuda-nvcc"}
+
+_CONDA_DEPS_START_RE = re.compile(r"^(?P<indent>\s*)dependencies\s*:\s*(?:#.*)?$")
+_CONDA_PKG = r"[A-Za-z0-9][A-Za-z0-9_.\-]*"
+_CONDA_EXACT_BUILD_RE = re.compile(rf"^{_CONDA_PKG}=[^=<>!~\s]+=[^=\s]+$")
+_CONDA_FULL_VERSION_RE = re.compile(rf"^{_CONDA_PKG}=\d+\.\d+\.\d+[A-Za-z0-9.\-+]*$")
+_CONDA_SERIES_RE = re.compile(rf"^(?P<pkg>{_CONDA_PKG})=(?:\d+\.\d+(?:\.\*)?|\d+\.\*)$")
+_CONDA_RANGE_RE = re.compile(rf"^{_CONDA_PKG}\s*(?:>=|<=|~=|!=|>|<)")
+_CONDA_BARE_RE = re.compile(rf"^{_CONDA_PKG}$")
 
 
 @dataclass
@@ -150,6 +186,77 @@ def _pip_entries(text: str) -> tuple[list[PipEntry], list[tuple[int, str]]]:
         entries.append(PipEntry(idx, requirement, line.rstrip(), comment))
 
     return entries, file_comments
+
+
+def _conda_entries(text: str) -> list[PipEntry]:
+    """Return the recipe's conda dependency items (the pip block excluded).
+
+    Text-scanned rather than taken from ``yaml.safe_load`` so every offender
+    can be reported at its own line number, exactly like the pip half. Items
+    nested deeper than the dependency indent belong to ``- pip:`` and are
+    skipped here — ``_pip_entries`` owns those.
+    """
+    lines = text.splitlines()
+    entries: list[PipEntry] = []
+
+    in_deps = False
+    deps_indent = 0
+    item_indent: int | None = None
+    for idx, line in enumerate(lines, start=1):
+        if not in_deps:
+            m = _CONDA_DEPS_START_RE.match(line)
+            if m:
+                in_deps = True
+                deps_indent = len(m.group("indent"))
+            continue
+
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent <= deps_indent:
+            break  # dedented out of dependencies:
+
+        m = _LIST_ITEM_RE.match(line)
+        if not m:
+            continue
+        if item_indent is None:
+            item_indent = len(m.group("indent"))
+        if len(m.group("indent")) > item_indent:
+            continue  # nested under `- pip:`
+        value, comment = _split_inline_comment(m.group("value"))
+        if value.rstrip().endswith(":"):
+            continue  # the `- pip:` mapping key itself
+        entries.append(PipEntry(idx, value, line.rstrip(), comment))
+
+    return entries
+
+
+def _classify_conda(entry: PipEntry) -> Offender | None:
+    dep = entry.requirement.strip()
+    if not dep:
+        return Offender(entry.lineno, entry.requirement, "empty conda dependency")
+
+    if _CONDA_EXACT_BUILD_RE.match(dep) or _CONDA_FULL_VERSION_RE.match(dep):
+        return None
+
+    series = _CONDA_SERIES_RE.match(dep)
+    if series:
+        if series.group("pkg") in SERIES_PIN_OK:
+            return None
+        return Offender(
+            entry.lineno, dep,
+            f"series pin floats the patch level; pin a full version or add "
+            f"{series.group('pkg')!r} to SERIES_PIN_OK with a reason",
+        )
+
+    if _CONDA_RANGE_RE.match(dep):
+        return Offender(entry.lineno, dep, "range/version constraint is not deterministic")
+    if _CONDA_BARE_RE.match(dep):
+        if dep in BARE_OK:
+            return None
+        return Offender(entry.lineno, dep, "bare conda package is not deterministic")
+    return Offender(entry.lineno, dep, "unrecognized nondeterministic conda dependency")
 
 
 def _is_documented_private_file(
@@ -253,6 +360,12 @@ def check_recipe(path: Path) -> RecipeReport:
         elif "file://" in entry.requirement:
             report.private_file_docs.append(entry.lineno)
 
+    for entry in _conda_entries(text):
+        offender = _classify_conda(entry)
+        if offender is not None:
+            report.offenders.append(offender)
+
+    report.offenders.sort(key=lambda o: o.lineno)
     return report
 
 

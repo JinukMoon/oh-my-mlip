@@ -7,6 +7,11 @@ verifier sha256s a downloaded weight file and compares it to that recorded
 fingerprint, so a user can confirm the file they fetched is byte-identical to the
 one we validated (not a silently-diverged official re-upload).
 
+A weight artifact may be a directory rather than a file (GRACE ships a
+TensorFlow SavedModel tree). Those are fingerprinted with `sha256_tree` — a
+digest over every contained file's relpath/size/sha256 — and recorded in the
+same `weights_sha256` field, so callers need no special case.
+
 Per-model status:
   * matches-validated   — recorded fingerprint present AND the supplied file's
                           sha256 (and size) match it.
@@ -67,8 +72,29 @@ def sha256_file(path: Path) -> tuple[str, int]:
     return h.hexdigest(), size
 
 
+def sha256_tree(root: Path) -> tuple[str, int]:
+    """Return (hexdigest, total_size) for a DIRECTORY weight artifact.
+
+    Some frameworks ship a directory, not a file — GRACE loads a TensorFlow
+    SavedModel tree (``saved_model.pb`` + ``variables/`` + ``assets/``), so a
+    plain file sha256 cannot fingerprint it and the model was left unprotected.
+    The digest is over ``<relpath>\\0<size>\\0<file sha256>\\n`` for every file,
+    sorted by relative path: stable across hosts, sensitive to any added,
+    removed, renamed or edited file. Symlinked roots are resolved first (the
+    hub keeps ``models/grace/<name>`` pointing at the framework cache).
+    """
+    root = root.resolve()
+    h = hashlib.sha256()
+    total = 0
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest, size = sha256_file(path)
+        h.update(f"{path.relative_to(root)}\0{size}\0{digest}\n".encode())
+        total += size
+    return h.hexdigest(), total
+
+
 def classify(vinfo: dict, file_path: Path | None) -> tuple[str, str]:
-    """Return (status, detail) for one model version against an optional file."""
+    """Return (status, detail) for one model version against an optional path."""
     recorded = vinfo.get("weights_sha256")
     if not recorded:
         return PENDING, "no weights_sha256 recorded"
@@ -77,7 +103,9 @@ def classify(vinfo: dict, file_path: Path | None) -> tuple[str, str]:
         return RECORDED, f"validated sha256={recorded[:12]}… size={size}"
     if not file_path.exists():
         return NOT_FOUND, f"path does not exist: {file_path}"
-    digest, size = sha256_file(file_path)
+    digest, size = (
+        sha256_tree(file_path) if file_path.is_dir() else sha256_file(file_path)
+    )
     if digest == recorded:
         return MATCH, f"sha256={digest[:12]}… size={size}"
     return MISMATCH, (

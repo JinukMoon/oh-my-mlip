@@ -22,6 +22,22 @@ the public commit's gas-phase energies drift ~0.24 eV/atom (owner must pin the
 exact commit); MatRIS and Nequix are simply **not in /TGM**, so there is no
 reference to compare. See `docs/equiv_results.md` for the full per-model numbers.
 
+**Host RAM floors.** Driver and GPU arch are the usual gates, but one model is
+bounded by ordinary system memory instead. A checkpoint is materialized in host
+RAM before it reaches the GPU, so the floor scales with checkpoint size, not
+VRAM:
+
+| model | checkpoint | host RAM floor | evidence |
+|---|---|---|---|
+| `UMA-m-1p1-*` (both task variants) | 11.2 GB | **≥ 32 GB** (19 GB is not enough) | 2026-08-17, RTX 4060 Ti / WSL2, 19 GB RAM: `get_predict_unit('uma-m-1p1')` is SIGKILLed by the OOM killer (**exit 137**) ~30 s into the load. `setup_verify` sees only `worker produced no handshake`. All five `UMA-s-*` variants passed on the same host in the same sweep. |
+| every other variant | ≤ 2.9 GB | 16 GB comfortably | 29/31 variants verified on the 19 GB host |
+
+A **no-handshake verdict with a short, benign stderr is the OOM signature** — run
+the loader directly and read the exit code before suspecting the model. This is a
+distinct failure from the model-load *stall* reported on an A4500 host (see the
+`UMA-m-1p1-OC20` note in `models.json`): same variant, two different hosts, two
+different causes.
+
 | env | status | py | torch | CUDA | driver floor | equivalence | host requirement / note |
 |---|---|---|---|---|---|---|---|
 | chgnet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
@@ -37,7 +53,7 @@ reference to compare. See `docs/equiv_results.md` for the full per-model numbers
 | pet | clean | 3.11.14 | 2.9.1 | cu128 | 570+ | ✅ matched (9.2e-07 eV/atom) | 2.8GB model |
 | sevennet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
 | tace | candidate | 3.11.15 | 2.11.0 | cu130 | 580+ (CUDA 13) | ✅ matched (CPU) (1.9e-06 eV/atom) | C/CUDA ext compiles; needs CUDA-13 driver for GPU |
-| uma | clean | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (1.6e-07 eV/atom) | gated weights (HF token); UMA proven via HF_TOKEN_PATH |
+| uma | clean | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (1.6e-07 eV/atom) | gated weights (HF token); UMA proven via HF_TOKEN_PATH. **`uma-m-1p1` needs ≥32 GB host RAM** (OOM-killed at 19 GB — see the RAM table above); the five `uma-s` variants have no such floor |
 | allegro | candidate | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (2.9e-07 eV/atom via AOT .pt2) | needs cueq-ops kernels + a per-arch .pt2 (nequip-compile on the user GPU) |
 | alphanet | candidate | 3.11.13 | 2.1.2 | cu121 | 525+ | ⚠ version drift (public HEAD ≠ /TGM) | owner must pin the exact commit (gas energies drift 0.24 eV/atom) |
 | equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ✅ matched (9.8e-07 eV/atom, multi-pass) | needs a 2-pass install (fairchem --no-deps) + nvalchemi-toolkit-ops; install.sh multi-pass pending |

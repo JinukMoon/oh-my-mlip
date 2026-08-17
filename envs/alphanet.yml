@@ -29,7 +29,11 @@ dependencies:
   - pip
   # CUDA 12.1 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.1.*
-  - ase
+  # ase pinned 2026-08-17 to the version present in the env whose GPU
+  # single-point verified; a bare `- ase` rode each new release into the
+  # build (the mattersim/eqnorm breakage class) and verify_determinism
+  # was pip-only, so nothing caught it.
+  - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu121
       # torch-scatter +pt21cu121 wheels are on the PyG wheel index.

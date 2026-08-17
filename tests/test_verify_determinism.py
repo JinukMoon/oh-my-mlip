@@ -30,23 +30,95 @@ def _write_recipe(
     *,
     build_status: str = "clean",
     reason: str | None = None,
+    conda_lines: list[str] | None = None,
 ) -> Path:
     header = f"# build_status: {build_status}\n"
     if reason:
         header += f"# candidate-reason: {reason}\n"
+    conda_block = "\n".join(
+        f"  - {line}" for line in (conda_lines or ["python=3.11.13", "pip"])
+    )
     pip_block = "\n".join(f"      - {line}" for line in pip_lines)
     text = header + textwrap.dedent(f"""\
         name: {name}
         channels:
           - conda-forge
         dependencies:
-          - python=3.11.13
-          - pip
-          - pip:
-        """) + pip_block + "\n"
+        """) + conda_block + "\n  - pip:\n" + pip_block + "\n"
     path = tmp_path / f"{name}.yml"
     path.write_text(text, encoding="utf-8")
     return path
+
+
+# ── conda half of the gate ───────────────────────────────────────────────────
+
+def test_bare_conda_package_fails(tmp_path: Path):
+    """A floating `- ase` must fail.
+
+    This is the regression the pip-only gate missed: an unpinned conda dep rode
+    each new ASE release into the build and broke mattersim/eqnorm, while the
+    checker reported the recipe as deterministic.
+    """
+    mod = _load_module()
+    _write_recipe(tmp_path, "bad", ["torch==2.7.1"],
+                  conda_lines=["python=3.11.13", "pip", "ase"])
+    reports = mod.check_all(tmp_path)
+    assert not reports[0].deterministic
+    assert any("bare conda package" in o.reason for o in reports[0].offenders)
+    assert mod.main(["--envs-dir", str(tmp_path)]) == 1
+
+
+def test_pinned_conda_package_passes(tmp_path: Path):
+    mod = _load_module()
+    _write_recipe(tmp_path, "good", ["torch==2.7.1"],
+                  conda_lines=["python=3.11.13", "pip", "ase=3.29.0",
+                               "libstdcxx-ng=13.2.0=h7e041cc_5"])
+    reports = mod.check_all(tmp_path)
+    assert reports[0].deterministic, [o.reason for o in reports[0].offenders]
+
+
+def test_conda_range_constraint_fails(tmp_path: Path):
+    mod = _load_module()
+    _write_recipe(tmp_path, "range", ["torch==2.7.1"],
+                  conda_lines=["python=3.11.13", "pip", "ase>=3.25"])
+    reports = mod.check_all(tmp_path)
+    assert any("range/version constraint" in o.reason for o in reports[0].offenders)
+
+
+def test_series_pin_allowed_only_for_toolchain_packages(tmp_path: Path):
+    """`cuda-nvcc=12.8.*` is an intentional series pin; `ase=3.29.*` is not."""
+    mod = _load_module()
+    _write_recipe(tmp_path, "toolchain", ["torch==2.7.1"],
+                  conda_lines=["python=3.11.13", "pip", "cuda-nvcc=12.8.*"])
+    assert mod.check_all(tmp_path)[0].deterministic
+
+    for path in tmp_path.glob("*.yml"):
+        path.unlink()
+    _write_recipe(tmp_path, "floaty", ["torch==2.7.1"],
+                  conda_lines=["python=3.11.13", "pip", "ase=3.29.*"])
+    reports = mod.check_all(tmp_path)
+    assert any("series pin floats the patch level" in o.reason for o in reports[0].offenders)
+
+
+def test_pip_block_items_are_not_read_as_conda_deps(tmp_path: Path):
+    """The nested `- pip:` items must be classified by the pip rules only.
+
+    A bare pip requirement is a pip offender ("bare package"), never a conda
+    one — if the scanner leaked, every recipe would double-report.
+    """
+    mod = _load_module()
+    _write_recipe(tmp_path, "nested", ["e3nn"])
+    reasons = [o.reason for o in mod.check_all(tmp_path)[0].offenders]
+    assert reasons == ["bare package is not deterministic"], reasons
+
+
+def test_real_recipes_pass_the_conda_half():
+    """Every shipped recipe must satisfy the extended gate, not just the pip half."""
+    mod = _load_module()
+    reports = mod.check_all(REPO_ROOT / "envs")
+    bad = {r.name: [f"{o.lineno}: {o.requirement} ({o.reason})" for o in r.offenders]
+           for r in reports if not r.deterministic}
+    assert not bad, bad
 
 
 def test_fully_pinned_recipe_passes(tmp_path: Path):
