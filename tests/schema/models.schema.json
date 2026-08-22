@@ -143,7 +143,73 @@
           "type": "boolean"
         },
         "note": {"type": "string"},
-        "status": {"type": "string"}
+        "status": {"type": "string"},
+        "finetune": {
+          "$ref": "#/definitions/finetune_entry"
+        }
+      }
+    },
+    "finetune_entry": {
+      "type": "object",
+      "description": "Per-variant fine-tuning classification (oh-my-mlip 4-feature expansion, P2a). NOT YET in version_entry's 'required' -- the AC3 gate lands in P2b once P3's demo runs have populated 'demonstrated'. A variant inherits its family's fine-tuning facts unless it carries an explicit override here (variant_args, or a fully-restated block for a divergence like UMA-s-1p2-OC22 or DPA-3.1-3M-FT).",
+      "additionalProperties": true,
+      "required": ["status", "runnable_as_installed", "blockers"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["documented", "documented (inherited from NequIP)",
+                   "documented (config-level)",
+                   "documented (generic v1) + code-excavation for eSEN specifics",
+                   "code-excavation-needed", "not-supported"],
+          "description": "doc-honesty state, NOT an execution claim -- see 'demonstrated' for that. 'documented' variants may carry a parenthetical qualifier (inherited-from-family, config-level-only, or v1-generic-plus-excavation) rather than a bare match against the enum root string; validated exactly against the values this registry actually uses."
+        },
+        "entrypoint": {
+          "type": ["string", "null"],
+          "description": "the console command or API this hub shells out to for fine-tuning"
+        },
+        "selector_kind": {
+          "type": ["string", "null"],
+          "enum": ["cli_flag", "config_key", null],
+          "description": "how the pretrained checkpoint is selected: a CLI flag, or a config file key"
+        },
+        "selector_path": {
+          "type": ["string", "null"],
+          "description": "the flag name or config dotted-path that names the checkpoint"
+        },
+        "semantics": {
+          "type": ["string", "null"],
+          "description": "the finetune-vs-resume distinction for this variant: which key/flag loads weights only (fine-tune) vs restores optimizer/scheduler/epoch state (resume). Conflating them yields a wrong run that still exits 0."
+        },
+        "variant_args": {
+          "type": "object",
+          "description": "extra selector(s) beyond the family's primary selector_path, needed when a SECOND parameter diverges per-variant (e.g. UMA's --uma-task, MACE MH-1's --foundation_head, EquFlash's config_template). Merged by ft_run.py (P3) after selector_path is applied."
+        },
+        "runnable_as_installed": {
+          "type": "boolean",
+          "description": "true iff every script/config/dependency the fine-tune command needs is present in this repo's pinned env, with no git clone and no extra pip install"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "empty iff runnable_as_installed; otherwise the concrete missing dependency/asset/enum-value, one entry each"
+        },
+        "licence": {
+          "type": ["string", "null"],
+          "description": "set only where the fine-tuned checkpoint itself carries a non-permissive licence a user should see before running (e.g. 'CC-BY-NC-SA-4.0', 'ASL'); null everywhere else. Disclosure, not a legal gate -- this repo is MIT and redistributes no weights either way."
+        },
+        "reason": {
+          "type": ["string", "null"],
+          "description": "free-form explanation for a non-trivial classification (code-excavation-needed, not-supported, or a variant that refutes its family's inheritance); null for a plain documented+runnable variant"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "URLs backing a 'not-supported' status, which asserts an ABSENCE and needs a citation"
+        },
+        "demonstrated": {
+          "type": ["string", "null"],
+          "description": "null until P3 records a passing ft_verify.py run for this variant; a 'demonstrated' doc-honesty state is a stronger claim than 'documented' and must never be inferred, only recorded from an oracle"
+        }
       }
     }
   }
