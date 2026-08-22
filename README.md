@@ -1,5 +1,9 @@
 # oh-my-mlip
 
+<p align="center">
+  <img src="assets/logo.png" alt="oh-my-mlip — machine learning interatomic potentials" width="360">
+</p>
+
 [![CI (GPU-free)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml/badge.svg)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
