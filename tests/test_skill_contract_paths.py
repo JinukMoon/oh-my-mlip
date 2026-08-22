@@ -60,6 +60,8 @@ LOAD_BEARING = [
     "scripts/setup_sweep.py",
     "scripts/catbench_jobgen.py",
     "scripts/catbench_report.py",
+    "scripts/distill_bootstrap.py",
+    "scripts/build_lammps_nnmtp.sh",
 ]
 
 

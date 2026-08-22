@@ -275,6 +275,78 @@ training command or config from memory.
    redistributes no weights either way, but a fine-tuned derivative of one of
    these checkpoints inherits that licence's terms.
 
+### (D) Distill a teacher into a CPU LAMMPS student — `distill_bootstrap.py`
+
+Examples: "distill MACE into a LAMMPS student", "compress this teacher into a
+fast CPU potential", "run the onthefly-distill active-learning loop on my
+structure". This branch orchestrates a **separate, GPL-2.0 sibling repo**,
+`onthefly-distill` (default `~/01_2026/onthefly-distill`, override with
+`--repo` or `$ONTHEFLY_REPO`) — it is invoked, never absorbed: nothing from it
+is copied into this repo, and this repo's MIT licence covers only what lives
+here. Ask for **which teacher** (any oh-my-mlip model/version) and **which
+structure** (an ASE-readable file with **at most 4 distinct elements** — see
+below) if either is missing.
+
+1. **One-time prerequisite**: `scripts/build_lammps_nnmtp.sh` builds a LAMMPS
+   binary with `pair_style nnmtp` (following `onthefly-distill/lammps/BUILD.md`
+   verbatim, cloned outside this repo under `$HOME/.cache/oh-my-mlip/lammps`).
+   Run it once; it is long and unattended. Skip it if
+   `$HOME/.cache/oh-my-mlip/lammps/build/lmp -h` already lists `nnmtp`.
+2. **`scripts/distill_bootstrap.py --teacher <variant> --structure <file>
+   --work <dir> [--target-ps F]`** renders three files into the (absolute)
+   work dir and executes nothing:
+   - `omm_teacher.py` — a zero-arg `make_calc()` whose body is
+     `oh_my_mlip.resolve(<teacher>)`'s import + inference lines pasted
+     **VERBATIM inside the function** (never edit a character — a modified
+     line is an unvalidated model), wrapped in a stdout/stderr-suppression
+     context. That suppression is load-bearing, not decoration: several
+     teacher frameworks (MACE's `mace_mp()` among them) print banner text at
+     import/construction time, and `onthefly-distill/scripts/can_relabel.py`
+     captures this exact process's stdout via a bash command substitution
+     compared against the literal string `"1"` — unsuppressed banner noise
+     makes an AL-capable teacher misread as unable to relabel, and the loop
+     silently falls back to one-shot distillation instead of running the
+     active-learning loop. Confirmed against this hub's MACE-MPA-0 teacher.
+   - `config.yaml` — overlaid onto `onthefly-distill/config.example.yaml`'s
+     own structure (so every key its config loader reads stays present):
+     `teacher.type: ase_calculator`, `teacher.calculator:
+     "omm_teacher:make_calc"`, `python_bin` set to the **teacher's own env
+     interpreter** (so every AL-loop subprocess — train / student-MD / label —
+     runs inside an env that already has the teacher framework), `lmp_bin`
+     from step 1, and `system.{init_structure, species, specorder, masses}`
+     derived from `--structure` via `ase.io.read`. **`work_dir` is rendered as
+     an ABSOLUTE path** — `onthefly-distill`'s own loop script `cd`s into
+     itself before reading the config, so a relative `work_dir` would resolve
+     inside the sibling repo instead of your work dir.
+   - `run_distill.sh` — the rerun unit. Three environment facts, each
+     preventing a distinct silent failure: a `PATH` pin to the teacher env's
+     `bin` (the loop bootstraps its own config reads with bare `python`),
+     `PYTHONPATH` covering **both** the sibling repo (every AL-loop stage runs
+     as `python -m ontheflydistill.<mod>`) **and** the work dir (`omm_teacher`
+     is imported via `importlib` from a script whose own `sys.path[0]` is the
+     sibling repo's `scripts/`, so the work dir must be on the path too), and
+     `ONTHEFLY_CONFIG` pointing at the generated `config.yaml` (without it the
+     loop silently falls back to its built-in Pt-water defaults and ignores
+     everything just rendered). It then seeds the initial AL-pool dataset —
+     `scripts/teacher_md.py` (a short teacher MD trajectory) followed by
+     `python -m ontheflydistill.merge_xyz` — the same two steps
+     `onthefly-distill/examples/ptwater_acid/README.md` documents by hand,
+     automated and skipped on rerun once `dataset.extxyz` exists. Only then
+     does it `exec onthefly-distill/scripts/al_loop_local.sh` **verbatim** —
+     never reimplemented.
+3. **Run it**: `cd <work> && bash run_distill.sh`. This is genuinely long
+   (teacher MD, then repeated train → student-LAMMPS-MD → relabel rounds) —
+   run it in the background with `tee` and poll, per the house long-running-
+   script convention. It stops on its own: `stable_in_dump` (student reached
+   `al_loop.target_ps`), `STALLED` (no crash-time progress for
+   `no_progress_limit` rounds), or the `max_iter` backstop. The result is
+   always in `<work>/run/.al_status`.
+4. **`<=4 distinct elements`, stated as a `pair_nnmtp` v1 bound.** The LAMMPS
+   pair style the loop's student uses hard-codes `species_Z[4]`
+   (`pair_nnmtp_v2` lifts this but is documented as not used by the loop) —
+   `distill_bootstrap.py` refuses a richer structure with an actionable error
+   before writing anything, rather than failing deep inside a LAMMPS run.
+
 ## 4. D3 dispersion correction
 
 Every env ships catbench, so D3 is available everywhere:

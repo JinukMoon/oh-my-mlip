@@ -18,6 +18,7 @@
     "./skills/setup/",
     "./skills/run/",
     "./skills/catbench/",
-    "./skills/finetune/"
+    "./skills/finetune/",
+    "./skills/distill/"
   ]
 }
