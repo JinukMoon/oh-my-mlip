@@ -1,6 +1,6 @@
 {
   "name": "oh-my-mlip",
-  "description": "Claude Code plugin for oh-my-mlip: self-healing install loop for 20+ MLIP frameworks. One registry, many MLIPs \u2014 install, compile, and verify energy+force on GPU with zero human intervention.",
+  "description": "oh-my-mlip: install, benchmark, fine-tune, and distill 20+ MLIP frameworks. One registry, many MLIPs — every action a rerunnable file.",
   "author": {
     "name": "Jinuk Moon"
   },

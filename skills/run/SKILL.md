@@ -14,4 +14,5 @@ returned import/inference lines unmodified; execute with the returned
 interpreter). After a verification passes, `models.local.json` records the
 machine-verified interpreter/weights (exposed as `spec["local_verified"]`).
 
+One-shot from a shell: `run_examples/single_point.py <Model>` / `run_examples/relax.py <Model>`.
 If the model env is not yet materialized, run `/oh-my-mlip:setup <model>` first.

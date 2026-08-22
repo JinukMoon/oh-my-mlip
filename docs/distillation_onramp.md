@@ -1,5 +1,8 @@
 # Teacher-query on-ramp for downstream distillation (Phase 2)
 
+> Orchestration surface: `skills/distill/` + `scripts/distill_bootstrap.py` (AGENTS.md §3D).
+
+
 > **This is a Phase-2 roadmap note, not a v1 feature.** `oh-my-mlip` v1 does
 > **not** depend on any distillation tool. This document only states the *stable
 > teacher-provider contract* — a way to query a teacher MLIP for energies/forces

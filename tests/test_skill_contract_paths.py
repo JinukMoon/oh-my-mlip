@@ -59,6 +59,9 @@ LOAD_BEARING = [
     "scripts/setup_verify.py",
     "scripts/setup_sweep.py",
     "scripts/catbench_jobgen.py",
+    "scripts/ft_dataset.py",
+    "scripts/ft_run.py",
+    "scripts/ft_verify.py",
     "scripts/catbench_report.py",
     "scripts/distill_bootstrap.py",
     "scripts/build_lammps_nnmtp.sh",
@@ -86,3 +89,15 @@ def test_extractor_strips_anchors_and_punctuation():
         "scripts/setup_survey.py",
         "run_examples/single_point.py",
     }
+
+
+def test_every_skill_references_an_executable_path():
+    """AC7 proxy: a skill may instruct an agent, but the actions it drives must
+    exist as committed files — every SKILL.md names at least one scripts/ or
+    run_examples/ path, so no skill can ask an agent to author ad-hoc code."""
+    import re
+
+    for skill_md in sorted((REPO_ROOT / "skills").glob("*/SKILL.md")):
+        text = skill_md.read_text(encoding="utf-8")
+        refs = re.findall(r"(?:scripts|run_examples)/[A-Za-z0-9_./-]+", text)
+        assert refs, f"{skill_md.relative_to(REPO_ROOT)} references no scripts/ or run_examples/ path"

@@ -7,7 +7,7 @@ argument-hint: "--teacher <variant> --structure <file> --work <dir> [--target-ps
 Defer entirely to `AGENTS.md §3D` (distill a teacher into a CPU LAMMPS student).
 
 Read `AGENTS.md §3D` now. Do not reproduce its content here; follow it verbatim.
-Key entry points: `scripts/distill_bootstrap.py --teacher <variant> --structure
+Key entry points: `scripts/distill_bootstrap.py` (args: teacher variant, structure,
 <file> --work <dir>` (renders `omm_teacher.py` + `config.yaml` +
 `run_distill.sh` into the work dir — nothing executes yet), then `cd <work>
 && bash run_distill.sh` (seeds the initial teacher-MD dataset and hands off
