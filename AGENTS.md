@@ -227,6 +227,54 @@ the internal roster runner:
 > conditions; models with heavy CPU-side neighbor lists (e.g. ORB conservative+inf)
 > are the most contention-sensitive.
 
+### (C) Fine-tune a model on your own dataset — `ft_run.py`
+
+Examples: "fine-tune MACE on my dataset", "파인튜닝 해줘", "continue training SevenNet
+from the foundation checkpoint with my extxyz". Ask for **which model** and **where
+the dataset is** if either is missing, then follow this flow — never hand-write a
+training command or config from memory.
+
+1. **Convert first.** `scripts/ft_dataset.py` is the single canonical converter:
+   anything `ase.io.read` handles goes in, and it writes a `SinglePointCalculator`
+   **and** duplicates the same energy/forces into `REF_energy`/`REF_forces` on the
+   same extxyz file — one file feeds MACE (which reads `REF_*`, not the calculator)
+   and SevenNet/NequIP/Allegro/GRACE/MatterSim/PET/TACE (which read the calculator)
+   at once. `--to deepmd`/`dpa4` writes the npy system layout instead. `ft_run.py`
+   calls this for you; only invoke it directly for a converted dataset with no
+   training.
+2. **`scripts/ft_run.py <model> --dataset <path> [--out DIR] [--epochs N]`** resolves
+   the version's `finetune` block in `models.json` (ingested from
+   `scripts/upstream_finetune.py`) and writes **every artifact before running
+   anything**: the converted dataset, a patched config file when the family's
+   `selector_kind` is `config_key` (most families — a YAML/JSON patch, not a
+   hand-built flag string), and `<out>/finetune_<version>.sh` — `cd`s to the
+   absolute `<out>` dir, exports any `env_run`, then `exec`s the real command. Run
+   that `.sh` (or let `ft_run.py` run it for you without `--emit-only`); rerunning
+   it later from anywhere reproduces the same fine-tune.
+   - `--emit-only` stops after writing the files. `--slurm [--partition P]` also
+     emits an SBATCH-headed twin of the same body — never submits it.
+   - Refusal is by design, not a bug: a `finetune.status` of `not-supported` or
+     `code-excavation-needed` exits **2** (no training code exists yet, or exists
+     but is undocumented — Eqnorm/MatRIS/AlphaNet/EquiformerV3); `runnable_as_installed:
+     false` exits **3**, naming the exact blocker and its fix (e.g. `pip install
+     dpdata`). Relay that message to the user; do not retry with guessed flags.
+   - Only MACE, SevenNet and the deepmd family (DeePMD/DPA4) have a hand-verified
+     command builder — this is the demonstrated trio. Every other `documented`
+     family renders through a best-effort generic path, clearly labelled as a stub
+     in its own emitted config; treat its command as a draft to review, not a
+     ready-to-run recipe.
+3. **Verify with `scripts/ft_verify.py <ckpt> --model <M> --json`** — loads the
+   produced checkpoint through that framework's own ASE calculator, inside that
+   framework's own env, and reports pass iff energy+forces come back finite. This
+   is what turns a run into a `demonstrated` claim; a checkpoint that merely exists
+   on disk is not yet a demonstrated fine-tune.
+4. **Licence-gated checkpoints are advertised, not refused (Part 8 decision (a),
+   option B).** A version whose `finetune.licence` is set (MACE-MH-1: `ASL`;
+   EquFlash: `CC-BY-NC-SA-4.0`) still runs — `ft_run.py` prints the licence and a
+   URL before it starts. Pass that notice on to the user; `oh-my-mlip` is MIT and
+   redistributes no weights either way, but a fine-tuned derivative of one of
+   these checkpoints inherits that licence's terms.
+
 ## 4. D3 dispersion correction
 
 Every env ships catbench, so D3 is available everywhere:

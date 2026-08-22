@@ -17,6 +17,7 @@
   "skills": [
     "./skills/setup/",
     "./skills/run/",
-    "./skills/catbench/"
+    "./skills/catbench/",
+    "./skills/finetune/"
   ]
 }
