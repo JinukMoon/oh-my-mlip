@@ -3,28 +3,38 @@
 [![CI (GPU-free)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml/badge.svg)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> oh-my-mlip won't pick the best MLIP for you — but you'll never solve a conda
-> environment by hand again.
+> oh-my-mlip won't pick the best MLIP for you — but you'll never fight a conda
+> environment, a training config, or a benchmark script by hand again.
 
 **One registry, many MLIPs.** 20 machine-learning interatomic-potential
 frameworks (32 model variants) catalogued behind one convention. Each framework
-lives in its own validated conda env, built from a curated recipe, with
-[catbench](https://github.com/JinukMoon/catbench) adsorption benchmarking
-pre-wired and an **agent-native** surface (`AGENTS.md` + a Claude Code plugin +
-an MCP server).
+lives in its own conda env, built from a curated recipe; every capability below
+speaks the same language: facts live in `models.json`, procedures live in
+generated docs, and everything that executes is a file on disk you can rerun
+yourself — with or without an agent.
 
-`oh-my-mlip` is a **convenience layer**, not a model and not a benchmark verdict.
-It removes the one thing that actually stops people from using many MLIP
-frameworks at once: **the install / environment-solving layer.** It does not pick
-a model for you, and it never reimplements a model — it packages the real
-upstream frameworks (MACE, SevenNet, NequIP, ORB, UMA, …).
+`oh-my-mlip` is a **convenience layer**, not a model and not a benchmark
+verdict. It removes the things that actually stop people from using many MLIP
+frameworks at once — the install layer, the per-framework training dialects,
+the benchmarking boilerplate — and never reimplements a model: it packages and
+drives the real upstream frameworks (MACE, SevenNet, NequIP, ORB, UMA, …).
+
+## The four things it does
+
+| # | Feature | One command |
+|---|---------|-------------|
+| 1 | [Install & environments](#1--install--environments) | `/oh-my-mlip:setup MACE` |
+| 2 | [Run & benchmark](#2--run--benchmark-catbench) | `/oh-my-mlip:catbench` |
+| 3 | [Fine-tune](#3--fine-tune) | `/oh-my-mlip:finetune` |
+| 4 | [Distill](#4--distill) | `/oh-my-mlip:distill` |
+
+More capabilities land the same way — as one skill, one registry extension,
+one generated doc — so the list grows without the convention changing.
 
 ## Quickstart — let an agent do everything (Claude Code)
 
-This is an **agent-first** hub, and the agent path is the quickstart. The repo
-doubles as a self-serve Claude Code marketplace — two commands, once
-(enter them one at a time; the first is the marketplace source, the second is
-the install):
+This is an **agent-first** hub. The repo doubles as a self-serve Claude Code
+marketplace — two commands, once (enter them one at a time):
 
 ```
 /plugin marketplace add JinukMoon/oh-my-mlip
@@ -34,71 +44,52 @@ the install):
 /plugin install oh-my-mlip@oh-my-mlip
 ```
 
-The plugin installs at **user scope** — the skills work from any directory, in
-any project; the hub itself lives in `~/.oh-my-mlip` (or `$OH_MY_MLIP_HOME`).
-From then on, in any Claude Code session:
-
-```
-/oh-my-mlip:setup MACE                  # one model — zero prompts
-/oh-my-mlip:setup MACE SevenNet ORB     # several models, one command
-/oh-my-mlip:setup all                   # full registry: surveys what is already
-                                        # installed, presents the plan (disk,
-                                        # gated models, token setup if needed),
-                                        # then starts after your approval
-/oh-my-mlip:setup all except UMA eSEN   # full sweep minus models you name
-```
-
-Natural language works too — "which MLIPs can I install?" lists the registry
-roster (a pure read, nothing is installed), and "relax this POSCAR with an
-MLIP" or "install every MLIP you support" routes to the same skills. Each
-setup clones the hub if needed, builds the env, runs any first-use GPU
-compilation, and verifies energy + forces on your GPU before reporting back.
-Zero manual steps. Details:
-[`docs/claude_plugin.md`](docs/claude_plugin.md). (Tool-calling agents can use
-the [MCP server](#mcp-server) instead.)
+The plugin installs at **user scope** — the skills work from any directory; the
+hub itself lives in `~/.oh-my-mlip` (or `$OH_MY_MLIP_HOME`). Natural language
+works everywhere: "which MLIPs can I install?", "relax this POSCAR with an
+MLIP", "benchmark my adsorption set", "fine-tune SevenNet on my dataset" all
+route to the right skill. Details: [`docs/claude_plugin.md`](docs/claude_plugin.md).
+Tool-calling agents can use the [MCP server](#mcp-server) instead. Prefer
+typing commands yourself? Every feature below is driven by plain scripts —
+the agent is optional by design.
 
 ### Updating
 
 The plugin has no version pins — **every push to `main` is a new version**
-(identified by its git commit). Third-party marketplaces have auto-update
-**off** by default in Claude Code, so either enable it once
-(`/plugin` → Marketplaces → **Enable auto-update**) or pull updates explicitly,
-from your terminal:
+(identified by its git commit). Enable auto-update once (`/plugin` →
+Marketplaces → **Enable auto-update**) or pull explicitly:
+`claude plugin update oh-my-mlip@oh-my-mlip`, then `/reload-plugins`.
+A manually cloned hub updates with plain `git pull`.
 
-```bash
-claude plugin update oh-my-mlip@oh-my-mlip
+---
+
+## 1 — Install & environments
+
+Environment-solving is the tax every MLIP user pays first. Here it is paid
+once, in a reviewed recipe, instead of per person per machine.
+
+```
+/oh-my-mlip:setup MACE                  # one model — zero prompts
+/oh-my-mlip:setup MACE SevenNet ORB     # several models, one command
+/oh-my-mlip:setup all                   # the full registry, after your approval
 ```
 
-(or in-session: `/plugin` → **Installed** → oh-my-mlip → Update.)
+Each setup clones the hub if needed, builds the env from its curated recipe,
+runs any first-use GPU compilation, and verifies energy + forces on your GPU
+before reporting back. `install.sh` exiting cleanly is treated as necessary,
+never sufficient — the only completion test is a real computation.
 
-Updates never apply to a running session — run `/reload-plugins` (or start a
-new session) to load the new version. A manually cloned hub updates with plain
-`git pull`.
-
-### Manual quickstart (no agent required)
-
-`oh_my_mlip` is **path-importable, not a pip package**. `source env.sh` once per
-shell sets `OH_MY_MLIP_HOME`, the shared caches, and the D3/CUDA environment.
+No agent required:
 
 ```bash
 git clone https://github.com/JinukMoon/oh-my-mlip.git
 cd oh-my-mlip
 source env.sh
 
-# List registered models — pure registry read, no GPU / model env needed.
-python -c "import oh_my_mlip; print(oh_my_mlip.list_models())"
-
-# Build a model's env from its curated recipe (one-time, on your host).
-./install.sh MACE
-
-# Several at once — or everything: no argument builds every recipe.
-# Budget ~5-10 GB of disk per env; gated envs need your own HF token
-# (docs/hf_token.md) and are skipped without one.
-./install.sh MACE SevenNet ORB
-./install.sh
-
-# Single-point energy + forces (spawns the right env interpreter for you).
-python run_examples/single_point.py MACE
+python -c "import oh_my_mlip; print(oh_my_mlip.list_models())"   # registry read
+./install.sh MACE                                                # build one env
+python run_examples/single_point.py MACE                         # energy + forces
+python scripts/setup_verify.py MACE-MPA-0 --json                 # the completion oracle
 ```
 
 ```python
@@ -110,77 +101,119 @@ out = oh_my_mlip.run("MACE", atoms, properties=("energy", "forces"))
 print(out["energy"], out["forces"][0])
 ```
 
-### Bring your own envs (adopt, do not rebuild)
-
-Already have a working conda env for a framework? Adopt it instead of
-rebuilding — the resolver dispatches to any interpreter you register, after
-verifying the framework actually imports there:
+**Bring your own envs.** Already have a working conda env for a framework?
+Adopt it instead of rebuilding — zero disk, verified before it is trusted:
 
 ```bash
 python3 scripts/adopt_env.py MACE ~/miniconda3/envs/MACE
 python3 scripts/adopt_env.py --list
 ```
 
-Adoptions live in `env_map.local.json` (per-machine, untracked). An adopted
-env counts as `ready` in the setup survey (zero disk, no install), and
-`oh_my_mlip.run()`, the Claude Code plugin, and the MCP server all use it
-from any folder. The hub-prefix layout under `envs/` is just the install
-lifecycle's default, not a requirement.
-
-### API surface (small and stable)
+**API surface (small and stable).**
 
 | Call | Layer | Use |
 |---|---|---|
 | `list_models()` | registry | enumerate registered frameworks |
-| `resolve(model, version=None)` | registry | codegen dict (env `python`, `imports`, `inference`, flags) — no model loaded |
-| `get_calculator(model, ...)` | intra-env | build an ASE `Calculator` from inside that model's own env |
+| `resolve(model, version=None)` | registry | codegen dict (env `python`, `imports`, `inference`) — no model loaded |
+| `get_calculator(model, ...)` | intra-env | an ASE `Calculator` inside that model's own env |
 | `run(model, atoms, ...)` | cross-env | one-shot compute; spawns the right env interpreter |
 | `Worker` / `WorkerPool` | cross-env | persistent per-env worker for many repeated calls |
-
-## Why oh-my-mlip?
-
-The name is a promise, in the [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh)
-sense: a framework whose whole job is removing setup pain. Excellent
-neighboring tools exist, and nearly all of them **assume the hard part — a
-working environment for each framework — is already solved**:
-
-- **Evaluation suites** (mlipx, MLIP Arena, mlipaudit) benchmark models you
-  have already installed.
-- **Reimplementation stacks** (e.g. JAX rewrites of popular architectures)
-  unify frameworks by rewriting them — the opposite strategy; oh-my-mlip only
-  ever packages the real upstream code, so you compute with the authors' own
-  implementation.
-- **Single-backend unifiers** standardize on one tensor stack; oh-my-mlip
-  isolates instead (one env per framework), so PyTorch, TensorFlow, and JAX
-  frameworks ride along unchanged and never fight over CUDA pins.
-
-oh-my-mlip is the layer those tools stand on: curated, validated envs behind
-one registry, with an agent that does the installing — plus
-[catbench](https://github.com/JinukMoon/catbench) pre-wired the moment an env
-exists. Your favorite MLIP tool is welcome on top of it
-([Contributing](#contributing)).
-
-## Supported MLIPs
-
-20 frameworks / 32 model variants, install-verified on **two independent hosts**:
-the maintainer's RTX 4060 Ti (sm89, CUDA 12.x driver) and a third-party
-RTX A4500 login node (sm86, CUDA 13.0 driver) where 27/31 variants — including
-the CUDA-13-only trio (dpa4/tace/matris) — computed energy + forces on the GPU
-from a fresh clone. On a CUDA-12 driver that trio runs CPU-only and says so up
-front. Every push also runs a **GPU smoke test** (MACE + SevenNet single-points
-on a self-hosted runner) alongside the GPU-free CI. Separately,
-17/20 envs also **bit-reproduce** our internal `/TGM` reference (the rest run fine
-but aren't in that reference set, or are a public build that drifts). Per-model
-state, gated flag, and licenses: [`docs/model_status.md`](docs/model_status.md),
-[`docs/model_licenses.md`](docs/model_licenses.md); driver/CUDA floors and the
-equivalence matrix: [`docs/host_requirements.md`](docs/host_requirements.md).
 
 Want the explicit procedure rather than the wrapper — which pip packages each
 framework wants, the upstream command that fetches (and compiles) its
 checkpoint, and the calculator line that loads it? That is
-[`docs/recipes.md`](docs/recipes.md): upstream's own documented steps next to
-this repo's validated pin, one section per framework, generated from
-`models.json` so it cannot drift.
+[`docs/recipes.md`](docs/recipes.md), generated from `models.json` so it
+cannot drift.
+
+## 2 — Run & benchmark (catbench)
+
+Every env ships with [catbench](https://github.com/JinukMoon/catbench)
+pre-wired, so the moment a model installs it can be benchmarked on adsorption
+energies against your reference data — no per-model boilerplate.
+
+```bash
+# materialize + run one job file per model (the files are the actions):
+python run_examples/catbench_quickstart.py MyDataset --only MACE,SevenNet
+# jobs/catbench_<MLIP>.py        the exact per-model benchmark script
+# jobs/run_catbench_<MLIP>.sh    the runner (env vars + interpreter) you can rerun
+
+# on a SLURM cluster, emit sbatch-ready wrappers instead:
+python run_examples/catbench_quickstart.py MyDataset --slurm --emit-only
+
+# aggregate everything into one report (MAE table + comparison plot):
+python scripts/catbench_report.py --result ./result --out ./report
+```
+
+Every executed command exists on disk before it runs, so a benchmark is
+rerunnable — byte-identically — without the agent that launched it.
+
+## 3 — Fine-tune
+
+Foundation checkpoints are a starting point; your system usually deserves a
+few epochs of its own data. Fine-tuning dialects differ wildly between
+frameworks — CLI flags here, YAML keys there, a different dataset format
+everywhere. The hub absorbs those differences.
+
+```
+/oh-my-mlip:finetune            # asks: which model, which dataset — then runs
+```
+
+```bash
+# your dataset: anything ASE reads (extxyz, .traj, OUTCAR, ...) — converted
+# automatically to whatever the chosen framework's trainer eats:
+python scripts/ft_dataset.py --input my_frames.traj --to mace --out ft_data
+# the exact training command, written to disk, then executed:
+python scripts/ft_run.py MACE --dataset my_frames.traj --out ft_mace
+# the completion oracle: the produced checkpoint loads and computes:
+python scripts/ft_verify.py ft_mace/<checkpoint> --model MACE --json
+```
+
+Per-framework fine-tuning procedures — the exact upstream command, the config
+it consumes, the dataset format, and how the pretrained checkpoint is
+referenced — live in [`docs/finetune.md`](docs/finetune.md), generated from
+the registry with one classification per variant. A model whose upstream
+publishes no training path says so honestly rather than pretending.
+
+Some checkpoints carry non-commercial licenses (for example CC BY-NC or
+academic-use terms). Fine-tuning them is supported, and the hub prints the
+license and its URL before starting — a derivative of a non-commercial
+checkpoint inherits its terms, and that is worth knowing *before* training.
+
+## 4 — Distill
+
+A large, accurate teacher is expensive at MD time. Distillation turns it into
+a tiny NN-MTP student that runs in LAMMPS on CPUs — no Python, no LibTorch —
+validated against the teacher's own surface.
+
+```
+/oh-my-mlip:distill             # asks: which teacher, which material — then runs
+```
+
+The skill orchestrates the sibling project
+[`onthefly-distill`](https://github.com/JinukMoon/onthefly-distill): it
+renders the config, generates the teacher hook from the registry's own
+calculator lines, and invokes the sibling's published entrypoints verbatim —
+
+```bash
+python scripts/distill_bootstrap.py --teacher MACE-MPA-0 --structure slab.vasp --work ./distill
+cd distill && sh run_distill.sh     # teacher MD → student training → student LAMMPS MD, looped
+scripts/build_lammps_nnmtp.sh       # one-time: LAMMPS with the NN-MTP pair style
+```
+
+The loop labels structures with the teacher, trains the student, runs the
+student's own MD, and folds every failure back into training until the student
+survives its target trajectory — an active-learning loop that hardens the
+student exactly where it is weak. `onthefly-distill` is a separately-licensed
+**GPL-2.0** sibling project; oh-my-mlip invokes it and copies nothing in.
+
+---
+
+## Supported MLIPs
+
+Per-model state, gated flag, and licenses:
+[`docs/model_status.md`](docs/model_status.md),
+[`docs/model_licenses.md`](docs/model_licenses.md); driver/CUDA floors:
+[`docs/host_requirements.md`](docs/host_requirements.md).
 
 <!-- STATUS_TABLE_START -->
 | Framework | Models |
@@ -212,19 +245,15 @@ this repo's validated pin, one section per framework, generated from
 - **Envs build from recipes.** `install.sh <model>` builds the env on the current
   host from a curated recipe (`envs/<env>.yml`, plus a `.build.sh` sidecar where a
   framework needs a pinned side-install). Re-runs are safe by construction:
-  `install.sh --status` inspects install state, an interrupted env is
-  import-verified and **adopted or rebuilt — never duplicated**, and a ready
-  sentinel is only trusted after its imports re-verify. Per-model caveats live in
-  `models.json` and [`docs/model_status.md`](docs/model_status.md).
+  an interrupted env is import-verified and **adopted or rebuilt — never
+  duplicated**, and a ready sentinel is only trusted after its imports re-verify.
 - **Weights are never hosted here.** They download from each framework's official
-  channel on first run — into that framework's own native cache
-  (`~/.cache/huggingface`, `~/.cache/fairchem`, ...), so anything you already
-  downloaded is reused as-is and your `huggingface-cli login` keeps working for
-  gated models (fetched with *your* token). Building a shared multi-user hub?
-  Set `OMM_SHARED_CACHE_ROOT=/path` before sourcing `env.sh` to root every
-  framework cache under one explicit directory instead. Each successful
-  verification freezes the resolved interpreter/weight facts into the
-  per-machine ledger `models.local.json`. oh-my-mlip redistributes no weights.
+  channel on first run — into that framework's own native cache, so anything you
+  already downloaded is reused as-is and your `huggingface-cli login` keeps
+  working for gated models (fetched with *your* token). Building a shared
+  multi-user hub? Set `OMM_SHARED_CACHE_ROOT=/path` before sourcing `env.sh`.
+  Each successful verification freezes the resolved interpreter/weight facts
+  into the per-machine ledger `models.local.json`.
 - **Arch-pinned artifacts compile on your GPU.** The D3 CUDA kernel and the
   NequIP/Allegro AOT `.pt2` are compiled/reselected for your compute capability
   (auto-detected — sm86/sm89/anything newer) on first run — never shipped. See
@@ -232,17 +261,12 @@ this repo's validated pin, one section per framework, generated from
 - **Self-healing install loop.** A bounded, agent-driven setup loop with hard
   stop conditions (disk headroom, signature stall, cumulative-attempt cap,
   wall-clock) — the policy is the single source of truth in `AGENTS.md` §8.
-- **Relocatable env tarballs (LIVE for v1).** MACE and SevenNet tarballs are
-  published on the Hugging Face Hub with pinned revisions + sha256
-  (`dist_manifest.json`); `oh_my_mlip.fetch.fetch_env("MACE")` downloads,
-  integrity-checks, and unpacks one — host-verified end-to-end: a fresh-home
-  fetch reproduced the source env's energy bit-identically. Recipes remain
-  the always-available fallback and the path for Phase-2 envs. Author side,
-  a release is ONE deterministic
-  command with a hard pre-upload gate:
-  `scripts/release_env.sh <env> <model> <hf-repo> <revision>` (clean recipe
-  build → pack → unpack-and-compute relocation gate → publish + manifest pin;
-  a tarball that fails the gate is never uploaded).
+- **Relocatable env tarballs.** Selected envs are published on the Hugging Face
+  Hub with pinned revisions + sha256 (`dist_manifest.json`);
+  `oh_my_mlip.fetch.fetch_env("MACE")` downloads, integrity-checks, and unpacks
+  one. Recipes remain the always-available fallback. Author side, a release is
+  one deterministic command with a hard pre-upload relocation gate
+  (`scripts/release_env.sh`).
 
 ## Gated models
 
@@ -280,3 +304,5 @@ env setups are very welcome.
 
 See [`LICENSE`](LICENSE). Individual frameworks and their weights carry their own
 upstream licenses — see [`docs/model_licenses.md`](docs/model_licenses.md).
+`onthefly-distill`, orchestrated by the distill feature, is a separate GPL-2.0
+project.
