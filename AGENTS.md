@@ -201,9 +201,24 @@ the internal roster runner:
    `calc_num = 3` calculator instances, `config = {"mlip_name", "benchmark"}`,
    results into `cwd/result/`. With D3 enabled, the `mlip_name` gets a `_D3`
    suffix so D3/non-D3 results stay distinct.
-3. Run each model with its own `<env>/bin/python` (applying `env_run` where the
-   registry declares it), then aggregate with catbench's
-   `AdsorptionAnalysis().analysis()` + `threshold_sensitivity_analysis()`.
+3. **Materialize, then execute — never `python -c`.** Each model+version is
+   ALWAYS written to disk first via `scripts/catbench_jobgen.py`:
+   `jobs/catbench_<MLIP>.py` (verbatim `resolve()` codegen) and
+   `jobs/run_catbench_<MLIP>.sh` (the rerun unit — `cd`s to the absolute
+   workdir, `export`s `env_run` one key per line, then `exec`s the `.py`).
+   The quickstart script runs that `.sh`, not the interpreter directly.
+   `--emit-only` stops after writing the files; `--slurm [--partition P]`
+   additionally emits `jobs/run_slurm_<MLIP>.sh` (identical body, SBATCH
+   header, no `sbatch` issued); `--submit` dispatches through
+   `catbench_jobgen.submit()` behind an injectable hook instead of running
+   the local `.sh` in-process, and is never combined with `--emit-only`.
+4. Once `cwd/result/` is populated, aggregate with
+   `scripts/catbench_report.py --result <result dir> --out <report dir>` —
+   it wraps catbench's own `AdsorptionAnalysis().analysis()` (re-execing
+   itself under a catbench-bearing interpreter first, since catbench never
+   lives in the ambient one) and derives `report/mae_table.{md,csv}` +
+   `report/mae_comparison.png`, plus a `report/run_report.sh` that
+   reproduces the report from any working directory.
 
 > Speed caveat carried from the internal guide: catbench's `Time_per_step` is an
 > aggregate (total time / total steps) and is sensitive to host CPU load — a

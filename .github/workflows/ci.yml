@@ -118,6 +118,35 @@ jobs:
       - name: Weight-integrity fingerprint table
         run: python scripts/verify_weights_integrity.py
 
+      # ── 7e. Catbench jobgen tests (GPU-free, named for visibility) ───────────
+      # scripts/catbench_jobgen.py is the AC7 unit for catbench: byte-identical
+      # regeneration, env_run exports (NequIP/DeePMD/DPA4 — never MACE alone,
+      # C4), the shared cd, and SLURM body/header split. Already covered by the
+      # full suite below; named here so a regression reads clearly in the PR
+      # check list.
+      - name: Catbench jobgen tests
+        run: |
+          python -m pytest tests/test_catbench_jobgen.py -v \
+            --tb=short \
+            -p no:cacheprovider
+
+      # ── 7f. shellcheck an emitted catbench sample (GPU-free) ─────────────────
+      # jobs/ is a runtime artifact, never committed — this materializes one
+      # via the real emitter (resolve() succeeds on a fresh clone; only the
+      # interpreter path is unbuilt) and shellchecks the result.
+      - name: shellcheck an emitted catbench sample
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from oh_my_mlip import resolve
+          import catbench_jobgen
+          spec = resolve("DPA4")
+          catbench_jobgen.emit(spec, spec["version"], "Example", 1, False, "/tmp/omm_ci_catbench_sample", slurm=True)
+          PY
+          shellcheck /tmp/omm_ci_catbench_sample/jobs/run_catbench_*.sh
+          shellcheck /tmp/omm_ci_catbench_sample/jobs/run_slurm_*.sh
+
       # ── 8. Full pytest suite ─────────────────────────────────────────────────
       - name: Run all tests (no GPU)
         run: |

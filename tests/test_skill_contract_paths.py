@@ -58,6 +58,8 @@ LOAD_BEARING = [
     "scripts/setup_guardrail.py",
     "scripts/setup_verify.py",
     "scripts/setup_sweep.py",
+    "scripts/catbench_jobgen.py",
+    "scripts/catbench_report.py",
 ]
 
 

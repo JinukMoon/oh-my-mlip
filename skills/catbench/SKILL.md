@@ -12,3 +12,6 @@ at `raw_data/<tag>_adsorption.json`; each model runs in its own subprocess with
 the model's env interpreter; results aggregate into `cwd/result/`.
 
 If any model env is not yet materialized, run `/oh-my-mlip:setup <model>` first.
+
+Underlying job templates/emitters: `scripts/catbench_jobgen.py`.
+Result-directory aggregation into a report: `scripts/catbench_report.py`.
