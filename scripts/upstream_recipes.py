@@ -2,12 +2,12 @@
 
 Every `pip` and `fetch` value is what that framework's OWN documentation says;
 `src` / `fetch_src` are the URLs it was read from (2026-08). This is kept
-deliberately separate from our pinned recipe (`envs/*.yml`): upstream tells you
-the *supported* way, the pin tells you the exact combination that was
-energy-validated. `scripts/gen_recipes.py` renders both side by side.
+deliberately separate from the pinned recipe (`envs/*.yml`): upstream tells you
+the *supported* way, the pin gives one combination known to work together.
+`scripts/gen_recipes.py` renders both side by side.
 
-`note` records where the two diverge, and any upstream behaviour that bites in
-practice. Placeholders `{sha}` / `{url}` are filled from `models.json` at
+`note` records where the two diverge, and library behaviour that affects how you
+call it. Placeholders `{sha}` / `{url}` are filled from `models.json` at
 generation time and are what the drift guards check.
 
 When upstream changes its documented procedure, edit THIS file — never the
@@ -23,9 +23,9 @@ UPSTREAM: dict[str, dict] = {
         fetch=["# Checkpoints ship inside the sevenn package — pass the model keyword only:",
                "#   '7net-mf-ompa' / 'SevenNet-mf-ompa',  '7net-omni' / 'SevenNet-Omni'",
                "# modal='mpa' is the documented PBE-level default for both."],
-        note="Upstream also exposes enable_cueq / enable_flash. Our pin was validated with "
-             "enable_oeq=True, which works against the cuequivariance 0.8.0 wheel already in "
-             "the recipe (no separate install).",
+        note="Upstream also exposes enable_cueq / enable_flash. The pinned recipe uses "
+             "enable_oeq=True, which works against the cuequivariance wheel it already "
+             "installs — no separate accelerator install is needed.",
     ),
     "MACE": dict(
         src="https://github.com/ACEsuit/mace",
@@ -35,9 +35,9 @@ UPSTREAM: dict[str, dict] = {
         fetch=["# mace_mp downloads by name into ~/.cache/mace (override with XDG_CACHE_HOME)",
                "<prefix>/bin/python -c \"from mace.calculators import mace_mp; mace_mp(model='medium-mpa-0', device='cpu')\"",
                "<prefix>/bin/python -c \"from mace.calculators import mace_mp; mace_mp(model='mh-1', device='cpu')\""],
-        note="Upstream's example uses default_dtype='float32'; we validated float64 (the "
-             "equivalence-comparison basis). MH-1 is multi-head — head='omat_pbe' or "
-             "'oc20_usemppbe' (not 'oc20'); both heads share one weight file.",
+        note="MH-1 is multi-head: pass head='omat_pbe' or head='oc20_usemppbe' (there is no "
+             "plain 'oc20' head). Both heads load the same weight file. default_dtype "
+             "selects float32 or float64 — the calculator lines below use float64.",
     ),
     "NequIP": dict(
         src="https://nequip.readthedocs.io/en/latest/guide/getting-started/install.html",
@@ -54,12 +54,11 @@ UPSTREAM: dict[str, dict] = {
                "    --modifiers enable_OpenEquivariance",
                "# same for OAM-L (nequip.net:mir-group/NequIP-OAM-L:0.1)",
                "# PATH must include <prefix>/bin: without it openequivariance cannot find ninja",
-               "#   and dies with 'Ninja is required to load C++ extensions' (observed).",
+               "#   and dies with 'Ninja is required to load C++ extensions'.",
                "# MAX_JOBS=4 is required: oeq's first import JIT-builds with ninja at nproc and",
                "#   can wedge on a stale build lock."],
-        note="NequIPCalculator only supports from_compiled_model, so the per-arch .pt2 is "
-             "required rather than optional, and it is not portable between GPU architectures. "
-             "This exact recipe was executed on an sm89 host and produced a 44 MB .pt2.",
+        note="NequIPCalculator only loads via from_compiled_model, so the per-arch .pt2 is "
+             "required rather than optional and must be rebuilt for each GPU architecture.",
     ),
     "Allegro": dict(
         src="https://github.com/mir-group/allegro",
@@ -72,8 +71,8 @@ UPSTREAM: dict[str, dict] = {
                "    nequip.net:mir-group/Allegro-OAM-L:0.1 \\",
                "    $OMM/models/compiled/$ARCH/Allegro-OAM-L_${ARCH}.nequip.pt2 \\",
                "    --mode aotinductor --device cuda --target ase"],
-        note="Passing enable_OpenEquivariance here fails — Allegro runs on cuequivariance. "
-             "cueq ships prebuilt kernels (no JIT risk); the sm86 compile measured ~90 s.",
+        note="Allegro runs on cuequivariance, so passing enable_OpenEquivariance fails. cueq "
+             "ships prebuilt kernels, so there is no first-import JIT step.",
     ),
     "Nequix": dict(
         src="https://github.com/atomicarchitects/nequix",
@@ -81,12 +80,12 @@ UPSTREAM: dict[str, dict] = {
         req="JAX backend",
         fetch_src="https://github.com/atomicarchitects/nequix",
         fetch=["# Upstream supports alias auto-download: NequixCalculator('nequix-mp-1').",
-               "# We pull the commit-pinned file and check its digest instead (reproducibility).",
+               "# The commit-pinned file below is fetched directly so the digest can be checked.",
                "mkdir -p $OMM/models/nequix",
                "curl -L \"{url}\" -o $OMM/models/nequix/nequix-mp-1.nqx",
                "echo \"{sha}  $OMM/models/nequix/nequix-mp-1.nqx\" | sha256sum -c -",
                "# Keep the .nqx extension — renaming to .pt makes the loader treat it as torch."],
-        note="Upstream's example passes use_kernel=True; our validated path is use_kernel=False.",
+        note="use_kernel toggles the fused kernel; the calculator line below leaves it off.",
     ),
     "DeePMD": dict(
         src="https://docs.deepmodeling.com/projects/deepmd/",
@@ -101,10 +100,10 @@ UPSTREAM: dict[str, dict] = {
                "<prefix>/bin/dp --pt freeze -c $OMM/models/deepmd/DPA-3.1-3M.pt \\",
                "     -o $OMM/models/deepmd/frozen-omat24.pth --head Omat24",
                "# upstream equivalent: dp --pt freeze -c <ckpt> -o frozen_model.pth --model-branch <head>"],
-        note="The recorded digest describes the DOWNLOADED upstream checkpoint, not the derived "
-             "frozen model — check the source, not the freeze output. Freeze reproducibility is "
-             "claimed same-host only. At run time DeePMD needs LD_LIBRARY_PATH=\"\" (Intel oneAPI "
-             "libfabric clash).",
+        note="The published checkpoint is multi-task, so it must be frozen to a single head "
+             "before inference. The recorded digest is for the downloaded checkpoint, not "
+             "the frozen output. At run time DeePMD needs LD_LIBRARY_PATH=\"\" to avoid an "
+             "Intel oneAPI libfabric clash.",
     ),
     "ORB": dict(
         src="https://github.com/orbital-materials/orb-models",
@@ -114,11 +113,10 @@ UPSTREAM: dict[str, dict] = {
         fetch=["# Calling the named pretrained function is what triggers the download",
                "<prefix>/bin/python -c \"from orb_models.forcefield import pretrained; \\",
                "    pretrained.orb_v3_conservative_inf_omat(device='cpu', precision='float32-high')\""],
-        note="Upstream's README example unpacks a (orbff, atoms_adapter) 2-tuple; our pinned "
-             "version returns a single object — use the block-C line, not the README's. "
-             "precision='float32-high' selects TF32 matmul, so repeat single-points differ by "
-             "~3.1e-5 eV/atom: the weights are digest-pinned but the energy is only "
-             "equivalence-stable, never bitwise.",
+        note="Upstream's README unpacks a (orbff, atoms_adapter) tuple; the pinned version "
+             "returns a single object, so use the calculator line below. "
+             "precision='float32-high' selects TF32 matmul, which makes repeated runs "
+             "numerically close rather than bit-identical.",
     ),
     "GRACE": dict(
         src="https://gracemaker.readthedocs.io/",
@@ -133,12 +131,12 @@ UPSTREAM: dict[str, dict] = {
                "# so saved_model.pb sits directly under the target directory:",
                "python3 $OMM/scripts/prepare_grace_weights.py --name GRACE-2L-OAM \\",
                "    --target-dir $OMM/models/grace/GRACE-2L-OAM"],
-        note="Upstream also offers the grace_fm('<name>') convenience loader "
-             "(tensorpotential.calculator.foundation_models); we validated the flattened path "
-             "handed straight to TPCalculator. The recorded digest is a TREE digest over the "
-             "SavedModel directory, not a single file. On GPU, TF 2.16 wants libcudnn.so.8 while "
-             "catbench's torch pulls cuDNN 9 — sideload cuDNN 8.9 or GPU registration is skipped "
-             "silently.",
+        note="TensorFlow backend, so D3 dispersion (which needs torch) is unavailable. "
+             "grace_models leaves the SavedModel nested and it must be flattened before "
+             "TPCalculator can load it; the digest covers the whole SavedModel tree, not a "
+             "single file. On GPU, TF 2.16 loads libcudnn.so.8 while catbench's torch "
+             "installs cuDNN 9 — sideload cuDNN 8.9 or TF skips GPU registration silently. "
+             "Upstream also offers the grace_fm('<name>') convenience loader.",
     ),
     "MatterSim": dict(
         src="https://github.com/microsoft/mattersim",
@@ -147,8 +145,9 @@ UPSTREAM: dict[str, dict] = {
         fetch_src="https://github.com/microsoft/mattersim",
         fetch=["# Checkpoints ship in the package (./pretrained_models/); 1M is the default,",
                "# the 5M model is selected with load_path."],
-        note="Upstream defaults to the 1M model. We use load_path='MatterSim-v1.0.0-5M.pth' and "
-             "pass device='cuda' explicitly — without it the calculator has fallen back to CPU.",
+        note="The package ships both the 1M and 5M checkpoints and defaults to 1M; load_path "
+             "selects the 5M one. Pass device explicitly — otherwise the calculator can fall "
+             "back to CPU.",
     ),
     "CHGNet": dict(
         src="https://github.com/CederGroupHub/chgnet",
@@ -156,12 +155,13 @@ UPSTREAM: dict[str, dict] = {
         req=None,
         fetch_src="https://github.com/CederGroupHub/chgnet",
         fetch=["# CHGNet.load() prepares the weights itself — no download command needed."],
-        note="We pin the version explicitly: CHGNet.load(model_name='0.3.0').",
+        note="CHGNet.load() takes a model_name, so the version is selected in code rather "
+             "than at download time.",
     ),
     "AlphaNet": dict(
         src="https://github.com/zmyybc/AlphaNet",
         pip=["git clone https://github.com/zmyybc/AlphaNet.git", "cd AlphaNet", "pip install -e ."],
-        req="Upstream README shows python 3.8; the validated combination is python 3.11 + torch 2.1.2+cu121",
+        req="Upstream README shows python 3.8; the pinned recipe uses python 3.11 + torch 2.1.2+cu121",
         fetch_src="https://github.com/zmyybc/AlphaNet",
         fetch=["# Both the figshare checkpoint AND the in-repo config are required",
                "mkdir -p $OMM/models/alphanet",
@@ -169,9 +169,10 @@ UPSTREAM: dict[str, dict] = {
                "echo \"{sha}  $OMM/models/alphanet/alex_0410.ckpt\" | sha256sum -c -",
                "curl -L \"https://raw.githubusercontent.com/zmyybc/AlphaNet/65f8ea9330459e0106867d1c694aec4139c6cb19/pretrained/OMA/oma.json\" \\",
                "     -o $OMM/models/alphanet/oma.json"],
-        note="Installing upstream HEAD drifts gas-molecule energies by up to 0.24 eV/atom, so the "
-             "recipe pins commit 65f8ea93. Do not install matscipy: it forces numpy>=2 and breaks "
-             "the torch 2.1.2 ABI.",
+        note="Needs both the checkpoint and its config JSON — loading the checkpoint alone "
+             "fails. The recipe installs a pinned commit because package HEAD changes model "
+             "behaviour. Do not install matscipy: it forces numpy>=2 and breaks the torch "
+             "2.1.2 ABI.",
     ),
     "Eqnorm": dict(
         src="https://github.com/yzchen08/eqnorm",
@@ -185,8 +186,8 @@ UPSTREAM: dict[str, dict] = {
                "mkdir -p ~/.cache/eqnorm",
                "curl -L \"https://ndownloader.figshare.com/files/55429685\" -o ~/.cache/eqnorm/eqnorm-mptrj.pt",
                "echo \"{sha}  $HOME/.cache/eqnorm/eqnorm-mptrj.pt\" | sha256sum -c -"],
-        note="Upstream documents neither the cache path nor the URL — both were read out of the "
-             "package's own url_dict.",
+        note="Upstream documents neither the cache path nor the download URL — both come "
+             "from the package's own url_dict.",
     ),
     "fairchemv1": dict(
         src="https://github.com/facebookresearch/fairchem",
@@ -198,13 +199,14 @@ UPSTREAM: dict[str, dict] = {
                "<prefix>/bin/python -c \"from huggingface_hub import hf_hub_download; \\",
                "    print(hf_hub_download('facebook/OMAT24','esen_30m_oam.pt', local_dir='$OMM/models/fairchem'))\"",
                "echo \"{sha}  $OMM/models/fairchem/esen_30m_oam.pt\" | sha256sum -c -"],
-        note="OCPCalculator defaults to cpu=True — pass cpu=False or it silently runs on CPU.",
+        note="Gated weights: the download fails without an accepted license and a token. "
+             "OCPCalculator defaults to cpu=True, so pass cpu=False to run on GPU.",
     ),
     "EquiformerV3": dict(
         src="https://github.com/atomicarchitects/equiformer_v3",
         pip=["# Upstream publishes no pip package — it vendors a fairchem fork (sha a7300c58),",
              "# which envs/equiformer_v3.yml installs editable. There is no upstream install",
-             "# procedure to quote; the recipe below is the only reproducible path."],
+             "# procedure to quote — use the pinned recipe below."],
         req="scipy==1.16.0 (1.17 removed sph_harm)",
         fetch_src="https://huggingface.co/mirror-physics/equiformer_v3",
         fetch=["mkdir -p $OMM/models/equiformer_v3/checkpoint",
@@ -212,7 +214,9 @@ UPSTREAM: dict[str, dict] = {
                "     -o $OMM/models/equiformer_v3/checkpoint/omat24-mptrj-salex_gradient.pt",
                "echo \"{sha}  $OMM/models/equiformer_v3/checkpoint/omat24-mptrj-salex_gradient.pt\" | sha256sum -c -",
                "# The checkpoint/ path prefix is required — the bare filename 404s."],
-        note="Research-code release: the README documents training, not installation.",
+        note="Upstream publishes no pip package — it vendors a fairchem fork, which the "
+             "recipe installs editable. The checkpoint URL needs its checkpoint/ path "
+             "prefix; the bare filename 404s.",
     ),
     "UMA": dict(
         src="https://github.com/facebookresearch/fairchem",
@@ -224,10 +228,12 @@ UPSTREAM: dict[str, dict] = {
                "<prefix>/bin/python -c \"from fairchem.core import pretrained_mlip; \\",
                "    pretrained_mlip.get_predict_unit('uma-s-1p2', device='cpu')\"",
                "#   same pattern for uma-s-1p1 / uma-m-1p1 — three checkpoints cover seven variants"],
-        note="task_name is what separates the variants: oc20 (catalysis) / oc22 (oxides) / omat "
-             "(inorganic) / oc25 / omol / odac / omc. uma-m-1p1 (11.2 GB) needs materially more "
-             "than 19 GB of host RAM: on a 19 GB host the loader is OOM-killed (exit 137) and "
-             "surfaces only as 'worker produced no handshake'.",
+        note="Gated weights: the download fails without an accepted license and a token. "
+             "task_name is what distinguishes the variants — oc20 (catalysis), oc22 "
+             "(oxides), omat (inorganic materials), plus oc25 / omol / odac / omc. Three "
+             "checkpoints cover all seven variants; the -m- checkpoint is 11.2 GB and is "
+             "materialized in host RAM before it reaches the GPU, so it needs substantially "
+             "more system memory than the -s- ones.",
     ),
     "PET": dict(
         src="https://github.com/metatensor/metatrain",
@@ -241,8 +247,8 @@ UPSTREAM: dict[str, dict] = {
                "# upstream syntax: mtt export <path> <output>   (path may be local, an HF repo id, or a URL)",
                "<prefix>/bin/mtt export $OMM/models/pet/pet-oam-xl-v1.0.0.ckpt \\",
                "     $OMM/models/pet/pet-oam-xl-v1.0.0.pt"],
-        note="The export output is not byte-reproducible (serialization differs per run), so this "
-             "model's determinism oracle is the energy, not a sha256.",
+        note="The export output is not byte-reproducible: its serialization differs between "
+             "runs even for the same input.",
     ),
     "EquFlash": dict(
         src="https://github.com/SamsungDS/GGNN",
@@ -256,9 +262,9 @@ UPSTREAM: dict[str, dict] = {
                "curl -L \"https://ndownloader.figshare.com/files/65435004\" -o $OMM/models/equflash/EquFlash.pt",
                "echo \"4a1eb19e4f719282146285dd1655178a0d1cc70edee7f8e1401e9b1336383bfa  $OMM/models/equflash/EquFlash.pt\" | sha256sum -c -",
                "# plain figshare.com 202-blocks — always use the ndownloader subdomain"],
-        note="Upstream's two-file requirements split is exactly why a single conda solve is "
-             "impossible; our sidecar does the same work as a 2-pass pip. V2 is cueq-only — do "
-             "not inject conv_type='flashtp' (that is a v1-only backend).",
+        note="Upstream splits its requirements across two files, which is why a single conda "
+             "solve cannot build this env and the recipe uses a two-pass sidecar. V2 is "
+             "cueq-only — conv_type='flashtp' is a v1-only backend and V2 rejects it.",
     ),
     "MatRIS": dict(
         src="https://github.com/HPC-AI-Team/MatRIS",
@@ -271,8 +277,8 @@ UPSTREAM: dict[str, dict] = {
                "mkdir -p ~/.cache/matris",
                "curl -L \"https://ndownloader.figshare.com/files/59142728\" -o ~/.cache/matris/MatRIS_10M_OAM.pth.tar",
                "echo \"{sha}  $HOME/.cache/matris/MatRIS_10M_OAM.pth.tar\" | sha256sum -c -"],
-        note="Built against torch cu130, so GPU use needs a CUDA-13-class driver (>= ~580). "
-             "Below that, run with device='cpu' — the energy is unchanged, only slower.",
+        note="Selected by model key. Built against torch cu130, so GPU use needs a "
+             "CUDA-13-class driver — below that, run with device='cpu'.",
     ),
     "DPA4": dict(
         src="https://docs.deepmodeling.com/projects/deepmd/",
@@ -285,9 +291,10 @@ UPSTREAM: dict[str, dict] = {
                "echo \"{sha}  $OMM/models/dpa4/dpa-4.0.1-pro-mptrj.pt\" | sha256sum -c -",
                "# (the registry's weights_source is the matbench-discovery model page; the",
                "#  direct artifact is the figshare URL above)"],
-        note="Unlike DPA-3.1 this checkpoint is already single-head, so no freeze step. At run "
-             "time it needs LD_LIBRARY_PATH=\"/usr/lib/wsl/lib\" on WSL (keeps the driver mount "
-             "while evicting libfabric).",
+        note="Already single-head, so unlike DPA-3.1 there is no freeze step. On WSL it "
+             "needs LD_LIBRARY_PATH=\"/usr/lib/wsl/lib\" to keep the driver mount while "
+             "evicting libfabric. Built against torch cu130 — below a CUDA-13-class driver, "
+             "run on CPU.",
     ),
     "TACE": dict(
         src="https://tace.readthedocs.io/en/latest/install/install.html",
@@ -300,8 +307,9 @@ UPSTREAM: dict[str, dict] = {
                "<prefix>/bin/python -c \"from tace.foundations import tace_foundations; tace_foundations['TACE-OAM-L']\"",
                "echo \"{sha}  $HOME/.cache/tace/TACE-OAM-L.pt\" | sha256sum -c -",
                "# manual download: HF xvzemin/tace-foundations"],
-        note="On a host below the driver floor torch.cuda.is_available() has returned a false "
-             "positive and the failure surfaced only at use time — check the driver first and "
-             "pass device='cpu' from the start if it is short.",
+        note="Looking up the foundation key is what downloads the model. Enable only one "
+             "accelerator backend. torch.cuda.is_available() can return true on a host below "
+             "the driver floor and fail later at use time, so check the driver and pass "
+             "device='cpu' from the start if it is short.",
     ),
 }

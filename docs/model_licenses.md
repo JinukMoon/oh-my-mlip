@@ -29,7 +29,7 @@ Two licenses matter separately:
 Everything else below is permissive (MIT / Apache-2.0 / BSD-3-Clause), commercial
 use allowed.
 
-## Full table — 20 frameworks / 31 model variants
+## Full table — 20 frameworks / 32 model variants
 
 | Framework | Our variant(s) | GitHub | Code license | Weights license | Gated |
 |---|---|---|---|---|---|
@@ -47,7 +47,7 @@ use allowed.
 | **Eqnorm** | Eqnorm-MPtrj | [yzchen08/eqnorm](https://github.com/yzchen08/eqnorm) | MIT | MIT | no |
 | **fairchem (eSEN)** | eSEN-30M-OAM | [facebookresearch/fairchem](https://github.com/facebookresearch/fairchem) | MIT | per model card (e.g. `facebook/OMC25` on HF) | no² |
 | **EquiformerV3** | EqV3-OMatMPtrjSalex | [atomicarchitects/equiformer_v3](https://github.com/atomicarchitects/equiformer_v3) | MIT | MIT (`mirror-physics/equiformer_v3` on HF) | no |
-| **UMA** | UMA-s-1p2-* / UMA-s-1p1-* / UMA-m-1p1-* (7) | [facebookresearch/fairchem](https://github.com/facebookresearch/fairchem) | MIT (code) | **FAIR Chemistry License** ([facebook/UMA](https://huggingface.co/facebook/UMA)) | **yes** |
+| **UMA** | UMA-s-1p2-* / UMA-s-1p1-* / UMA-m-1p1-* (8) | [facebookresearch/fairchem](https://github.com/facebookresearch/fairchem) | MIT (code) | **FAIR Chemistry License** ([facebook/UMA](https://huggingface.co/facebook/UMA)) | **yes** |
 | **PET** | PET-OAM-XL | [spozdn/pet](https://github.com/spozdn/pet) | MIT | unconfirmed³ | no |
 | **EquFlash** | EquFlash, EquFlashV2 | [SamsungDS/GGNN](https://github.com/SamsungDS/GGNN) | **CC BY-NC-SA 4.0 — non-commercial** | inherits (non-commercial) | no |
 | **MatRIS** | MatRIS-10M-OAM | [HPC-AI-Team/MatRIS](https://github.com/HPC-AI-Team/MatRIS) | BSD-3-Clause | BSD-3-Clause (presumed; in-repo) | unknown |

@@ -4,9 +4,9 @@
 Per framework the recipe book carries three blocks:
 
   A. install   upstream's OWN documented command (scripts/upstream_recipes.py,
-               each entry carrying the doc URL it was read from) PLUS this
-               repo's validated pin, rendered from `envs/<env>.yml` (or the
-               multi-pass sidecar) as commands you can paste.
+               each entry carrying the doc URL it was read from) PLUS the
+               pinned combination from `envs/<env>.yml` (or the multi-pass
+               sidecar), rendered as commands you can paste.
   B. weights   upstream's OWN acquisition idiom — the framework CLI / python
                call / URL that actually fetches the checkpoint, including any
                post-download step (freeze / export / flatten / AOT compile).
@@ -20,7 +20,7 @@ Two guards keep this from drifting away from `models.json`:
             emitted automatically, so a newly recorded sha256 can never be
             silently missing from the doc.
 
-The output is HERMETIC: no adopted-env paths, no per-host ledger values, no
+The output is HERMETIC: no host-specific paths, no per-machine state, no
 `$HOME`. Paths render as `$OMM/...` so the doc is byte-identical on any clone —
 which is what makes `--check` usable in CI.
 
@@ -46,6 +46,8 @@ from upstream_recipes import UPSTREAM  # noqa: E402
 
 DOC = REPO / "docs" / "recipes.md"
 CATBENCH_PIN = "1.1.2"
+# Rendered in place of the host's real GPU arch (sm86/sm89/...) in compile paths.
+ARCH_PLACEHOLDER = "${OMM_ARCH}"
 
 # Variant whose registry digest / source id must appear in that family's curated
 # recipe. Families absent here are covered by the soft guard only.
@@ -75,7 +77,7 @@ def canonical(text: str) -> str:
 
 
 def pin_block(env: str) -> list[str]:
-    """This repo's validated pin as pasteable commands."""
+    """The pinned version combination, as pasteable commands."""
     yaml = _yaml()
     ymlp, side = REPO / "envs" / f"{env}.yml", REPO / "envs" / f"{env}.build.sh"
     d = yaml.safe_load(ymlp.read_text())
@@ -167,18 +169,18 @@ def render(models: dict) -> str:
     out: list[str] = []
     w = out.append
 
-    w("# MLIP recipes — upstream procedure + this repo's validated pin")
+    w("# MLIP recipes — install, fetch, and run each framework")
     w("")
     w("<!-- GENERATED FILE — do not edit by hand. -->")
     w("<!-- Regenerate: python3 scripts/gen_recipes.py --write   ·   CI: --check -->")
     w("")
-    w("Block **A** and block **B** are what each framework's OWN documentation says; the")
-    w("source URL is linked per section (read 2026-08). Block **C** is copied verbatim from")
-    w("`models.json` — those exact lines passed the energy-equivalence validation, so do not")
-    w("edit a single character of them.")
+    w("One section per framework: how to install it, how to get its weights, and the")
+    w("calculator line that runs it. Blocks **A** and **B** are what each framework's own")
+    w("documentation says, with the source URL linked. Block **C** comes verbatim from")
+    w("`models.json` — keep those lines exactly as written.")
     w("")
-    w("Upstream install gives you the *supported* way; the pin gives you the *exact combination")
-    w("that was validated*. Reproducing our numbers means using the pin.")
+    w("Upstream install gives the supported way; the pin gives one combination of versions")
+    w("known to work together.")
     w("")
     w("```bash")
     w("export OMM=$(pwd)          # this clone")
@@ -208,13 +210,12 @@ def render(models: dict) -> str:
     w("python3 -c \"import sys; sys.path.insert(0,'$OMM'); from oh_my_mlip import fetch; \\")
     w("    print(fetch.ensure_weights('<Framework>', version='<Variant>'))\"")
     w("")
-    w("# 4. the ONLY completion test: energy + forces on this host, exit 0 iff pass")
+    w("# 4. check it works: energy + forces, exit 0 on success")
     w("python3 $OMM/scripts/setup_verify.py <Variant> --json")
     w("```")
     w("")
-    w("`install.sh` exiting 0 is necessary but **not** sufficient — step 4 is what DONE")
-    w("means. A bare name resolves family-first, so pass `--version` to reach a variant")
-    w("whose name its family shadows.")
+    w("A bare name resolves family-first, so pass `--version` to reach a variant whose")
+    w("name its family shadows.")
     w("")
     w("---")
     w("")
@@ -245,7 +246,7 @@ def render(models: dict) -> str:
             w(ln)
         w("```")
         w("")
-        w("This repo's validated pin:")
+        w("Pinned combination:")
         w("")
         w("```bash")
         for ln in pin_block(env):
@@ -264,7 +265,10 @@ def render(models: dict) -> str:
         w("### C. ASE calculator")
         w("")
         for v in versions:
-            s = registry.resolve(fam, version=v, models=models)
+            # ARCH_PLACEHOLDER keeps arch-pinned compile paths generic: resolve()
+            # would otherwise bake THIS machine's GPU arch into the doc, which is
+            # both wrong for the reader and a --check failure on another host.
+            s = registry.resolve(fam, version=v, arch=ARCH_PLACEHOLDER, models=models)
             w(f"`{v}`" + (" *(default)*" if v == entry.get("default_version") else ""))
             w("")
             w("```python")
@@ -276,7 +280,8 @@ def render(models: dict) -> str:
         run = f'{s["env_run_raw"]} ' if s.get("env_run_raw") else ""
         w(f"Run: `{run}<prefix>/bin/python script.py` — never `conda activate`.")
         w("")
-        w(f"Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py {versions[0]} --json`")
+        w(f"Check it works: `python3 $OMM/scripts/setup_verify.py {versions[0]} --json` "
+      f"(prints energy + forces; exit 0 on success).")
         w("")
         if u.get("note"):
             w(f"> **Note:** {u['note']}")

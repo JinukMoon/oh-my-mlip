@@ -58,6 +58,7 @@ How to read the columns:
 | UMA-s-1p1-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-s-1p2-OC20 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | UMA-s-1p2-OC22 | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
+| UMA-s-1p2-OC25 | UMA | on-demand-hf | gpu pending | yes | Phase 2 |
 | UMA-s-1p2-OMAT | UMA | on-demand-hf | validated (sm89) | yes | Phase 2 |
 | PET-OAM-XL | PET | on-demand-hf | validated (sm89) | no | Phase 2 |
 | EquFlashV2 | EquFlash | on-demand-hf | validated (sm89) | no | Phase 2 |

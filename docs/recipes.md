@@ -1,15 +1,15 @@
-# MLIP recipes — upstream procedure + this repo's validated pin
+# MLIP recipes — install, fetch, and run each framework
 
 <!-- GENERATED FILE — do not edit by hand. -->
 <!-- Regenerate: python3 scripts/gen_recipes.py --write   ·   CI: --check -->
 
-Block **A** and block **B** are what each framework's OWN documentation says; the
-source URL is linked per section (read 2026-08). Block **C** is copied verbatim from
-`models.json` — those exact lines passed the energy-equivalence validation, so do not
-edit a single character of them.
+One section per framework: how to install it, how to get its weights, and the
+calculator line that runs it. Blocks **A** and **B** are what each framework's own
+documentation says, with the source URL linked. Block **C** comes verbatim from
+`models.json` — keep those lines exactly as written.
 
-Upstream install gives you the *supported* way; the pin gives you the *exact combination
-that was validated*. Reproducing our numbers means using the pin.
+Upstream install gives the supported way; the pin gives one combination of versions
+known to work together.
 
 ```bash
 export OMM=$(pwd)          # this clone
@@ -39,13 +39,12 @@ python3 $OMM/scripts/adopt_env.py <env> <prefix>      # alternative to building
 python3 -c "import sys; sys.path.insert(0,'$OMM'); from oh_my_mlip import fetch; \
     print(fetch.ensure_weights('<Framework>', version='<Variant>'))"
 
-# 4. the ONLY completion test: energy + forces on this host, exit 0 iff pass
+# 4. check it works: energy + forces, exit 0 on success
 python3 $OMM/scripts/setup_verify.py <Variant> --json
 ```
 
-`install.sh` exiting 0 is necessary but **not** sufficient — step 4 is what DONE
-means. A bare name resolves family-first, so pass `--version` to reach a variant
-whose name its family shadows.
+A bare name resolves family-first, so pass `--version` to reach a variant whose
+name its family shadows.
 
 ---
 
@@ -61,7 +60,7 @@ Upstream ([source](https://sevennet.readthedocs.io/en/latest/)) — requires: Py
 pip install sevenn
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/sevennet.yml -p <prefix>
@@ -101,9 +100,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py SevenNet-MF-OMPA --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py SevenNet-MF-OMPA --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream also exposes enable_cueq / enable_flash. Our pin was validated with enable_oeq=True, which works against the cuequivariance 0.8.0 wheel already in the recipe (no separate install).
+> **Note:** Upstream also exposes enable_cueq / enable_flash. The pinned recipe uses enable_oeq=True, which works against the cuequivariance wheel it already installs — no separate accelerator install is needed.
 
 ---
 
@@ -120,7 +119,7 @@ pip install --upgrade pip
 pip install mace-torch
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/mace.yml -p <prefix>
@@ -173,9 +172,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py MACE-MPA-0 --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py MACE-MPA-0 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream's example uses default_dtype='float32'; we validated float64 (the equivalence-comparison basis). MH-1 is multi-head — head='omat_pbe' or 'oc20_usemppbe' (not 'oc20'); both heads share one weight file.
+> **Note:** MH-1 is multi-head: pass head='omat_pbe' or head='oc20_usemppbe' (there is no plain 'oc20' head). Both heads load the same weight file. default_dtype selects float32 or float64 — the calculator lines below use float64.
 
 ---
 
@@ -192,7 +191,7 @@ pip install nequip
 pip install openequivariance   # accelerator, separate
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/nequip.yml -p <prefix>
@@ -217,7 +216,7 @@ PATH="<prefix>/bin:$PATH" MAX_JOBS=4 <prefix>/bin/nequip-compile \
     --modifiers enable_OpenEquivariance
 # same for OAM-L (nequip.net:mir-group/NequIP-OAM-L:0.1)
 # PATH must include <prefix>/bin: without it openequivariance cannot find ninja
-#   and dies with 'Ninja is required to load C++ extensions' (observed).
+#   and dies with 'Ninja is required to load C++ extensions'.
 # MAX_JOBS=4 is required: oeq's first import JIT-builds with ninja at nproc and
 #   can wedge on a stale build lock.
 ```
@@ -229,7 +228,7 @@ PATH="<prefix>/bin:$PATH" MAX_JOBS=4 <prefix>/bin/nequip-compile \
 ```python
 import openequivariance
 from nequip.ase import NequIPCalculator
-calc = NequIPCalculator.from_compiled_model(compile_path='$OMM/models/compiled/sm89/NequIP-OAM-XL_sm89.nequip.pt2', device='cuda')
+calc = NequIPCalculator.from_compiled_model(compile_path='$OMM/models/compiled/${OMM_ARCH}/NequIP-OAM-XL_${OMM_ARCH}.nequip.pt2', device='cuda')
 atoms.calc = calc
 ```
 
@@ -238,15 +237,15 @@ atoms.calc = calc
 ```python
 import openequivariance
 from nequip.ase import NequIPCalculator
-calc = NequIPCalculator.from_compiled_model(compile_path='$OMM/models/compiled/sm89/NequIP-OAM-L_sm89.nequip.pt2', device='cuda')
+calc = NequIPCalculator.from_compiled_model(compile_path='$OMM/models/compiled/${OMM_ARCH}/NequIP-OAM-L_${OMM_ARCH}.nequip.pt2', device='cuda')
 atoms.calc = calc
 ```
 
 Run: `MAX_JOBS=4 <prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py NequIP-OAM-XL --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py NequIP-OAM-XL --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** NequIPCalculator only supports from_compiled_model, so the per-arch .pt2 is required rather than optional, and it is not portable between GPU architectures. This exact recipe was executed on an sm89 host and produced a 44 MB .pt2.
+> **Note:** NequIPCalculator only loads via from_compiled_model, so the per-arch .pt2 is required rather than optional and must be rebuilt for each GPU architecture.
 
 ---
 
@@ -262,7 +261,7 @@ Upstream ([source](https://github.com/mir-group/allegro)):
 pip install nequip-allegro
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/allegro.yml -p <prefix>
@@ -292,15 +291,15 @@ PATH="<prefix>/bin:$PATH" <prefix>/bin/nequip-compile \
 ```python
 import cuequivariance_torch
 from nequip.ase import NequIPCalculator
-calc = NequIPCalculator.from_compiled_model(compile_path='$OMM/models/compiled/sm89/Allegro-OAM-L_sm89.nequip.pt2', device='cuda')
+calc = NequIPCalculator.from_compiled_model(compile_path='$OMM/models/compiled/${OMM_ARCH}/Allegro-OAM-L_${OMM_ARCH}.nequip.pt2', device='cuda')
 atoms.calc = calc
 ```
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py Allegro-OAM-L --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py Allegro-OAM-L --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Passing enable_OpenEquivariance here fails — Allegro runs on cuequivariance. cueq ships prebuilt kernels (no JIT risk); the sm86 compile measured ~90 s.
+> **Note:** Allegro runs on cuequivariance, so passing enable_OpenEquivariance fails. cueq ships prebuilt kernels, so there is no first-import JIT step.
 
 ---
 
@@ -316,7 +315,7 @@ Upstream ([source](https://github.com/atomicarchitects/nequix)) — requires: JA
 pip install nequix
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/nequix.yml -p <prefix>
@@ -332,7 +331,7 @@ Upstream acquisition ([source](https://github.com/atomicarchitects/nequix)):
 
 ```bash
 # Upstream supports alias auto-download: NequixCalculator('nequix-mp-1').
-# We pull the commit-pinned file and check its digest instead (reproducibility).
+# The commit-pinned file below is fetched directly so the digest can be checked.
 mkdir -p $OMM/models/nequix
 curl -L "https://github.com/atomicarchitects/nequix/raw/7c2854de8e754b1a60274c7d9d2e014989ed632e/models/nequix-mp-1.nqx" -o $OMM/models/nequix/nequix-mp-1.nqx
 echo "1647af8e627e1afa11e2bfadeab0797326513a521afd7dd01606a96f56783eee  $OMM/models/nequix/nequix-mp-1.nqx" | sha256sum -c -
@@ -351,9 +350,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py Nequix-MP-1 --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py Nequix-MP-1 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream's example passes use_kernel=True; our validated path is use_kernel=False.
+> **Note:** use_kernel toggles the fused kernel; the calculator line below leaves it off.
 
 ---
 
@@ -370,7 +369,7 @@ pip install torch torchvision torchaudio
 pip install git+https://github.com/deepmodeling/deepmd-kit@v3.1.0
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/deepmd.yml -p <prefix>
@@ -409,9 +408,9 @@ atoms.calc = calc
 
 Run: `LD_LIBRARY_PATH="" <prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py DPA-3.1-3M-FT --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py DPA-3.1-3M-FT --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** The recorded digest describes the DOWNLOADED upstream checkpoint, not the derived frozen model — check the source, not the freeze output. Freeze reproducibility is claimed same-host only. At run time DeePMD needs LD_LIBRARY_PATH="" (Intel oneAPI libfabric clash).
+> **Note:** The published checkpoint is multi-task, so it must be frozen to a single head before inference. The recorded digest is for the downloaded checkpoint, not the frozen output. At run time DeePMD needs LD_LIBRARY_PATH="" to avoid an Intel oneAPI libfabric clash.
 
 ---
 
@@ -427,7 +426,7 @@ Upstream ([source](https://github.com/orbital-materials/orb-models)):
 pip install orb-models
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/orb.yml -p <prefix>
@@ -464,9 +463,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py ORB-v3 --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py ORB-v3 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream's README example unpacks a (orbff, atoms_adapter) 2-tuple; our pinned version returns a single object — use the block-C line, not the README's. precision='float32-high' selects TF32 matmul, so repeat single-points differ by ~3.1e-5 eV/atom: the weights are digest-pinned but the energy is only equivalence-stable, never bitwise.
+> **Note:** Upstream's README unpacks a (orbff, atoms_adapter) tuple; the pinned version returns a single object, so use the calculator line below. precision='float32-high' selects TF32 matmul, which makes repeated runs numerically close rather than bit-identical.
 
 ---
 
@@ -482,7 +481,7 @@ Upstream ([source](https://gracemaker.readthedocs.io/)) — requires: TensorFlow
 pip install tensorpotential
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/grace.yml -p <prefix>
@@ -522,9 +521,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py GRACE-2L-OAM --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py GRACE-2L-OAM --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream also offers the grace_fm('<name>') convenience loader (tensorpotential.calculator.foundation_models); we validated the flattened path handed straight to TPCalculator. The recorded digest is a TREE digest over the SavedModel directory, not a single file. On GPU, TF 2.16 wants libcudnn.so.8 while catbench's torch pulls cuDNN 9 — sideload cuDNN 8.9 or GPU registration is skipped silently.
+> **Note:** TensorFlow backend, so D3 dispersion (which needs torch) is unavailable. grace_models leaves the SavedModel nested and it must be flattened before TPCalculator can load it; the digest covers the whole SavedModel tree, not a single file. On GPU, TF 2.16 loads libcudnn.so.8 while catbench's torch installs cuDNN 9 — sideload cuDNN 8.9 or TF skips GPU registration silently. Upstream also offers the grace_fm('<name>') convenience loader.
 
 ---
 
@@ -540,7 +539,7 @@ Upstream ([source](https://github.com/microsoft/mattersim)):
 pip install mattersim
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/mattersim.yml -p <prefix>
@@ -571,9 +570,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py MatterSim-v1-5M --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py MatterSim-v1-5M --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream defaults to the 1M model. We use load_path='MatterSim-v1.0.0-5M.pth' and pass device='cuda' explicitly — without it the calculator has fallen back to CPU.
+> **Note:** The package ships both the 1M and 5M checkpoints and defaults to 1M; load_path selects the 5M one. Pass device explicitly — otherwise the calculator can fall back to CPU.
 
 ---
 
@@ -589,7 +588,7 @@ Upstream ([source](https://github.com/CederGroupHub/chgnet)):
 pip install chgnet
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/chgnet.yml -p <prefix>
@@ -620,9 +619,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py CHGNet-v0.3.0 --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py CHGNet-v0.3.0 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** We pin the version explicitly: CHGNet.load(model_name='0.3.0').
+> **Note:** CHGNet.load() takes a model_name, so the version is selected in code rather than at download time.
 
 ---
 
@@ -632,7 +631,7 @@ pin: python 3.11.13 · torch==2.1.2+cu121 · variants: `AlphaNet-v1-OMA`
 
 ### A. install
 
-Upstream ([source](https://github.com/zmyybc/AlphaNet)) — requires: Upstream README shows python 3.8; the validated combination is python 3.11 + torch 2.1.2+cu121:
+Upstream ([source](https://github.com/zmyybc/AlphaNet)) — requires: Upstream README shows python 3.8; the pinned recipe uses python 3.11 + torch 2.1.2+cu121:
 
 ```bash
 git clone https://github.com/zmyybc/AlphaNet.git
@@ -640,7 +639,7 @@ cd AlphaNet
 pip install -e .
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 bash $OMM/envs/alphanet.build.sh <prefix>      # single conda solve impossible -> the sidecar owns the build
@@ -682,9 +681,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py AlphaNet-v1-OMA --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py AlphaNet-v1-OMA --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Installing upstream HEAD drifts gas-molecule energies by up to 0.24 eV/atom, so the recipe pins commit 65f8ea93. Do not install matscipy: it forces numpy>=2 and breaks the torch 2.1.2 ABI.
+> **Note:** Needs both the checkpoint and its config JSON — loading the checkpoint alone fails. The recipe installs a pinned commit because package HEAD changes model behaviour. Do not install matscipy: it forces numpy>=2 and breaks the torch 2.1.2 ABI.
 
 ---
 
@@ -700,7 +699,7 @@ Upstream ([source](https://github.com/yzchen08/eqnorm)):
 pip install git+https://github.com/yzchen08/eqnorm.git
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/eqnorm.yml -p <prefix>
@@ -736,9 +735,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py Eqnorm-MPtrj --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py Eqnorm-MPtrj --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream documents neither the cache path nor the URL — both were read out of the package's own url_dict.
+> **Note:** Upstream documents neither the cache path nor the download URL — both come from the package's own url_dict.
 
 ---
 
@@ -754,7 +753,7 @@ Upstream ([source](https://github.com/facebookresearch/fairchem)):
 pip install fairchem-core
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/fairchemv1.yml -p <prefix>
@@ -788,9 +787,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py eSEN-30M-OAM --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py eSEN-30M-OAM --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** OCPCalculator defaults to cpu=True — pass cpu=False or it silently runs on CPU.
+> **Note:** Gated weights: the download fails without an accepted license and a token. OCPCalculator defaults to cpu=True, so pass cpu=False to run on GPU.
 
 ---
 
@@ -805,10 +804,10 @@ Upstream ([source](https://github.com/atomicarchitects/equiformer_v3)) — requi
 ```bash
 # Upstream publishes no pip package — it vendors a fairchem fork (sha a7300c58),
 # which envs/equiformer_v3.yml installs editable. There is no upstream install
-# procedure to quote; the recipe below is the only reproducible path.
+# procedure to quote — use the pinned recipe below.
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/equiformer_v3.yml -p <prefix>
@@ -842,15 +841,15 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py EqV3-OMatMPtrjSalex --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py EqV3-OMatMPtrjSalex --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Research-code release: the README documents training, not installation.
+> **Note:** Upstream publishes no pip package — it vendors a fairchem fork, which the recipe installs editable. The checkpoint URL needs its checkpoint/ path prefix; the bare filename 404s.
 
 ---
 
 ## UMA — env `uma`
 
-pin: python 3.11.13 · torch==2.8.0+cu128 · variants: `UMA-m-1p1-OC20`, `UMA-m-1p1-OMAT`, `UMA-s-1p1-OC20`, `UMA-s-1p1-OMAT`, `UMA-s-1p2-OC20`, `UMA-s-1p2-OC22`, `UMA-s-1p2-OMAT`
+pin: python 3.11.13 · torch==2.8.0+cu128 · variants: `UMA-m-1p1-OC20`, `UMA-m-1p1-OMAT`, `UMA-s-1p1-OC20`, `UMA-s-1p1-OMAT`, `UMA-s-1p2-OC20`, `UMA-s-1p2-OC22`, `UMA-s-1p2-OC25`, `UMA-s-1p2-OMAT`
 
 ### A. install
 
@@ -860,7 +859,7 @@ Upstream ([source](https://github.com/facebookresearch/fairchem)):
 pip install fairchem-core
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/uma.yml -p <prefix>
@@ -938,6 +937,15 @@ calc = FAIRChemCalculator(predictor, task_name='oc22')
 atoms.calc = calc
 ```
 
+`UMA-s-1p2-OC25`
+
+```python
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
+predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')
+calc = FAIRChemCalculator(predictor, task_name='oc25')
+atoms.calc = calc
+```
+
 `UMA-s-1p2-OMAT` *(default)*
 
 ```python
@@ -949,9 +957,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py UMA-m-1p1-OC20 --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py UMA-m-1p1-OC20 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** task_name is what separates the variants: oc20 (catalysis) / oc22 (oxides) / omat (inorganic) / oc25 / omol / odac / omc. uma-m-1p1 (11.2 GB) needs materially more than 19 GB of host RAM: on a 19 GB host the loader is OOM-killed (exit 137) and surfaces only as 'worker produced no handshake'.
+> **Note:** Gated weights: the download fails without an accepted license and a token. task_name is what distinguishes the variants — oc20 (catalysis), oc22 (oxides), omat (inorganic materials), plus oc25 / omol / odac / omc. Three checkpoints cover all seven variants; the -m- checkpoint is 11.2 GB and is materialized in host RAM before it reaches the GPU, so it needs substantially more system memory than the -s- ones.
 
 ---
 
@@ -967,7 +975,7 @@ Upstream ([source](https://github.com/metatensor/metatrain)):
 pip install metatrain
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/pet.yml -p <prefix>
@@ -1003,9 +1011,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py PET-OAM-XL --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py PET-OAM-XL --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** The export output is not byte-reproducible (serialization differs per run), so this model's determinism oracle is the energy, not a sha256.
+> **Note:** The export output is not byte-reproducible: its serialization differs between runs even for the same input.
 
 ---
 
@@ -1022,7 +1030,7 @@ pip install -r requirements.txt
 pip install --no-deps -r requirements-no-deps.txt
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 bash $OMM/envs/equflash.build.sh <prefix>      # single conda solve impossible -> the sidecar owns the build
@@ -1075,9 +1083,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py EquFlashV2 --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py EquFlashV2 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream's two-file requirements split is exactly why a single conda solve is impossible; our sidecar does the same work as a 2-pass pip. V2 is cueq-only — do not inject conv_type='flashtp' (that is a v1-only backend).
+> **Note:** Upstream splits its requirements across two files, which is why a single conda solve cannot build this env and the recipe uses a two-pass sidecar. V2 is cueq-only — conv_type='flashtp' is a v1-only backend and V2 rejects it.
 
 ---
 
@@ -1094,7 +1102,7 @@ Upstream ([source](https://github.com/HPC-AI-Team/MatRIS)) — requires: torch >
 #   ase>=3.23.0, numpy>=2.0.0, pymatgen>2024.9.10, torch>2.6.0
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/matris.yml -p <prefix>
@@ -1128,9 +1136,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py MatRIS-10M-OAM --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py MatRIS-10M-OAM --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Built against torch cu130, so GPU use needs a CUDA-13-class driver (>= ~580). Below that, run with device='cpu' — the energy is unchanged, only slower.
+> **Note:** Selected by model key. Built against torch cu130, so GPU use needs a CUDA-13-class driver — below that, run with device='cpu'.
 
 ---
 
@@ -1147,7 +1155,7 @@ pip install torch torchvision torchaudio
 pip install git+https://github.com/deepmodeling/deepmd-kit@v3.1.0
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/dpa4.yml -p <prefix>
@@ -1181,9 +1189,9 @@ atoms.calc = calc
 
 Run: `LD_LIBRARY_PATH="/usr/lib/wsl/lib" <prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py DPA-4.0.1-pro-MPtrj --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py DPA-4.0.1-pro-MPtrj --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Unlike DPA-3.1 this checkpoint is already single-head, so no freeze step. At run time it needs LD_LIBRARY_PATH="/usr/lib/wsl/lib" on WSL (keeps the driver mount while evicting libfabric).
+> **Note:** Already single-head, so unlike DPA-3.1 there is no freeze step. On WSL it needs LD_LIBRARY_PATH="/usr/lib/wsl/lib" to keep the driver mount while evicting libfabric. Built against torch cu130 — below a CUDA-13-class driver, run on CPU.
 
 ---
 
@@ -1201,7 +1209,7 @@ pip install tace
 #   pip install "tace[oeq]"   |   pip install "tace[cueq12]"   |   pip install "tace[cueq13]"
 ```
 
-This repo's validated pin:
+Pinned combination:
 
 ```bash
 conda env create -f $OMM/envs/tace.yml -p <prefix>
@@ -1236,8 +1244,8 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Verify (the only DONE test): `python3 $OMM/scripts/setup_verify.py TACE-OAM-L --json`
+Check it works: `python3 $OMM/scripts/setup_verify.py TACE-OAM-L --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** On a host below the driver floor torch.cuda.is_available() has returned a false positive and the failure surfaced only at use time — check the driver first and pass device='cpu' from the start if it is short.
+> **Note:** Looking up the foundation key is what downloads the model. Enable only one accelerator backend. torch.cuda.is_available() can return true on a host below the driver floor and fail later at use time, so check the driver and pass device='cpu' from the start if it is short.
 
 ---

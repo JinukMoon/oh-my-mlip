@@ -109,3 +109,15 @@ def test_rendered_doc_is_host_independent(models: dict):
         "the rendered doc embeds this clone's absolute path; it would differ on "
         "another machine and break --check"
     )
+
+
+def test_rendered_doc_does_not_bake_in_the_host_gpu_arch(models: dict):
+    """Compile paths must stay generic. resolve() substitutes the running host's
+    arch, which would both mislead the reader and make --check fail on a machine
+    with a different GPU."""
+    import re as _re
+
+    text = gen_recipes.render(models)
+    leaked = sorted(set(_re.findall(r"/models/compiled/(sm\d+)/", text)))
+    assert not leaked, f"host GPU arch baked into compile paths: {leaked}"
+    assert "${OMM_ARCH}" in text, "arch placeholder missing from the compile paths"

@@ -332,6 +332,9 @@
       "UMA-s-1p2-OC22": {"mlip_name": "UMA-s-1p2-OC22", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
         "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "weights_source_url": "https://huggingface.co/facebook/UMA", "validation": "validated_sm89", "note": "verify task_name='oc22'",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='oc22')"]},
+      "UMA-s-1p2-OC25": {"mlip_name": "UMA-s-1p2-OC25", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
+        "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "weights_source_url": "https://huggingface.co/facebook/UMA", "validation": "gpu_pending", "note": "OC25 electrocatalysis task head of the uma-s-1p2 checkpoint — same weights as the other UMA-s-1p2 variants, only task_name differs. Added 2026-08-17 for parity with the CCEL /TGM hub roster, which carries this variant; not yet host-verified here.",
+        "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='oc25')"]},
       "UMA-s-1p2-OMAT": {"mlip_name": "UMA-s-1p2-OMAT", "training_set": ["OMol25", "OMat24", "OC20", "OpenDAC25", "OMC25"],
         "gated": true, "license_url": "https://huggingface.co/facebook/UMA", "weights": "on-demand-hf", "weights_fetch": "gated-hf", "weights_source": "facebook/UMA", "weights_source_url": "https://huggingface.co/facebook/UMA", "validation": "validated_sm89",
         "inference": ["predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')", "calc = FAIRChemCalculator(predictor, task_name='omat')"]}

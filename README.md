@@ -7,7 +7,7 @@
 > environment by hand again.
 
 **One registry, many MLIPs.** 20 machine-learning interatomic-potential
-frameworks (31 model variants) catalogued behind one convention. Each framework
+frameworks (32 model variants) catalogued behind one convention. Each framework
 lives in its own validated conda env, built from a curated recipe, with
 [catbench](https://github.com/JinukMoon/catbench) adsorption benchmarking
 pre-wired and an **agent-native** surface (`AGENTS.md` + a Claude Code plugin +
@@ -162,7 +162,7 @@ exists. Your favorite MLIP tool is welcome on top of it
 
 ## Supported MLIPs
 
-20 frameworks / 31 model variants, install-verified on **two independent hosts**:
+20 frameworks / 32 model variants, install-verified on **two independent hosts**:
 the maintainer's RTX 4060 Ti (sm89, CUDA 12.x driver) and a third-party
 RTX A4500 login node (sm86, CUDA 13.0 driver) where 27/31 variants — including
 the CUDA-13-only trio (dpa4/tace/matris) — computed energy + forces on the GPU
@@ -199,7 +199,7 @@ this repo's validated pin, one section per framework, generated from
 | Eqnorm | Eqnorm-MPtrj |
 | fairchemv1 | eSEN-30M-OAM |
 | EquiformerV3 | EqV3-OMatMPtrjSalex |
-| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OMAT |
+| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT |
 | PET | PET-OAM-XL |
 | EquFlash | EquFlashV2, EquFlash |
 | MatRIS | MatRIS-10M-OAM |
