@@ -291,10 +291,15 @@ def convert(
 
     if target == "extxyz-canonical":
         train_path = out / "train.xyz"
-        valid_path = out / "valid.xyz"
         write_extxyz_canonical(train_frames, train_path)
-        write_extxyz_canonical(valid_frames, valid_path)
-        manifest["outputs"] = {"train": str(train_path), "valid": str(valid_path)}
+        # A 0-frame validation file would be handed to the trainer and fail
+        # deep inside it -- mirror the deepmd branch: no frames, no file.
+        valid_path = None
+        if valid_frames:
+            valid_path = out / "valid.xyz"
+            write_extxyz_canonical(valid_frames, valid_path)
+        manifest["outputs"] = {"train": str(train_path),
+                               "valid": str(valid_path) if valid_path else None}
     elif target == "deepmd":
         train_systems = write_deepmd(train_frames, out / "train_systems", elements)
         valid_systems = write_deepmd(valid_frames, out / "valid_systems", elements) if valid_frames else []

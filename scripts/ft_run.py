@@ -148,6 +148,11 @@ def entrypoint_bin(resolved: dict, name: str) -> str:
 
 
 def _importable(python_bin: str, module: str) -> bool:
+    if not Path(python_bin).exists():
+        # Fresh clone: the env interpreter is not built yet, so no blocker fix
+        # can be observed -- treat as not importable and let the caller's
+        # refusal name the real remedy (install.sh) instead of tracing back.
+        return False
     check = subprocess.run([python_bin, "-c", f"import {module}"], capture_output=True)
     return check.returncode == 0
 
@@ -189,9 +194,12 @@ def set_dotted(d: dict, dotted: str, value) -> None:
 
 
 # ── dataset conversion ────────────────────────────────────────────────────────
-def run_ft_dataset(dataset: Path, target: str, out: Path, split: float, seed: int) -> dict:
+def run_ft_dataset(dataset: Path, target: str, out: Path, split: float, seed: int,
+                   python_bin: str | None = None) -> dict:
+    # The model env is the one interpreter guaranteed to carry ase/numpy; the
+    # ambient interpreter that launched ft_run.py carries no such guarantee.
     cmd = [
-        sys.executable, str(FT_DATASET),
+        python_bin or sys.executable, str(FT_DATASET),
         "--input", str(dataset),
         "--split", str(split), "--seed", str(seed),
         "--to", target, "--out", str(out),
@@ -207,14 +215,14 @@ def run_ft_dataset(dataset: Path, target: str, out: Path, split: float, seed: in
 def build_mace(ctx: Context) -> CommandSpec:
     foundation = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
     variant_args = ctx.finetune.get("variant_args") or {}
-    train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths["valid"]
+    train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
     argv = [
         entrypoint_bin(ctx.resolved, "mace_run_train"),
         f"--name={ctx.version}",
         f"--foundation_model={foundation}",
         "--multiheads_finetuning=False",  # C7/note: bare invocation defaults True in 0.3.15
         f"--train_file={train_path}",
-        f"--valid_file={valid_path}",
+        *( [f"--valid_file={valid_path}"] if valid_path else ["--valid_fraction=0.1"] ),
         "--energy_key=REF_energy",
         "--forces_key=REF_forces",
         "--E0s=average",
@@ -275,12 +283,15 @@ def build_sevennet(ctx: Context) -> CommandSpec:
     set_dotted(cfg, "train.per_epoch", 1)
 
     modality = _SEVENNET_MODALITY.get(ctx.version)
+    valid = ctx.dataset_paths.get("valid")
     if modality:
         set_dotted(cfg, "data.load_trainset_path", _sevenn_modal_path(modality, str(ctx.dataset_paths["train"])))
-        set_dotted(cfg, f"data.load_{modality}_validset_path", _sevenn_modal_path(modality, str(ctx.dataset_paths["valid"])))
+        if valid:
+            set_dotted(cfg, f"data.load_{modality}_validset_path", _sevenn_modal_path(modality, str(valid)))
     else:
         set_dotted(cfg, "data.load_trainset_path", [str(ctx.dataset_paths["train"])])
-        set_dotted(cfg, "data.load_validset_path", [str(ctx.dataset_paths["valid"])])
+        if valid:
+            set_dotted(cfg, "data.load_validset_path", [str(valid)])
     set_dotted(cfg, "data.batch_size", ctx.batch_size)
     for k, v in (ctx.finetune.get("variant_args") or {}).items():
         set_dotted(cfg, k, v)
@@ -300,7 +311,7 @@ def build_deepmd(ctx: Context) -> CommandSpec:
         # blocker `live_recheck_blockers` drops unconditionally for this
         # exact reason).
         link = ctx.out / (foundation_path.stem + ".pt")
-        if not link.exists():
+        if not (link.is_symlink() or link.exists()):
             link.symlink_to(foundation_path)
         ckpt_for_cli = link
 
@@ -458,11 +469,24 @@ def main() -> int:
 
     blockers = list(finetune.get("blockers") or [])
     remaining = live_recheck_blockers(family, blockers, resolved["python"])
-    if not finetune.get("runnable_as_installed") and remaining:
-        print(f"[ft_run] {family}/{version}: not runnable as installed:", file=sys.stderr)
-        for b in remaining:
-            print(f"  blocker: {b}", file=sys.stderr)
-        return 3
+    if not finetune.get("runnable_as_installed"):
+        if remaining:
+            print(f"[ft_run] {family}/{version}: not runnable as installed:", file=sys.stderr)
+            for b in remaining:
+                print(f"  blocker: {b}", file=sys.stderr)
+            if not Path(resolved["python"]).exists():
+                print(f"  (the env interpreter {resolved['python']} does not exist -- "
+                      f"build it first: ./install.sh {resolved['env']})", file=sys.stderr)
+            return 3
+        if not blockers:
+            # runnable_as_installed:false with an empty blocker list: nothing
+            # to live-recheck, so the registry flag stands (schema forbids
+            # this shape, but a hand-edited registry must not slip through).
+            print(f"[ft_run] {family}/{version}: registry marks this variant not "
+                  f"runnable as installed and lists no verifiable blockers -- refusing.",
+                  file=sys.stderr)
+            return 3
+        # every declared blocker demonstrably cleared -> proceed.
 
     licence = finetune.get("licence")
     if licence:
@@ -477,7 +501,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     target = FAMILY_DATASET_TARGET.get(family, "extxyz")
-    conv = run_ft_dataset(args.dataset, target, out / "data", args.split, args.seed)
+    conv = run_ft_dataset(args.dataset, target, out / "data", args.split, args.seed,
+                          python_bin=resolved["python"])
 
     ctx = Context(
         family=family, version=version, finetune=finetune, resolved=resolved, out=out,

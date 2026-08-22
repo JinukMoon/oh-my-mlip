@@ -36,6 +36,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+
+pytest.importorskip("ase")  # GPU-free CI has no ase
 from ase.build import bulk, molecule
 from ase.io import write
 

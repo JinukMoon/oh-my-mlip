@@ -59,3 +59,13 @@ cache/
 .gjc_closure_artifacts/
 env_map.local.json
 models.local.json
+
+# runtime artifacts emitted by the feature scripts (never committed)
+jobs/
+result/
+report/
+ft_demo.traj
+ft_mace/
+ft_sevennet/
+ft_deepmd/
+distill_demo*/

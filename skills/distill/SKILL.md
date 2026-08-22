@@ -7,11 +7,11 @@ argument-hint: "--teacher <variant> --structure <file> --work <dir> [--target-ps
 Defer entirely to `AGENTS.md §3D` (distill a teacher into a CPU LAMMPS student).
 
 Read `AGENTS.md §3D` now. Do not reproduce its content here; follow it verbatim.
-Key entry points: `scripts/distill_bootstrap.py` (args: teacher variant, structure,
-<file> --work <dir>` (renders `omm_teacher.py` + `config.yaml` +
-`run_distill.sh` into the work dir — nothing executes yet), then `cd <work>
-&& bash run_distill.sh` (seeds the initial teacher-MD dataset and hands off
-to `onthefly-distill`'s own active-learning loop).
+Key entry points: `scripts/distill_bootstrap.py` (args per its `--help`:
+teacher variant, structure path, work dir) renders `omm_teacher.py` +
+`config.yaml` + `run_distill.sh` into the work dir — nothing executes yet.
+Then `cd <work> && bash run_distill.sh` seeds the initial teacher-MD dataset
+and hands off to `onthefly-distill`'s own active-learning loop.
 
 Interview first if missing: **which teacher** (any oh-my-mlip model/version),
 **which structure** (<=4 distinct elements — `pair_nnmtp` v1's bound), and

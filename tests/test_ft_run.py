@@ -13,8 +13,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy")  # GPU-free CI has no numpy/ase
+pytest.importorskip("ase")
 from ase.build import bulk
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import write

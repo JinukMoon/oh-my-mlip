@@ -66,8 +66,8 @@ try:
 except ImportError as exc:  # pragma: no cover - environment hint
     raise ImportError(
         "distill_bootstrap.py needs ase + pyyaml on the interpreter that runs "
-        "it -- e.g. `/home/jumoon/miniconda3/envs/toolkit/bin/python "
-        "scripts/distill_bootstrap.py ...` -- not the ambient system python."
+        "it -- use any conda env carrying both (e.g. a model env or your "
+        "analysis env), not the bare system python."
     ) from exc
 
 MAX_SPECIES = 4  # pair_nnmtp v1: `int species_Z[4]` (F18) -- v2 is unbounded
