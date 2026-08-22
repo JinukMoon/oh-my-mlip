@@ -40,6 +40,12 @@ def _good_version() -> dict:
         "weights_source": "TODO-owner-review",
         "validation": "validated_sm89",
         "inference": ["calc = SomeCalc()"],
+        # 'finetune' joined version_entry's required set in P2b.
+        "finetune": {
+            "status": "not-supported",
+            "runnable_as_installed": False,
+            "blockers": ["test fixture -- no real fine-tuning research done for TestModel"],
+        },
     }
 
 

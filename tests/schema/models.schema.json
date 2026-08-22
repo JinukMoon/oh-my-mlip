@@ -61,8 +61,8 @@
   "definitions": {
     "version_entry": {
       "type": "object",
-      "description": "Per-version data. The honesty fields (gated, weights, validation) plus the weights-provenance fields (weights_fetch, weights_source) are always required. At least one of 'inference' (plain) or both 'inference_sm86'+'inference_sm89' (arch-pinned) must be present.",
-      "required": ["gated", "weights", "validation", "weights_fetch", "weights_source"],
+      "description": "Per-version data. The honesty fields (gated, weights, validation) plus the weights-provenance fields (weights_fetch, weights_source) are always required. At least one of 'inference' (plain) or both 'inference_sm86'+'inference_sm89' (arch-pinned) must be present. 'finetune' joined the required set in P2b, once all 32 variants carried a classification (AC3 gate).",
+      "required": ["gated", "weights", "validation", "weights_fetch", "weights_source", "finetune"],
       "additionalProperties": true,
       "oneOf": [
         {
@@ -151,7 +151,7 @@
     },
     "finetune_entry": {
       "type": "object",
-      "description": "Per-variant fine-tuning classification (oh-my-mlip 4-feature expansion, P2a). NOT YET in version_entry's 'required' -- the AC3 gate lands in P2b once P3's demo runs have populated 'demonstrated'. A variant inherits its family's fine-tuning facts unless it carries an explicit override here (variant_args, or a fully-restated block for a divergence like UMA-s-1p2-OC22 or DPA-3.1-3M-FT).",
+      "description": "Per-variant fine-tuning classification (oh-my-mlip 4-feature expansion, P2a). Now REQUIRED on every version_entry (P2b: the AC3 gate is live -- all 32 variants carry a classification, 3 of them a 'demonstrated' verdict from P3's ft_verify runs). A variant inherits its family's fine-tuning facts unless it carries an explicit override here (variant_args, or a fully-restated block for a divergence like UMA-s-1p2-OC22 or DPA-3.1-3M-FT).",
       "additionalProperties": true,
       "required": ["status", "runnable_as_installed", "blockers"],
       "properties": {

@@ -90,6 +90,24 @@ jobs:
       - name: Check docs/recipes.md is in sync with models.json
         run: python scripts/gen_recipes.py --check
 
+      # ── 7''. Fine-tuning doc sync ─────────────────────────────────────────────
+      # docs/finetune.md is generated from models.json's per-variant `finetune`
+      # block + scripts/upstream_finetune.py. Fails if the committed doc is
+      # stale, if a family/variant orphans either table, or if a family's
+      # upstream source URL goes missing from the rendered text. The rendered
+      # doc is host-independent (no absolute clone path, no baked-in GPU arch),
+      # so this check is meaningful on any clone.
+      - name: Check docs/finetune.md is in sync with models.json
+        run: python scripts/gen_finetune.py --check
+
+      # ── 7'''. README brand gates ──────────────────────────────────────────────
+      # The README speaks about value and purpose, not measured results or
+      # hardware product names — no vendor card names (arch codes like
+      # sm86/sm89 stay allowed), no unit-glued numbers or benchmark fractions,
+      # and the generated status-table markers must survive every rewrite.
+      - name: README brand gates
+        run: python scripts/verify_readme_brand.py
+
       # ── 7a. Recipe determinism gate ──────────────────────────────────────────
       # Fails on bare pip requirements, range pins, or git installs without an
       # exact commit SHA. Candidate recipes may only document private file://
