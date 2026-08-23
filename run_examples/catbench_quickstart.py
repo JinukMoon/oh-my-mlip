@@ -232,9 +232,9 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
     # (resolve()); env_run now lives inside the emitted .sh as export lines.
     # All runs write into the shared cwd/result that catbench aggregates.
     workdir = Path.cwd()
-    rc = 0
     dispatched = 0
     skipped = 0
+    failed = 0
     for model in models:
         for spec in _resolve_versions_for(model, version_pins):
             # Check the env interpreter exists BEFORE dispatching: a fresh clone
@@ -250,7 +250,7 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
                 )
                 skipped += 1
                 continue
-            rc |= _run_one_model(
+            model_rc = _run_one_model(
                 model, spec, tag, args.calc_num, args.d3,
                 workdir=workdir,
                 emit_only=args.emit_only,
@@ -259,6 +259,8 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
                 submit=args.submit,
                 submit_hook=submit_hook,
             )
+            if model_rc != 0:
+                failed += 1
             dispatched += 1
 
     if dispatched == 0:
@@ -270,16 +272,19 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
             )
         else:
             print("[stop] no model+version resolved to a runnable spec.", file=sys.stderr)
-        return rc or 2
+        return 2
 
     if args.emit_only:
         print(f"\nAll {dispatched} model job(s) emitted under {workdir / 'jobs'}. Nothing executed.")
-        return rc
+        return 1 if failed else 0
 
-    print(f"\nAll {dispatched} model run(s) finished. Aggregate with:")
-    print(f"  python3 {Path(__file__).resolve().parent.parent / 'scripts' / 'catbench_report.py'} "
-          f"--result {workdir / 'result'} --out {workdir / 'report'}")
-    return rc
+    if failed:
+        print(f"\n{dispatched - failed}/{dispatched} model run(s) succeeded, {failed} failed.")
+    else:
+        print(f"\nAll {dispatched} model run(s) finished. Aggregate with:")
+        print(f"  python3 {Path(__file__).resolve().parent.parent / 'scripts' / 'catbench_report.py'} "
+              f"--result {workdir / 'result'} --out {workdir / 'report'}")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -264,7 +264,11 @@ def test_more_than_4_species_is_refused_actionably(tmp_path, fake_d):
     assert "pair_nnmtp" in msg
     assert "v1" in msg
     assert "4" in msg
-    # refusal happens before any artifact is written
+    # refusal happens before ANYTHING is written -- not even the work dir
+    # or its bootstrap.log (AGENTS.md §3D: species is validated before
+    # distill_bootstrap.py creates anything on disk).
+    assert not work.exists()
+    assert not (work / "bootstrap.log").exists()
     assert not (work / "omm_teacher.py").exists()
 
 

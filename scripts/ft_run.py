@@ -122,7 +122,6 @@ class CommandSpec:
     argv: list
     config_path: Path | None = None
     config_text: str | None = None
-    dataset_target: str = "extxyz"
 
 
 # ── model/version/finetune resolution ────────────────────────────────────────
@@ -240,7 +239,7 @@ def build_mace(ctx: Context) -> CommandSpec:
     ]
     for k, v in variant_args.items():
         argv.append(f"{k}={v}")
-    return CommandSpec(argv=argv, dataset_target="mace")
+    return CommandSpec(argv=argv)
 
 
 _SEVENNET_PRESET = {
@@ -299,7 +298,7 @@ def build_sevennet(ctx: Context) -> CommandSpec:
     config_path = ctx.out / "input.yaml"
     config_text = yaml.safe_dump(cfg, sort_keys=False)
     argv = [entrypoint_bin(ctx.resolved, "sevenn"), "train", str(config_path)]
-    return CommandSpec(argv=argv, config_path=config_path, config_text=config_text, dataset_target="sevennet")
+    return CommandSpec(argv=argv, config_path=config_path, config_text=config_text)
 
 
 def build_deepmd(ctx: Context) -> CommandSpec:
@@ -342,7 +341,7 @@ def build_deepmd(ctx: Context) -> CommandSpec:
         entrypoint_bin(ctx.resolved, "dp"), "--pt", "train", str(config_path),
         "--finetune", str(ckpt_for_cli), "--use-pretrain-script",
     ]
-    return CommandSpec(argv=argv, config_path=config_path, config_text=config_text, dataset_target="deepmd")
+    return CommandSpec(argv=argv, config_path=config_path, config_text=config_text)
 
 
 def build_generic(ctx: Context) -> CommandSpec:
@@ -359,8 +358,15 @@ def build_generic(ctx: Context) -> CommandSpec:
 
     try:
         foundation = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
-    except SystemExit:
+    except SystemExit as exc:
         foundation = "<foundation-checkpoint-unresolved>"
+        print(
+            f"[ft_run] WARNING: {ctx.family}/{ctx.version}: could not resolve a "
+            f"foundation checkpoint ({exc}) -- substituting "
+            f"{foundation!r} into the emitted stub config instead of refusing "
+            f"outright.",
+            file=sys.stderr,
+        )
 
     rest = []
     for tok in tokens[1:]:
@@ -396,10 +402,7 @@ def build_generic(ctx: Context) -> CommandSpec:
         for k, v in variant_args.items():
             argv.append(f"{k}={v}")
 
-    return CommandSpec(
-        argv=argv, config_path=config_path, config_text=config_text,
-        dataset_target=FAMILY_DATASET_TARGET.get(ctx.family, "extxyz"),
-    )
+    return CommandSpec(argv=argv, config_path=config_path, config_text=config_text)
 
 
 BUILDERS = {

@@ -107,8 +107,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def check_repo(repo: Path, work: Path) -> tuple[Path, Path]:
-    """Step 1: locate D. No clone, no install -- just verify it is what it claims."""
-    _log(work, f"step 1/4: locate onthefly-distill at {repo}")
+    """Step 2: locate D. No clone, no install -- just verify it is what it claims."""
+    _log(work, f"step 2/4: locate onthefly-distill at {repo}")
     loop = repo / "scripts" / "al_loop_local.sh"
     example_cfg = repo / "config.example.yaml"
     teacher_md = repo / "scripts" / "teacher_md.py"
@@ -122,13 +122,17 @@ def check_repo(repo: Path, work: Path) -> tuple[Path, Path]:
     return loop, example_cfg
 
 
-def read_structure(path: Path, work: Path):
-    """Step 2 (part 1): derive system.{species,specorder,masses} from --structure.
+def read_structure(path: Path):
+    """Step 1: validate + derive system.{species,specorder,masses} from
+    --structure.
+
+    Runs BEFORE the work dir (and bootstrap.log) is created: a structure
+    with too many distinct elements must be refused with nothing written to
+    disk, not after a work dir and log file already exist (AGENTS.md §3D).
 
     First-seen element order is used for `specorder` (and therefore
     `species`/`masses`) so the mapping is deterministic for a given file.
     """
-    _log(work, f"step 2/4: read structure {path}")
     if not path.is_file():
         raise SystemExit(f"--structure {path} does not exist")
     atoms = ase_read(str(path))
@@ -148,13 +152,12 @@ def read_structure(path: Path, work: Path):
         )
     species = [z_by_symbol[s] for s in specorder]
     masses = [round(float(atomic_masses[z]), 6) for z in species]
-    _log(work, f"  specorder={specorder} species(Z)={species} masses={masses}")
     return specorder, species, masses
 
 
 def resolve_teacher(teacher: str, work: Path) -> dict:
-    """Step 2 (part 2): resolve the teacher through the registry -- never by hand."""
-    _log(work, f"step 2/4: resolve teacher {teacher!r} via oh_my_mlip.resolve()")
+    """Step 3 (part 1): resolve the teacher through the registry -- never by hand."""
+    _log(work, f"step 3/4: resolve teacher {teacher!r} via oh_my_mlip.resolve()")
     spec = resolve(teacher)
     _log(work, f"  -> family={spec['model']} version={spec['version']} env={spec['env']} python={spec['python']}")
     return spec
@@ -316,10 +319,18 @@ exec "{repo_abs}/scripts/al_loop_local.sh"
 def main(argv=None) -> int:
     args = parse_args(argv)
     work = args.work.resolve()
+    structure_abs = args.structure.resolve()
+
+    # Validate the structure BEFORE creating the work dir or its log: a
+    # too-many-species structure must be refused with nothing written to
+    # disk yet, not after a work dir and bootstrap.log already exist.
+    specorder, species, masses = read_structure(structure_abs)
+
     work.mkdir(parents=True, exist_ok=True)
+    _log(work, f"step 1/4: read structure {structure_abs}")
+    _log(work, f"  specorder={specorder} species(Z)={species} masses={masses}")
 
     loop, example_cfg = check_repo(args.repo, work)
-    specorder, species, masses = read_structure(args.structure.resolve(), work)
     spec = resolve_teacher(args.teacher, work)
 
     _log(work, "step 3/4: write omm_teacher.py")
@@ -331,7 +342,7 @@ def main(argv=None) -> int:
         lmp_bin=args.lmp_bin,
         teacher_python=spec["python"],
         work_dir_abs=work,
-        structure_abs=args.structure.resolve(),
+        structure_abs=structure_abs,
         specorder=specorder,
         species=species,
         masses=masses,

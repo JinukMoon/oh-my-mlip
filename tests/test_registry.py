@@ -217,6 +217,9 @@ def test_parse_env_run_empty_and_none():
         "PATH=/usr/bin",         # PATH not on the allowlist
         "LD_LIBRARY_PATH=a`b`",  # backtick metachar
         "OMP_NUM_THREADS=4|cat",  # pipe metachar
+        'LD_LIBRARY_PATH=a"b',   # stray double-quote -- would break out of
+                                 # the emitted `export KEY="<value>"` quoting
+        "LD_LIBRARY_PATH=a'b",   # stray single-quote, same reason
     ],
 )
 def test_parse_env_run_rejects_unsafe(bad):

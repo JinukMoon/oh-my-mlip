@@ -344,16 +344,19 @@ ENV_RUN_ALLOWLIST: frozenset[str] = frozenset(
 # A permitted token is exactly KEY=VALUE where KEY is an allowed env-var name
 # and VALUE contains no shell metacharacters. VALUE may be empty or quoted.
 _KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_SHELL_META_RE = re.compile(r"[`$&|;<>(){}\n\r*?!\\]")
+_SHELL_META_RE = re.compile(r"[`$&|;<>(){}\n\r*?!\\'\"]")
 
 
 def parse_env_run(s: str | None) -> dict[str, str]:
     """Parse an `env_run` prefix string into an env-var dict.
 
     Accepts whitespace-separated ``KEY=VALUE`` tokens. Each KEY must be on
-    ``ENV_RUN_ALLOWLIST`` and each VALUE must be free of shell metacharacters.
-    Surrounding single/double quotes on the VALUE are stripped (so
-    ``LD_LIBRARY_PATH=""`` -> ``{"LD_LIBRARY_PATH": ""}``).
+    ``ENV_RUN_ALLOWLIST`` and each VALUE must be free of shell metacharacters
+    (quote characters included -- the emitted `.sh` always wraps VALUE in its
+    own double quotes, e.g. ``export KEY="<value>"``, so a stray ``"`` or
+    ``'`` inside VALUE would break out of that quoting and emit a malformed
+    export). Surrounding single/double quotes on the VALUE itself are
+    stripped first (so ``LD_LIBRARY_PATH=""`` -> ``{"LD_LIBRARY_PATH": ""}``).
 
     Raises ``RegistryError`` for ANY token that is not a bare allow-listed
     KEY=VALUE (e.g. ``$(rm -rf /)`` or ``FOO=bar; rm x``). There is NO raw

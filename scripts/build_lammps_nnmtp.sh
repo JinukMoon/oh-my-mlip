@@ -11,7 +11,11 @@
 # working tree clean of it.
 #
 # Usage:
-#   scripts/build_lammps_nnmtp.sh [--repo <onthefly-distill dir>] [--prefix <build root>] [-j N]
+#   scripts/build_lammps_nnmtp.sh [--repo <onthefly-distill dir>] [--prefix <build root>]
+#                                 [--ref <git-ref>] [-j N]
+# --ref pins the LAMMPS clone to a specific tag/branch/commit; default is
+# 'stable', which is upstream LAMMPS's own recommendation (BUILD.md), not an
+# oh-my-mlip choice -- pass --ref only to deviate from that.
 # Result:
 #   <prefix>/lammps/build/lmp   (echoed at the end; export LMP_BIN=<that path>)
 # Oracle:
@@ -20,11 +24,13 @@ set -euo pipefail
 
 REPO="${ONTHEFLY_REPO:-$HOME/01_2026/onthefly-distill}"
 PREFIX="${OMM_BUILD_ROOT:-$HOME/.cache/oh-my-mlip}"
+REF="stable"
 JOBS="$(nproc)"
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo)   REPO="$2"; shift 2 ;;
     --prefix) PREFIX="$2"; shift 2 ;;
+    --ref)    REF="$2"; shift 2 ;;
     -j)       JOBS="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -42,15 +48,27 @@ mkdir -p "$PREFIX"
 cd "$PREFIX"
 
 if [ ! -d lammps/.git ]; then
-  git clone -b stable --depth 1 https://github.com/lammps/lammps
+  git clone -b "$REF" --depth 1 https://github.com/lammps/lammps
 fi
 cp "$REPO"/lammps/src/pair_nnmtp.*    lammps/src/
 cp "$REPO"/lammps/src/pair_nnmtp_v2.* lammps/src/ 2>/dev/null || true
 
 mkdir -p lammps/build
 cd lammps/build
+
+# cmake/make failures are common (missing system libs, compiler mismatches)
+# and their real cause lives in the log tail, not in this script's own exit
+# message -- point at it before bailing instead of leaving the agent to guess
+# which log to open.
+_on_build_fail() {
+  echo "build failed -- see the log tail below (full logs: $PWD/cmake.log, $PWD/make.log)" >&2
+  tail -n 40 cmake.log make.log 2>/dev/null >&2 || true
+}
+trap _on_build_fail ERR
+
 "$CMAKE" ../cmake -DCMAKE_BUILD_TYPE=Release >cmake.log 2>&1
 make -j "$JOBS" >make.log 2>&1
+trap - ERR
 
 LMP="$PREFIX/lammps/build/lmp"
 n="$("$LMP" -h 2>/dev/null | grep -c nnmtp || true)"
