@@ -477,6 +477,161 @@ this stop set never re-encodes.
 
 ---
 
+## 9. Installing model environments — single, multiple, or all
+
+This is the procedure behind `/oh-my-mlip:setup` (or any request to install,
+set up, or "get working" one or more MLIPs). It runs upstream of §3: once an
+env is installed and verified here, §3A–D take over for actual use. The
+`skills/setup/SKILL.md` contract is a pointer into this section — it carries
+no procedure of its own.
+
+### 9.0 Bootstrapping when the repo is not yet on disk
+
+The plugin must behave identically from any working directory — the cwd plays
+no role in locating the repo:
+
+- If `$OH_MY_MLIP_HOME` is set and the path exists, use it.
+- Else if `$OMM_HOME` is set and the path exists, use it as `OH_MY_MLIP_HOME`.
+- Otherwise clone `https://github.com/JinukMoon/oh-my-mlip.git` into
+  `~/.oh-my-mlip` (no ref pinned yet).
+- Export `OH_MY_MLIP_HOME` so every child process inherits it; do not rely on
+  `env.sh`'s relative-path autodetection.
+- Confirm `which conda || which mamba` before entering any install loop —
+  `install.sh` hard-exits without one; guide the user to a scoped Miniconda
+  install only with explicit consent (the "conda / mamba absent" row of §8).
+- `source $OH_MY_MLIP_HOME/env.sh` before any `install.sh` invocation (§0/§4).
+
+### 9.1 Roster listing (read-only, no install)
+
+"Which models can I install?" never installs anything: resolve the repo per
+§9.0 (a clone is cheap; no conda/GPU/env build needed for a listing), then
+read `models.json` and report name / framework / `gated` / validation status
+per model — `oh_my_mlip.list_models()` is the one-liner if Python is
+available. `docs/model_status.md` is the human-readable rendering of the same
+registry. Close by offering the install step and flagging gated models as
+needing the user's own HF token (§5).
+
+### 9.2 Target resolution — single, several, all, or all-except
+
+- Several explicit names — resolve each via the registry, preserve the given
+  order; `install.sh` natively accepts the same multi-target list.
+- `all` (or "everything") — every model family in `models.json`, one
+  representative version per env; bare `install.sh` builds every recipe.
+- `all except <names>` — resolve `all`, then drop the named families; state
+  the exclusions in the plan so the user sees what was left out.
+- A single or explicitly-listed target skips the approval gate in §9.3 —
+  naming the model(s) IS the approval, and §9.4's loop runs zero-prompt.
+
+### 9.3 The `all`-target survey-plan-approve gate
+
+An `all` sweep is a 100+ GB, multi-hour commitment, so it gets the one
+deliberate human checkpoint in this flow:
+
+1. Run `scripts/setup_survey.py` first, before anything else. It computes
+   atomically the one fact set the plan needs: per-env state (ready / partial
+   / missing), the disk budget counting only the envs that will actually
+   build, leak-safe token availability (§5 — the value is never read), and
+   the gated list. Render this output as-is; never recompute, reorder, or
+   partially re-derive it, and never open with a disk question before it has
+   run.
+2. Show the table before asking: the resolved `OH_MY_MLIP_HOME`, the per-env
+   state table plus gated models and exclusions, and the disk verdict — in
+   that order, before the approval question. The question restates the
+   counts in its own text; an option that offers to install an already-
+   `ready` env is a contract violation.
+3. If the budget does not fit, that shortfall is part of the same approval
+   question, not a separate upfront alarm — the selection in step 4 decides
+   what makes the cut.
+4. Ask for approval using the host's native interactive question UI when one
+   exists (e.g. Claude Code's selectable-option tool), not a plain-text
+   prompt: one single-select question (install everything in the plan / only
+   what's missing-or-broken / choose exclusions), and if exclusions are
+   chosen, follow-up multi-select question(s) listing the pending models
+   (batched to the UI's per-question option limit). Free-text exclusions
+   ("skip everything except MACE") are always honored too. Fall back to a
+   text plan + text approval only when no interactive question UI exists.
+   After approval the sweep runs to completion with zero further prompts.
+5. Gated targets with no token found: the plan must include a token request
+   spelling out the literal commands/URLs from `docs/hf_token.md` — each
+   gated model's `license_url`, the token-creation page, and
+   `huggingface-cli login` to run in the user's OWN terminal (never paste the
+   token into the conversation — §5's leak-safe rule). The user can say
+   "token is set" afterward and the sweep re-checks before proceeding.
+6. An approved subset ("skip the last three") is an exclusion list — restate
+   the final targets in one line before starting.
+
+### 9.4 Batch execution and the per-target self-healing loop
+
+After approval (or immediately, for single/explicit targets), run each
+target through the loop below. `scripts/setup_sweep.py --targets
+<M1,M2,...>` is the deterministic driver for a batch: it enforces
+one-env-at-a-time execution (the hard constraint in this file's header),
+`skipped_gated` bookkeeping for gated targets without a token, never
+stopping on one target's failure, a 10 GB disk-floor re-check before each
+target (below it, that and every remaining target are recorded
+`skipped_disk` and the sweep ends), and one JSONL ledger line per phase
+under `.sweep/`. Do not iterate `install.sh` over targets by hand.
+
+Per target, whether inside a sweep or standalone:
+
+0. **Take stock first**, always, before any mutation:
+   `scripts/setup_survey.py --table <model>` (read-only) reports
+   ready / partial / broken / not-installed, using the same state rules as
+   `install.sh --status`. `ready` jumps straight to step 3 (verify only —
+   report "already installed and verified" and stop if it passes; fall into
+   step 1 if it fails, since `install.sh`'s adopt-or-heal repairs rather
+   than duplicates an env). Anything else proceeds to step 1, naming the
+   state that was found.
+1. **Install**: `install.sh <model>` (with `OH_MY_MLIP_HOME` exported),
+   capturing stdout/stderr.
+2. **Guardrail check**: write the attempt's raw stderr to a file — the
+   helper owns normalization, never pre-normalize or hash it yourself —
+   then `scripts/setup_guardrail.py gate --state <state-file> --ceiling-gb
+   30 --stderr-file <stderr-file>`. It always exits 0 and prints one JSON
+   verdict; parse the JSON, not the exit code: `guardrail_halt` /
+   `wallclock_halt` stop unconditionally; `stalled` / `stalled_cumulative`
+   stop and switch to the docs-request path (§8); `ok` continues.
+3. **On failure, recover**: classify the traceback against §8's
+   retryable/halt-and-report table and apply the matching strategy, then
+   return to step 1. A missing or unclear install recipe / weight source, or
+   any guardrail stop above, means exactly one bounded attempt, then the §8
+   docs-request path — not an open-ended retry loop.
+4. **On success, verify with one command**:
+   `scripts/setup_verify.py <model> --json`. It preflights the driver-skew
+   predicate (constraint 9 in this file's header) to pick the device, runs
+   the single-point witness, samples GPU PIDs with descendant attribution
+   (the compute PID is a worker grandchild — never run `nvidia-smi`
+   yourself), and prints one JSON verdict (`pass`, `device`, `degraded`,
+   `reason`, `energy_ev`, `fmax_ev_a`, `forces_shape`, `gpu_pid_confirmed`,
+   `gpu_mem_bytes`, `local_record`); exit 0 iff `pass`. On pass it also
+   upserts the machine-local verified ledger `models.local.json`, which
+   `resolve()` exposes as `spec["local_verified"]`. Render the verdict as
+   printed — never re-judge it or run a second GPU check.
+   `pass:true, degraded:false` is a clean GPU verification;
+   `pass:true, degraded:true` is a pass-with-caveat (report `device=cpu` and
+   the computed `reason`); `pass:false` returns to step 3 using `reason` as
+   the error signature.
+5. **Declare success**: report the verdict fields as-is — model name, env
+   path, `energy_ev`, `forces_shape`, `device`, `degraded` (with its reason
+   when true), `gpu_pid_confirmed`.
+
+After a batch sweep completes, run the recovery pass for each `failed`
+ledger entry through steps 1–4 above, then finish with
+`scripts/setup_sweep.py report` — the final report comes strictly from the
+ledger (a target absent from it appears as `not_attempted`, never silently
+dropped). A single-target gated request still halts per §5; inside a batch
+the driver's `skipped_gated` bookkeeping replaces the halt.
+
+### 9.5 Arch-pinned first-run compilation
+
+For `arch_pinned: true` models (e.g. NequIP, Allegro), the loop above must
+also cover first-run compilation of the `.pt2` artifact — see §6 for the
+compilation flow, artifact locations, and arch-selection logic. The loop
+body in §9.4 applies equally; checkpoint acquisition and
+`scripts/compile_nequip.sh` are the arch-pinned-specific piece.
+
+---
+
 ### Plugin vs MCP — surfaces, not knowledge homes
 
 The **Claude Code plugin** (`.claude-plugin/` + `skills/`) is the **primary

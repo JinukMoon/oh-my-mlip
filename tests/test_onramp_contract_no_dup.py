@@ -20,14 +20,15 @@ AGENTS = REPO_ROOT / "AGENTS.md"
 
 # On-ramp contract surfaces that must reference (not duplicate) AGENTS.md.
 # Scope expansion (P6): every pointer-style skill joins the guard. skills/setup/
-# stays OUT deliberately — it is a 292-line procedural document, not a pointer,
-# and bringing it under the 10-gram guard would mean rewriting it wholesale
-# (out of scope here; tracked as future work, not silently waived).
+# joined in FU7: its former 292-line procedural body was split — duplicated
+# knowledge deleted, unique agent-facing procedure moved into AGENTS.md §9 (and
+# its subsections), and the skill rewritten as a pointer, same as the rest.
 ONRAMP_SURFACES = [
     "skills/catbench/SKILL.md",
     "skills/finetune/SKILL.md",
     "skills/distill/SKILL.md",
     "skills/run/SKILL.md",
+    "skills/setup/SKILL.md",
     "docs/distillation_onramp.md",
     "docs/catbench_data_format.md",
 ]
