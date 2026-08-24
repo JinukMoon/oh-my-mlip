@@ -1,0 +1,28 @@
+name: GPU smoke (self-hosted)
+
+# Separated from ci.yml on purpose: a job whose runner is OFFLINE never starts,
+# so continue-on-error cannot save it — the whole run sits queued for 24 h and
+# is then cancelled, turning the CI badge red even though every GPU-free check
+# passed. In its own workflow, runner downtime affects only this badge-less
+# workflow and never the "CI (GPU-free)" verdict.
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  gpu-smoke-test:
+    name: GPU smoke test (self-hosted, non-blocking)
+    runs-on: [self-hosted, gpu]
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      # Drive the project's OWN verify oracle instead of hand-resolving an
+      # interpreter: setup_verify.py resolves through the registry (honoring
+      # env_map.local.json adoptions), preflights driver skew, runs the
+      # single_point witness, proves GPU use, and exits 0 iff pass.
+      - name: MACE GPU verdict (setup_verify oracle)
+        run: python3 scripts/setup_verify.py MACE --json
+      - name: SevenNet GPU verdict (setup_verify oracle)
+        run: python3 scripts/setup_verify.py SevenNet --json
