@@ -4,11 +4,15 @@
 # These are the ONLY packages needed to run the GPU-free CI suite locally:
 #   pytest         — test runner
 #   jsonschema     — JSON-Schema validation of models.json + dist_manifest.json
+#   numpy, ase     — structure I/O in the distill and relax-input tests
+#                    (no model is loaded)
 #
-# No torch, ase, or conda env is required for the CI steps.
+# No torch or conda env is required for the CI steps.
 
 pytest>=7.0
 jsonschema>=4.0
+numpy>=1.26
+ase>=3.23
 
 # Optional: shellcheck is a native binary, not a pip package.
 # Install separately:
