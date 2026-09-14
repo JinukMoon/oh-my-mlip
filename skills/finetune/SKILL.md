@@ -13,3 +13,7 @@ Key entry points: `scripts/ft_dataset.py` (canonical dataset converter),
 --model <M> --json` (the checkpoint-loads-and-computes oracle).
 
 If the model's env is not yet materialized, run `/oh-my-mlip:setup <model>` first.
+
+Whole-job requests (interview, scoped plan, approval, execution, evidence)
+follow the shared recipe `recipes/finetune.md` — read it after the section
+above; it says which helpers exist today and which are still planned.

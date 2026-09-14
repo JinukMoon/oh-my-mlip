@@ -86,6 +86,20 @@ def test_split_is_seed_deterministic(tmp_path, synthetic_traj):
     assert train_a == train_b
 
 
+def test_empty_validation_split_fails_fast(tmp_path, synthetic_traj):
+    """m3: 5 frames x 0.95 rounds to 5/0 -- refused here, not deep inside the
+    trainer; --split 1.0 is the explicit opt-out and still writes no valid file."""
+    with pytest.raises(SystemExit) as exc:
+        ft_dataset.convert([str(synthetic_traj)], ":", "energy", "forces", 0.95, 0, "mace", tmp_path / "e")
+    assert "EMPTY" in str(exc.value) and "--split 1.0" in str(exc.value)
+    assert not (tmp_path / "e" / "train.xyz").exists()
+    with pytest.raises(SystemExit) as exc:
+        ft_dataset.convert([str(synthetic_traj)], ":", "energy", "forces", 0.0, 0, "mace", tmp_path / "z")
+    assert "0 of 5 frames for training" in str(exc.value)
+    m = ft_dataset.convert([str(synthetic_traj)], ":", "energy", "forces", 1.0, 0, "mace", tmp_path / "one")
+    assert m["n_valid"] == 0 and m["outputs"]["valid"] is None and m["n_train"] == 5
+
+
 def test_split_differs_across_seeds_deterministically(tmp_path, synthetic_traj):
     out_a = tmp_path / "seed0"
     out_b = tmp_path / "seed1"
@@ -132,7 +146,7 @@ def test_deepmd_writer_round_trips_energy_and_forces(tmp_path, synthetic_traj):
 
 
 # ── documented-not-implemented targets refuse cleanly (exit 2) ─────────────
-@pytest.mark.parametrize("alias", ["orb", "chgnet", "nequix", "alphanet"])
+@pytest.mark.parametrize("alias", ["orb", "nequix", "aselmdb", "alphanet"])
 def test_not_implemented_targets_exit_2(tmp_path, synthetic_traj, alias):
     out = tmp_path / f"out_{alias}"
     with pytest.raises(SystemExit) as exc:
@@ -143,6 +157,12 @@ def test_not_implemented_targets_exit_2(tmp_path, synthetic_traj, alias):
 def test_unknown_target_is_a_usage_error(tmp_path, synthetic_traj):
     with pytest.raises(SystemExit):
         ft_dataset.canonical_target("not-a-real-target")
+
+
+def test_chgnet_is_an_extxyz_alias_consumed_by_the_driver():
+    """chgnet 0.4.0 has no on-disk training format; ft_run.py's driver reads
+    the canonical extxyz and builds pymatgen Structures in memory."""
+    assert ft_dataset.canonical_target("chgnet") == "extxyz-canonical"
 
 
 # ── normalize_frame: calculator vs info/array fallback ───────────────────────

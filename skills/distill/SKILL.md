@@ -20,3 +20,7 @@ Interview first if missing: **which teacher** (any oh-my-mlip model/version),
 If the teacher's env is not yet materialized, run `/oh-my-mlip:setup <teacher>`
 first. If `$HOME/.cache/oh-my-mlip/lammps/build/lmp` does not exist yet, run
 `scripts/build_lammps_nnmtp.sh` first (one-time, unattended, long-running).
+
+Whole-job requests (interview, scoped plan, approval, execution, evidence)
+follow the shared recipe `recipes/distill.md` — read it after the section
+above; it says which helpers exist today and which are still planned.

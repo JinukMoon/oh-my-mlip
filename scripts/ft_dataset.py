@@ -26,7 +26,11 @@ unimplemented, never as silently absent):
   ------------------  ----------------------------------------------  --------------------------
   extxyz-canonical    calculator + REF_energy/REF_forces (info/       IMPLEMENTED
                        arrays) -- feeds MACE, SevenNet, NequIP,
-                       Allegro, GRACE, MatterSim, PET, TACE
+                       Allegro, GRACE, MatterSim, PET, TACE, and
+                       CHGNet (whose python-API driver emitted by
+                       ft_run.py converts each frame to a pymatgen
+                       Structure + eV/atom in memory -- chgnet 0.4.0
+                       has no on-disk training format of its own)
   deepmd              npy system layout (type_map.raw/type.raw +      IMPLEMENTED (demo path)
                        set.000/{coord,box,energy,force}.npy) --
                        feeds DeePMD, DPA4. Uses ``dpdata`` when it is
@@ -38,12 +42,10 @@ unimplemented, never as silently absent):
                        see scripts/upstream_finetune.py's DeePMD/DPA4
                        blockers).
   orb                 ASE sqlite ``.db``, 1-indexed dense ids         documented, NOT implemented
-  chgnet              pymatgen ``Structure`` + eV/atom + kBar         documented, NOT implemented
-                       stress (eV/A^3 * 1602.1766208)
   aselmdb             UMA / EquiformerV3 / Nequix                     documented, NOT implemented
   alphanet            custom pickle, needs ``virial`` in `atoms.info` documented, NOT implemented
 
-Requesting one of the four not-implemented targets exits 2 with a message
+Requesting one of the three not-implemented targets exits 2 with a message
 naming the target and pointing back at this table -- it never silently no-ops
 or falls back to a different target.
 
@@ -74,11 +76,13 @@ from ase.io import read, write
 _EXTXYZ_ALIASES = {
     "extxyz", "extxyz-canonical", "mace", "sevennet", "nequip", "allegro",
     "grace", "mattersim", "pet", "tace",
+    # chgnet: ft_run.py's driver converts the canonical extxyz to pymatgen
+    # Structures + eV/atom in memory (no on-disk chgnet format exists)
+    "chgnet",
 }
 _DEEPMD_ALIASES = {"deepmd", "dpa4"}
 _NOT_IMPLEMENTED = {
     "orb": "ASE sqlite .db, 1-indexed dense ids",
-    "chgnet": "pymatgen Structure + eV/atom + kBar stress (eV/A^3 * 1602.1766208)",
     "nequix": "aselmdb (UMA / EquiformerV3 / Nequix)",
     "aselmdb": "aselmdb (UMA / EquiformerV3 / Nequix)",
     "alphanet": "custom pickle, needs 'virial' in atoms.info",
@@ -270,6 +274,17 @@ def convert(
     raw_frames = read_frames(inputs, index)
     frames = [normalize_frame(a, energy_key, force_key) for a in raw_frames]
     train_idx, valid_idx = deterministic_split(len(frames), split, seed)
+    # Fail here, not inside the trainer: an empty split is handed on as
+    # "no validation file" and several trainers (NequIP's unconditional
+    # val-metric monitor, SevenNet's checkpoint_best) then die or never
+    # write the designated checkpoint. A caller who wants no validation
+    # says so with --split 1.0.
+    if not train_idx:
+        raise SystemExit(f"[ft_dataset] --split {split} leaves 0 of {len(frames)} frames for training")
+    if not valid_idx and split < 1.0:
+        raise SystemExit(f"[ft_dataset] --split {split} of {len(frames)} frames rounds to an EMPTY "
+                         f"validation set -- supply more frames, lower --split, or pass --split 1.0 "
+                         f"to opt out of validation explicitly")
     train_frames = [frames[i] for i in train_idx]
     valid_frames = [frames[i] for i in valid_idx]
     elements = sorted({s for a in frames for s in a.get_chemical_symbols()})

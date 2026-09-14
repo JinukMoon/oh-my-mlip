@@ -65,9 +65,9 @@ Pinned combination:
 ```bash
 conda env create -f $OMM/envs/sevennet.yml -p <prefix>
 #   equivalent explicit form:
-#     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* ase=3.28.0
-#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 sevenn @ git+https://github.com/MDIL-SNU/SevenNet.git@e72eb2c9ebf6895a9d6fa3318f0ae4409d0f9f73 cuequivariance==0.8.0 cuequivariance-torch==0.8.0 e3nn==0.5.6
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+#     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* cuda-nvrtc-dev=12.6.85 cuda-driver-dev=12.6.77 ase=3.28.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 sevenn @ git+https://github.com/MDIL-SNU/SevenNet.git@e72eb2c9ebf6895a9d6fa3318f0ae4409d0f9f73 cuequivariance==0.8.0 cuequivariance-torch==0.8.0 e3nn==0.5.6 openequivariance==0.6.6 ninja==1.13.0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -126,7 +126,7 @@ conda env create -f $OMM/envs/mace.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* ase=3.25.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363 cuequivariance==0.5.1 cuequivariance-torch==0.5.1 e3nn==0.4.4
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -196,9 +196,9 @@ Pinned combination:
 ```bash
 conda env create -f $OMM/envs/nequip.yml -p <prefix>
 #   equivalent explicit form:
-#     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* ase=3.26.0
+#     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* cuda-nvrtc-dev=12.8.93 cuda-driver-dev=12.8.90 ase=3.26.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.9.1+cu128 nequip==0.15.0 e3nn==0.5.7 openequivariance==0.4.1 ninja==1.13.0 setuptools==80.9.0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -268,7 +268,7 @@ conda env create -f $OMM/envs/allegro.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* ase=3.29.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.8.0+cu128 nequip==0.15.0 nequip-allegro==0.7.1 cuequivariance==0.8.1 cuequivariance-torch==0.8.1 cuequivariance-ops-cu12==0.8.1 cuequivariance-ops-torch-cu12==0.8.1 e3nn==0.5.7 ninja==1.13.0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -276,12 +276,16 @@ conda env create -f $OMM/envs/allegro.yml -p <prefix>
 Upstream acquisition ([source](https://www.nequip.net/)):
 
 ```bash
-# Same compiler and URI scheme as NequIP, but NO --modifiers (cueq backend)
+# Same compiler and URI scheme as NequIP, with the CuEquivariance modifier
 ARCH=$(<prefix>/bin/python -c "import torch;c=torch.cuda.get_device_capability();print(f'sm{c[0]}{c[1]}')")
 PATH="<prefix>/bin:$PATH" <prefix>/bin/nequip-compile \
     nequip.net:mir-group/Allegro-OAM-L:0.1 \
     $OMM/models/compiled/$ARCH/Allegro-OAM-L_${ARCH}.nequip.pt2 \
-    --mode aotinductor --device cuda --target ase
+    --mode aotinductor --device cuda --target ase \
+    --modifiers enable_CuEquivarianceContracter
+# Load: `import cuequivariance_torch` BEFORE NequIPCalculator.from_compiled_model,
+#   else 'Could not find schema for cuequivariance_ops::tensor_product_uniform_1d_jit'.
+# AOT Inductor + CuEquivariance does not support float64 models (use torchscript).
 ```
 
 ### C. ASE calculator
@@ -299,7 +303,7 @@ Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
 Check it works: `python3 $OMM/scripts/setup_verify.py Allegro-OAM-L --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Allegro runs on cuequivariance, so passing enable_OpenEquivariance fails. cueq ships prebuilt kernels, so there is no first-import JIT step.
+> **Note:** Allegro's recommended accelerated path is CuEquivariance: compile with --modifiers enable_CuEquivarianceContracter (needs cuequivariance-torch + cuequivariance-ops-torch-cu12) and import cuequivariance_torch before loading.
 
 ---
 
@@ -322,7 +326,7 @@ conda env create -f $OMM/envs/nequix.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* ase=3.29.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.10.0+cu126 nequix==0.4.3 jax==0.6.2 jax-cuda12-plugin==0.6.2 jax-cuda12-pjrt==0.6.2 jaxlib==0.6.2 e3nn-jax==0.20.8 equinox==0.13.6
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -375,8 +379,8 @@ Pinned combination:
 conda env create -f $OMM/envs/deepmd.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* ase=3.27.0
-#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.8.0+cu128 deepmd-kit==3.1.2 setuptools==70.2.0 mpich==5.0.1
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.8.0+cu128 deepmd-kit==3.1.2 setuptools==70.2.0 mpich==5.0.1 dpdata==1.1.0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -433,7 +437,7 @@ conda env create -f $OMM/envs/orb.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* ase=3.27.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 orb-models==0.5.4 torch-dftd==0.5.1
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -488,7 +492,7 @@ conda env create -f $OMM/envs/grace.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge python=3.11.11 pip ase=3.29.0
 #     <prefix>/bin/pip install tensorflow[and-cuda]==2.16.2 tensorpotential==0.5.3
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -546,7 +550,7 @@ conda env create -f $OMM/envs/mattersim.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.10.16 pip cuda-nvcc=12.4.* ase=3.24.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu124 torch==2.6.0+cu124 mattersim @ git+https://github.com/microsoft/mattersim.git@bf13be6f6fd470fd4e299855c755ad13968620bb torch-geometric==2.6.1 e3nn==0.5.6 setuptools==75.8.0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -595,7 +599,7 @@ conda env create -f $OMM/envs/chgnet.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* ase=3.25.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 chgnet==0.4.0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -652,7 +656,7 @@ bash $OMM/envs/alphanet.build.sh <prefix>      # single conda solve impossible -
 #     lightning tensorboard "numpy==1.26.4"
 #     <prefix>/bin/pip install --no-deps "alphanet @ git+https://github.com/zmyybc/AlphaNet.git@65f8ea9330459e0106867d1c694aec4139c6cb19"
 #     <prefix>/bin/pip install pydantic pydantic_settings rich scikit-learn "numpy==1.26.4"
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -706,7 +710,7 @@ conda env create -f $OMM/envs/eqnorm.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=11.8.* ase=3.25.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu118 --find-links https://data.pyg.org/whl/torch-2.6.0+cu118.html torch==2.6.0+cu118 eqnorm @ git+https://github.com/yzchen08/eqnorm.git@57527db44fee9fab3fb5775dd860ca4bbe014f44 torch-geometric==2.6.1 torch-scatter==2.1.2+pt26cu118 e3nn==0.5.6 vesin==0.3.7 setuptools==78.1.1
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -760,7 +764,7 @@ conda env create -f $OMM/envs/fairchemv1.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.1.* ase=3.25.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu121 --find-links https://data.pyg.org/whl/torch-2.4.1+cu121.html torch==2.4.1+cu121 fairchem-core==1.10.0 scipy==1.16.0 torch-geometric==2.6.1 torch_scatter==2.1.2+pt24cu121 torch_sparse==0.6.18+pt24cu121 e3nn==0.5.6 setuptools==78.1.1
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -814,7 +818,7 @@ conda env create -f $OMM/envs/equiformer_v3.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=12.8.* ase=3.29.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html torch==2.7.1+cu128 torch-geometric==2.7.0 torch_scatter==2.1.2+pt27cu128 torch_sparse==0.6.18+pt27cu128 torch_cluster==1.6.3+pt27cu128 torch_spline_conv==1.2.2+pt27cu128 e3nn==0.5.6 scipy==1.16.0 fairchem-core @ git+https://github.com/atomicarchitects/equiformer_v3.git@a7300c58df683dc99cb48027d5bfd4c887486c48#subdirectory=packages/fairchem-core
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -866,7 +870,7 @@ conda env create -f $OMM/envs/uma.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* ase=3.27.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.8.0+cu128 fairchem-core==2.16.0 e3nn==0.5.6 scipy==1.16.0 setuptools==78.1.1
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -982,7 +986,7 @@ conda env create -f $OMM/envs/pet.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.14 pip cuda-nvcc=12.8.* ase=3.27.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.9.1+cu128 metatrain==2026.1 upet==0.1.0 metatomic-torch==0.1.7 metatensor-torch==0.8.3 setuptools==80.9.0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -1047,7 +1051,7 @@ bash $OMM/envs/equflash.build.sh <prefix>      # single conda solve impossible -
 #     <prefix>/bin/pip install pyyaml lmdb numba scipy==1.16.0 pymatgen orjson submitit wandb \
 #     torchtnt pydantic huggingface_hub hydra-core tqdm pynvml \
 #     nvalchemi-toolkit-ops==0.3.0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -1109,7 +1113,7 @@ conda env create -f $OMM/envs/matris.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* ase=3.29.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.12.1+cu130 matris @ git+https://github.com/HPC-AI-Team/MatRIS@c16f569ca08e6905e91b64e2ee68614303e46f7f
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -1161,8 +1165,8 @@ Pinned combination:
 conda env create -f $OMM/envs/dpa4.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* ase=3.28.0
-#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 deepmd-kit==3.2.0b0 e3nn==0.6.0 vesin==0.5.8 vesin-torch==0.5.8 mpich==5.0.1
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 deepmd-kit==3.2.0b0 e3nn==0.6.0 vesin==0.5.8 vesin-torch==0.5.8 mpich==5.0.1 dpdata==1.1.0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights
@@ -1216,7 +1220,7 @@ conda env create -f $OMM/envs/tace.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* ase=3.29.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 torch-geometric==2.8.0 e3nn==0.6.0 TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
-<prefix>/bin/pip install catbench==1.1.2    # every env: D3 dispersion + adsorption benchmarking
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
 ### B. weights

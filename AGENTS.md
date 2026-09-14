@@ -256,16 +256,39 @@ training command or config from memory.
    - Refusal is by design, not a bug: a `finetune.status` of `not-supported` or
      `code-excavation-needed` exits **2** (no training code exists yet, or exists
      but is undocumented — Eqnorm/MatRIS/AlphaNet/EquiformerV3); `runnable_as_installed:
-     false` exits **3**, naming the exact blocker and its fix (e.g. `pip install
-     dpdata`). Relay that message to the user; do not retry with guessed flags.
-   - Only MACE, SevenNet and the deepmd family (DeePMD/DPA4) have a hand-verified
-     command builder — this is the demonstrated trio. Every other `documented`
-     family renders through a best-effort generic path, clearly labelled as a stub
-     in its own emitted config; treat its command as a draft to review, not a
-     ready-to-run recipe.
-3. **Verify with `scripts/ft_verify.py <ckpt> --model <M> --json`** — loads the
+     false` exits **3**, naming each remaining blocker phrased as its own fix
+     (a missing import, a file to symlink). Relay that message to the user; do
+     not retry with guessed flags.
+   - Eleven families have a command builder built from the installed package's
+     own sources (`BUILDERS` in `scripts/ft_run.py`: MACE, SevenNet, DeePMD, DPA4,
+     GRACE, PET, NequIP, Allegro, MatterSim, TACE, CHGNet; citations in the
+     `note` fields of `scripts/upstream_finetune.py`). There is no generic
+     renderer. Any other family that passes the registry gate exits **4** before
+     any dataset conversion or file write — "no real command builder", an
+     implementation gap in this hub, not an upstream limitation. Nothing is
+     emitted for it, `--emit-only` included; the sweep records it as
+     `failed(no_builder)`. With the current registry every non-builder family is
+     already stopped by exit 2 or 3, so exit 4 is the fail-closed guard. Eleven
+     builders is this hub's implementation coverage, not the fine-tuning
+     requirement met: the exit-3 families (UMA, ORB, Nequix, EquFlash,
+     fairchemv1) and the unwritten dataset writers are gaps pending
+     implementation here, never "unsupported" — that word is reserved for a
+     cited upstream absence. Exit
+     **1** is a usage error or unknown model; exit **5** is an explicit `--seed`
+     the family cannot honour in full (NequIP/Allegro seed only the data split;
+     their training seed is fixed upstream — `--allow-partial-seed` accepts the
+     narrower scope, recorded in `<out>/ft_run.json` as `seed_control.scope`);
+     any other code is the training
+     process's own. Some emitted `finetune_<version>.sh` (SevenNet, NequIP/Allegro,
+     TACE) carry one prestage line before `exec` — still a single rerunnable file.
+     `<out>/ft_run.json` records the run's inputs, seed scope, designated
+     checkpoint glob, artifacts and the `rematerialize` argv; the per-family
+     seed table is in `recipes/finetune.md`.
+3. **Verify with `scripts/ft_verify.py <ckpt> --model <M> [--version <V>] --json`** — loads the
    produced checkpoint through that framework's own ASE calculator, inside that
-   framework's own env, and reports pass iff energy+forces come back finite. This
+   framework's own env, and reports pass iff energy is finite, forces are finite
+   with the probe's `[4,3]` shape, and the backend execution record agrees with
+   `gpu_used` — on `--device cuda` that record must show GPU compute ops. This
    is what turns a run into a `demonstrated` claim; a checkpoint that merely exists
    on disk is not yet a demonstrated fine-tune.
 4. **Licence-gated checkpoints are advertised, not refused (Part 8 decision (a),
@@ -632,6 +655,54 @@ body in §9.4 applies equally; checkpoint acquisition and
 
 ---
 
+## 10. End-to-end recipes — a request becomes plan → approval → execution → evidence
+
+`recipes/` holds one workflow protocol per request kind. Each recipe layers
+the six-stage job protocol (ask, plan, approve, execute, verify, out of
+scope — defined once in `recipes/README.md`) on top of the mechanics
+sections of this file, and closes with a "Planned helpers (not
+implemented)" section so a reader can tell an existing command from a
+design target. Read the mechanics section first, then the recipe, and only
+for the request at hand:
+
+| Request | Mechanics here | Recipe |
+|---|---|---|
+| install / verify envs | §9 | `recipes/setup.md` |
+| single-point / relax | §3A | `recipes/run.md` |
+| catbench | §3B | `recipes/catbench.md` |
+| fine-tune | §3C | `recipes/finetune.md` |
+| distill | §3D | `recipes/distill.md` |
+
+Discovery is host-neutral: Claude Code reaches a recipe through the
+matching `skills/<name>/SKILL.md`; Codex, and any agent that reads this
+file, reaches it through the table above. Recipe text is never copied into
+this file or into a skill (`tests/test_onramp_contract_no_dup.py`,
+`tests/test_recipe_contract.py`).
+
+To exercise a candidate checkout rather than the plugin a host already has
+installed, point the host at that checkout: Claude Code with
+`claude --plugin-dir <candidate root>` (session-local; loads that root's
+`.claude-plugin/` and `skills/`, installs nothing) and `OH_MY_MLIP_HOME`
+set to the same root; Codex by starting in that root, whose `AGENTS.md` it
+reads from its cwd. A session started without either runs the installed
+plugin, which may be older than the candidate, and its results are not
+evidence about the candidate (`recipes/README.md`, candidate-local
+discovery).
+
+A recipe explains and invokes; it does not own knowledge that an
+executable file already owns. Package combinations and their order live
+in `install.sh` with `envs/<env>.yml` / `envs/<env>.build.sh`; run
+commands live in the emitters under `scripts/` and the run files they
+write; the agent's contribution is the scientific inputs (models,
+dataset, targets, budget). A failure those files do not already handle is
+recorded as failed and fixed by a reviewed change to the owning file —
+never by installing or upgrading something inside an env during a job.
+Every recipe therefore opens with an executable-chain table (step → owner
+file) and closes with the helpers still planned and the steps that lack an
+owner file.
+
+---
+
 ### Plugin vs MCP — surfaces, not knowledge homes
 
 The **Claude Code plugin** (`.claude-plugin/` + `skills/`) is the **primary
@@ -648,7 +719,8 @@ into the MCP server — it is a thin adapter only (see docstring in
 `oh_my_mlip/mcp_server.py`).
 
 **Single source of truth:** all model facts in `models.json`; all agent strategy
-in `AGENTS.md`. Neither surface (plugin nor MCP) duplicates or extends these.
+in `AGENTS.md`; the per-request job protocols in `recipes/` (§10). Neither
+surface (plugin nor MCP) duplicates or extends these.
 
 ### Section → MCP tool
 

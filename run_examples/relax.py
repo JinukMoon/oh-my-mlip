@@ -8,19 +8,29 @@ subprocess on every optimizer step.
 
 LAUNCHER NEEDS ase: unlike single_point.py, the ASE optimizer (BFGS) runs in the
 LAUNCHING interpreter (it drives the worker step by step), so this example must
-be run with a python that can import ase, e.g. the toolkit env:
-  /home/jumoon/miniconda3/envs/toolkit/bin/python  (or any env with ase).
+be run with a python that can import ase. Use the model's own registry-resolved
+interpreter — every model env ships ase — rather than a hand-picked one:
+  python3 -c 'import oh_my_mlip; print(oh_my_mlip.resolve("<MODEL>")["python"])'
 Only the heavy MLIP framework stays in the worker; ase here is just the optimizer
 + structure I/O. (single_point.py is fully ase-free in the launcher.)
 
-Run:
-  source env.sh
-  python run_examples/relax.py [MODEL] [--steps 50] [--fmax 0.05] [--d3]
+Run (absolute hub path; <interp> is the interpreter printed above):
+  OH_MY_MLIP_HOME=<hub root> <interp> <hub root>/run_examples/relax.py <MODEL> --structure PATH [--steps 50] [--fmax 0.05] [--d3]
 
-Reads POSCAR from the current directory if present, else relaxes a rattled Cu
-cell as a smoke test. For gated models export HF_TOKEN first (docs/gated_models.md).
+Input selection:
+  --structure PATH   relax exactly this file (any ase.io.read format). A missing
+                     or unreadable path is an error (exit 2); nothing else is
+                     substituted for it.
+  (no --structure)   legacy demo mode: reads POSCAR from the current directory
+                     if present, else relaxes a built-in rattled Cu cell as a
+                     smoke test. The demo is labelled as such in the output and
+                     is not a result for any user structure.
+The identity of what was relaxed (path, sha256, atom count, formula) is printed
+before the optimizer starts. For gated models export HF_TOKEN first
+(docs/gated_models.md).
 """
 import argparse
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -64,18 +74,58 @@ class _WorkerCalculator(Calculator):
         self.results["forces"] = np.asarray(results["forces"], dtype=float)
 
 
-def _load_atoms():
+class InputError(ValueError):
+    """An explicitly requested structure could not be loaded (never substituted)."""
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _load_atoms(structure: str | None):
+    """Return (atoms, identity dict).
+
+    Explicit `--structure`: the file must exist and parse, otherwise InputError;
+    nothing is substituted for it. No argument: legacy demo mode — cwd POSCAR if
+    present, else the built-in rattled Cu cell, labelled `demo`.
+    """
+    if structure is not None:
+        path = Path(structure)
+        if not path.is_file():
+            raise InputError(f"--structure {structure!r}: no such file")
+        try:
+            atoms = read(str(path))
+        except Exception as exc:  # ase raises many types; all mean "unreadable"
+            raise InputError(f"--structure {structure!r}: not readable by ase.io.read ({exc})") from exc
+        return atoms, {"source": "explicit", "path": str(path.resolve()), "sha256": _sha256(path)}
     poscar = Path("POSCAR")
     if poscar.exists():
-        return read(str(poscar))
+        return read(str(poscar)), {"source": "cwd POSCAR", "path": str(poscar.resolve()), "sha256": _sha256(poscar)}
     atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
     atoms.rattle(stdev=0.1, seed=0)
-    return atoms
+    return atoms, {"source": "demo", "path": None, "sha256": None}
+
+
+def _print_identity(atoms, ident: dict) -> None:
+    if ident["source"] == "demo":
+        print("structure   : [demo] built-in rattled Cu cell — no input file; "
+              "this is a smoke test, not a result for any user structure")
+    else:
+        print(f"structure   : {ident['path']} ({ident['source']})")
+        print(f"sha256      : {ident['sha256']}")
+    print(f"atoms       : {len(atoms)} {atoms.get_chemical_formula()}")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("model", nargs="?", default="MACE")
+    ap.add_argument("--structure", default=None,
+                    help="path to the structure to relax (any ase.io.read format); required for a real job. "
+                         "Missing/unreadable -> exit 2, no substitute. Default: legacy demo (cwd POSCAR or built-in Cu)")
     ap.add_argument("--version", default=None)
     ap.add_argument("--steps", type=int, default=50)
     ap.add_argument("--fmax", type=float, default=0.05)
@@ -83,7 +133,12 @@ def main() -> int:
     ap.add_argument("--arch", default=None, help="sm86/sm89 for arch-pinned models; default: host GPU auto-detect")
     args = ap.parse_args()
 
-    atoms = _load_atoms()
+    try:
+        atoms, ident = _load_atoms(args.structure)
+    except InputError as exc:
+        print(f"[oh-my-mlip] {exc}", file=sys.stderr)
+        return 2
+    _print_identity(atoms, ident)
 
     # One persistent env process backs an ASE calculator adapter for the whole relaxation.
     try:

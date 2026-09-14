@@ -209,7 +209,21 @@ UPSTREAM_FT: dict[str, dict] = {
         runnable_as_installed=True,
         blockers=[],
         licence=None,
-        note="cutoff_radius and model_type_names MUST match the foundation model exactly "
+        note="ft_run.py builder (host-inspected nequip 0.17.1 sources): config.yaml "
+             "with run: [train]; data: ASEDataModule(train_file_path/val_file_path, "
+             "transforms ChemicalSpeciesToAtomTypeMapper(chemical_symbols) + "
+             "NeighborListTransform(r_max)); trainer: lightning.Trainer with a "
+             "ModelCheckpoint(dirpath=<out>/checkpoints, filename=best, "
+             "monitor=val0_epoch/weighted_sum, save_last) -> <out>/checkpoints/last.ckpt; "
+             "training_module: EMALightningModule with model: ModelFromPackage, loss "
+             "EnergyForceLoss, val_metrics EnergyForceMetrics, optimizer Adam. A prestage "
+             "step (nequip_prestage.py) pins the nequip.net package to "
+             "models/nequip/<version>.nequip.zip (NEQUIP_CACHE_DIR also pointed at "
+             "models/nequip/model_cache) and fills model_type_names / cutoff_radius from "
+             "GraphModel.type_names / .metadata['r_max'] instead of the resolvers, so the "
+             "same emitted config also works for Allegro's nequip 0.15.0. Reload for "
+             "verification: NequIPCalculator._from_saved_model(<ckpt>). "
+             "cutoff_radius and model_type_names MUST match the foundation model exactly "
              "(a different r_max breaks the neighbour list) — current docs read them off "
              "the package via ${type_names_from_package:...}/${cutoff_radius_from_package:"
              "...} resolvers. DOC-VS-INSTALLED: those resolvers exist in the installed "
@@ -244,19 +258,23 @@ UPSTREAM_FT: dict[str, dict] = {
         selector_kind="config_key",
         selector_path="model._target_: ModelFromPackage + package_path",
         runnable_as_installed=True,
-        blockers=["installed nequip 0.15.0 in the Allegro env lacks the "
-                  "${type_names_from_package:}/${cutoff_radius_from_package:} resolvers the "
-                  "current fine-tuning docs use — model_type_names/cutoff_radius must be "
-                  "written as literal values matching the foundation model instead of "
-                  "resolved from the package"],
+        blockers=[],
         licence=None,
         note="Allegro is a model plugin inside the NequIP trainer, not a separate CLI — "
              "the Allegro env's bin/ contains only the nequip-* entry points, no "
-             "allegro-train. The official tutorial config (configs/tutorial.yaml) nests "
-             "the model block under training_module:, while the NequIP fine-tuning doc "
-             "shows a top-level model: — both forms appear in official material, and the "
-             "installed 0.15.0 tutorial uses the training_module: nesting; which shape "
-             "oh-my-mlip should emit is unresolved without a smoke run.",
+             "allegro-train. Config shape RESOLVED from the installed sources: "
+             "nequip/scripts/train.py asserts 'model' in config.training_module in BOTH "
+             "0.15.0 and 0.17.1, so ft_run.py nests model: under training_module: "
+             "(the fine-tuning doc's top-level model: is a shorthand). The missing "
+             "0.15.0 resolvers are worked around by ft_run.py's nequip_prestage.py "
+             "step: it fetches the nequip.net package once into "
+             "models/<env>/<version>.nequip.zip (0.15.0's _get_model_file_path "
+             "otherwise re-downloads to a temp file on every run), reads "
+             "GraphModel.type_names / .metadata['r_max'] from it and writes them as "
+             "literals into config.yaml. Checkpoint: <out>/checkpoints/last.ckpt "
+             "(lightning ModelCheckpoint, save_last). Reload: "
+             "NequIPCalculator._from_saved_model(<ckpt>) (the only uncompiled ASE path; "
+             "from_compiled_model needs a nequip-compile step first).",
     ),
     "GRACE": dict(
         status="documented",
@@ -296,7 +314,22 @@ UPSTREAM_FT: dict[str, dict] = {
         runnable_as_installed=True,
         blockers=[],
         licence=None,
-        note="fit.trainable_variable_names (e.g. ['I2/reducing_','rho/reducing_',"
+        note="ft_run.py builder (host-inspected tensorpotential 0.5.3 sources): a "
+             "single `gracemaker input.yaml` with potential.finetune_foundation_model: "
+             "<version> + reduce_elements: True, data.filename/test_filename pointing at "
+             "the canonical extxyz (cli/data.py reads energy/forces from the ase "
+             "calculator), fit.loss huber energy/forces, fit.maxiter = epochs. Output "
+             "lands in seed/<seed>/: checkpoints/checkpoint.* plus an UNCONDITIONAL "
+             "final_model tf.saved_model export after training (cli/gracemaker.py:578), "
+             "so no separate `gracemaker -s` step is needed; the reload witness is "
+             "seed/<seed>/final_model/saved_model.pb via TPCalculator(<dir>). The "
+             "fine-tune CHECKPOINT (dict format, distinct from the saved_model the "
+             "single-point inference uses) is fetched by gracemaker on first use into "
+             "$GRACE_CACHE/checkpoints/<model>; ft_run.py exports "
+             "GRACE_CACHE=$OH_MY_MLIP_HOME/models/grace (the hub's saved-model layout "
+             "already matches <cache>/<model>), and `grace_models checkpoint <model>` "
+             "prestages it without a training run. "
+             "fit.trainable_variable_names (e.g. ['I2/reducing_','rho/reducing_',"
              "'I1/reducing_']) restricts training to variables whose name matches one of "
              "the given prefixes — GRACE's closest analogue to LoRA/head-only fine-tuning. "
              "TensorFlow-based: gracemaker --help emits benign cuFFT/cuDNN 'already "
@@ -378,11 +411,13 @@ UPSTREAM_FT: dict[str, dict] = {
                 "}"],
         data_format="DeePMD's own 'system' layout (type.raw/type_map.raw/set.NNN/"
                      "{coord,energy,force}.npy), NOT extxyz/ASE directly. Converter is "
-                     "dpdata (NOT installed in the local env — pip install dpdata first): "
+                     "dpdata (pinned dpdata==1.1.0 in envs/deepmd.yml): "
                      "dpdata.MultiSystems.from_file('train.extxyz', fmt='extxyz')."
-                     "to('deepmd/npy', 'deepmd_data'). DPA-style heterogeneous compositions "
-                     "use the deepmd/npy/mixed layout (only the DPA-1/DPA-2 descriptors "
-                     "support it).",
+                     "to('deepmd/npy', 'deepmd_data'). scripts/ft_dataset.py --to deepmd "
+                     "performs this conversion (dpdata when importable, its own numpy "
+                     "writer of the same layout otherwise). DPA-style heterogeneous "
+                     "compositions use the deepmd/npy/mixed layout (only the DPA-1/DPA-2 "
+                     "descriptors support it).",
         foundation="--finetune <path> where <path> MUST have a .pt extension — DeePMD "
                     "dispatches its training/show entry points on the FILE SUFFIX (.pth = "
                     "frozen TorchScript inference model, .pt = training checkpoint). The "
@@ -399,13 +434,16 @@ UPSTREAM_FT: dict[str, dict] = {
                    "--finetune already IS the weights-only path.",
         selector_kind="cli_flag",
         selector_path="--finetune",
-        runnable_as_installed=False,
-        blockers=["dpdata is not installed in the deepmd env (ModuleNotFoundError "
-                  "verified) — pip install dpdata before converting any ASE-readable data",
-                  "the shipped weight dpa-3.1-3m-ft.pth must be symlinked to a .pt name "
-                  "before dp --pt show/--finetune will dispatch on it correctly"],
+        runnable_as_installed=True,
+        blockers=[],
         licence=None,
-        note="Multi-task fine-tuning (keeping pretraining branches alive alongside the "
+        note="Two former blockers are now handled by the recipe/builder rather than "
+             "left to the user: (1) dpdata is pinned in envs/deepmd.yml (dpdata==1.1.0), "
+             "and scripts/ft_dataset.py writes the deepmd/npy layout itself when the "
+             "module is absent; (2) the .pth -> .pt suffix symlink for "
+             "dpa-3.1-3m-ft.pth is performed by ft_run.py's build_deepmd inside the run "
+             "directory before dp --pt train is invoked. "
+             "Multi-task fine-tuning (keeping pretraining branches alive alongside the "
              "downstream branch, anti-forgetting) uses a multi_input.json with "
              "model.model_dict.<DOWNSTREAM>.finetune_head: <PRE_DATA_branch> plus "
              "training.model_prob branch-sampling weights (verbatim doc shape in report B "
@@ -430,7 +468,8 @@ UPSTREAM_FT: dict[str, dict] = {
                 "                \"numb_steps\": 100000}",
                 "}"],
         data_format="Identical to DeePMD/DPA-3.1 — deepmd 'system' npy/hdf5 layout, "
-                     "converted from extxyz via dpdata (also missing from this env).",
+                     "converted from extxyz via dpdata (pinned dpdata==1.1.0 in "
+                     "envs/dpa4.yml) or scripts/ft_dataset.py's numpy writer.",
         foundation="--finetune <path> — identical mechanism to DeePMD/DPA-3.1. The local "
                     "checkpoint dpa-4.0.1-pro-mptrj.pt is already .pt (no suffix-symlink "
                     "gotcha) and is SINGLE-TASK: dp --pt show ... model-branch raises "
@@ -442,15 +481,16 @@ UPSTREAM_FT: dict[str, dict] = {
                    "user's input.json.",
         selector_kind="cli_flag",
         selector_path="--finetune",
-        runnable_as_installed=False,
-        blockers=["dpdata is not installed in the dpa4 env either — same pip install "
-                  "dpdata blocker as DeePMD",
-                  "the 'dpa4' descriptor type only exists in deepmd-kit 3.2.0b0 (the dpa4 "
-                  "env) — the deepmd env's 3.1.2 cannot parse a \"type\": \"dpa4\" "
-                  "descriptor at all, so a DPA4 fine-tune must run under the dpa4 "
-                  "interpreter"],
+        runnable_as_installed=True,
+        blockers=[],
         licence=None,
-        note="Byte-for-byte the same CLI surface as DeePMD/DPA-3.1 (verified: dp --pt "
+        note="dpdata is pinned in envs/dpa4.yml (dpdata==1.1.0); scripts/ft_dataset.py "
+             "also writes the deepmd/npy layout without it. The 'dpa4' descriptor type "
+             "only exists in deepmd-kit 3.2.0b0 (this env) — the deepmd env's 3.1.2 "
+             "cannot parse a \"type\": \"dpa4\" descriptor, which is why ft_run.py "
+             "always runs this family under the dpa4 interpreter (registry env), never "
+             "under deepmd's; this is an env-selection fact, not a blocker. "
+             "Byte-for-byte the same CLI surface as DeePMD/DPA-3.1 (verified: dp --pt "
              "train --help is character-for-character identical between the two envs). "
              "--model-branch is meaningless here because the shipped checkpoint is "
              "single-task, unlike DPA-3.1-3M-FT's 31-head multi-task checkpoint — do not "
@@ -714,7 +754,16 @@ UPSTREAM_FT: dict[str, dict] = {
         runnable_as_installed=True,
         blockers=[],
         licence=None,
-        note="MUST be launched under torchrun even for a single GPU/CPU run — the "
+        note="ft_run.py builder (host-inspected mattersim 1.2.1 sources): `torchrun "
+             "--nproc_per_node=1 --standalone -m mattersim.training.finetune_mattersim "
+             "--load_model_path <name> --train_data_path/--valid_data_path <extxyz> "
+             "--save_path <out>/results --save_checkpoint --epochs N --batch_size B "
+             "--lr 2e-4 --include_forces --device cuda|cpu`; --save_checkpoint "
+             "(BooleanOptionalAction, default False) is what makes potential.save_model "
+             "write <out>/results/best_model.pth and last_model.pth. Reload: "
+             "Potential.from_checkpoint(load_path=<best_model.pth>, "
+             "load_training_state=False) + MatterSimCalculator(potential=...). "
+             "MUST be launched under torchrun even for a single GPU/CPU run — the "
              "script reads os.environ['LOCAL_RANK'] unconditionally at module load and "
              "calls torch.distributed.init_process_group; plain python "
              "finetune_mattersim.py dies with KeyError. --save_checkpoint defaults to "
@@ -757,7 +806,18 @@ UPSTREAM_FT: dict[str, dict] = {
         runnable_as_installed=True,
         blockers=[],
         licence=None,
-        note="Energy label MUST be eV/atom, not total energy (the notebook variable is "
+        note="ft_run.py builder (host-inspected chgnet 0.4.0 sources): chgnet ships no "
+             "training CLI, so ft_run.py emits finetune_chgnet.py and runs it with the "
+             "env python: ase reads the canonical extxyz, pymatgen's AseAtomsAdaptor "
+             "builds Structures, energies are divided by len(atoms) (eV/atom), "
+             "StructureData + get_loader(batch_size) feed "
+             "Trainer(model=CHGNet.load(model_name='0.3.0'), targets='ef', "
+             "optimizer='Adam', scheduler='CosLR', criterion='MSE', epochs, "
+             "learning_rate=1e-3, use_device).train(train, val, save_dir=<out>/chgnet_ft). "
+             "Trainer.save_checkpoint writes epoch<N>_*.pth.tar every epoch and copies the "
+             "best-val-energy epoch to bestE_epoch<N>_*.pth.tar; reload: "
+             "CHGNet.from_file(<bestE_*.pth.tar>) + CHGNetCalculator(model=...). "
+             "Energy label MUST be eV/atom, not total energy (the notebook variable is "
              "literally energies_per_atom). Stress units are VASP raw kBar, with a "
              "documented SIGN FLIP (verbatim): '...the -10 unit conversion modifies it to "
              "be kbar in VASP raw unit... If you're using stress labels from VASP, you "
@@ -908,7 +968,19 @@ UPSTREAM_FT: dict[str, dict] = {
         runnable_as_installed=True,
         blockers=[],
         licence=None,
-        note="Three fine-tune methods share the read_from key: method: full (all "
+        note="ft_run.py builder (host-inspected metatrain 2026.1 sources): `mtt train "
+             "options.yaml -o <out>/model-ft.pt -e <out>/extensions` with "
+             "architecture.training.finetune {read_from: "
+             "models/pet/pet-oam-xl-v1.0.0.ckpt (the training checkpoint, NOT the "
+             "exported .pt the single-point line uses), method: full}; training_set / "
+             "validation_set as {systems: {read_from, reader: ase, length_unit: "
+             "angstrom}, targets: {energy: {quantity: energy, key: energy, unit: eV, "
+             "forces: {key: forces}}}} (utils/data/readers/ase.py copies a "
+             "SinglePointCalculator's results into info['energy']/arrays['forces'] "
+             "before reading those keys); test_set: 0.0. cli/train.py writes "
+             "<out>/model-ft.ckpt and the exported <out>/model-ft.pt unconditionally "
+             "after training; reload: MetatomicCalculator(<model-ft.pt>, device=...). "
+             "Three fine-tune methods share the read_from key: method: full (all "
              "weights trainable), method: heads (backbone frozen, config.head_modules/"
              "last_layer_modules list what stays trainable), method: lora "
              "(config.target_modules/rank/alpha; the concept page has no LoRA YAML "
@@ -1048,7 +1120,24 @@ UPSTREAM_FT: dict[str, dict] = {
         runnable_as_installed=True,
         blockers=[],
         licence=None,
-        note="REAL BUG in the installed TACE 0.2.0: tace-convert's --type flag defaults "
+        note="ft_run.py builder (host-inspected tace 0.2.0 sources + upstream "
+             "example/train/tace.yaml key layout): writes tace.yaml in <out> and runs "
+             "`tace-train -cn tace` from there (hydra config_path is the cwd); a "
+             "prestage step (tace_prestage.py) resolves the foundation file through "
+             "tace.foundations.tace_foundations['<version>'] (HF download into "
+             "~/.cache/tace on first use; TACE-OAM-L.pt already present on this host) "
+             "and writes it into finetune_from_model. finetune: null and no "
+             "finetune_config.yaml in <out> => FULL fine-tune (train.py logs a warning "
+             "and skips LoRA/freezing), so the tace-finetune/tace-convert LoRA steps are "
+             "not used. Hard-required keys carried: misc.global_seed / "
+             "misc.LossSkipController, trainer.precision, dataset.train_dataloader / "
+             "valid_dataloader (torch_geometric DataLoader), optimizer, scheduler, "
+             "loss (NormalLoss over [energy, forces]), model.config.fidelity (read "
+             "before the checkpoint's own model config replaces it), and one "
+             "ModelCheckpoint callback (dirpath checkpoints_epoch, save_last) -> "
+             "<out>/checkpoints_epoch/last.ckpt. Reload: TACEAseCalc(model=<last.ckpt>, "
+             "fidelity_idx=0, target_property=[energy, forces]). "
+             "REAL BUG in the installed TACE 0.2.0: tace-convert's --type flag defaults "
              "to 'merge_lora' but ALLOWED_TYPE only contains 'merged_lora' — the "
              "documented --type merge_lora is rejected by argparse choices, and passing "
              "--type merged_lora instead reaches a body check that only accepts the "

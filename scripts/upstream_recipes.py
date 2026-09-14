@@ -65,14 +65,19 @@ UPSTREAM: dict[str, dict] = {
         pip=["pip install nequip-allegro"],
         req=None,
         fetch_src="https://www.nequip.net/",
-        fetch=["# Same compiler and URI scheme as NequIP, but NO --modifiers (cueq backend)",
+        fetch=["# Same compiler and URI scheme as NequIP, with the CuEquivariance modifier",
                "ARCH=$(<prefix>/bin/python -c \"import torch;c=torch.cuda.get_device_capability();print(f'sm{c[0]}{c[1]}')\")",
                "PATH=\"<prefix>/bin:$PATH\" <prefix>/bin/nequip-compile \\",
                "    nequip.net:mir-group/Allegro-OAM-L:0.1 \\",
                "    $OMM/models/compiled/$ARCH/Allegro-OAM-L_${ARCH}.nequip.pt2 \\",
-               "    --mode aotinductor --device cuda --target ase"],
-        note="Allegro runs on cuequivariance, so passing enable_OpenEquivariance fails. cueq "
-             "ships prebuilt kernels, so there is no first-import JIT step.",
+               "    --mode aotinductor --device cuda --target ase \\",
+               "    --modifiers enable_CuEquivarianceContracter",
+               "# Load: `import cuequivariance_torch` BEFORE NequIPCalculator.from_compiled_model,",
+               "#   else 'Could not find schema for cuequivariance_ops::tensor_product_uniform_1d_jit'.",
+               "# AOT Inductor + CuEquivariance does not support float64 models (use torchscript)."],
+        note="Allegro's recommended accelerated path is CuEquivariance: compile with "
+             "--modifiers enable_CuEquivarianceContracter (needs cuequivariance-torch + "
+             "cuequivariance-ops-torch-cu12) and import cuequivariance_torch before loading.",
     ),
     "Nequix": dict(
         src="https://github.com/atomicarchitects/nequix",

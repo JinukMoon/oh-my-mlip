@@ -19,7 +19,7 @@
 #     a large nvidia-cu12 runtime stack and has not been smoke-tested in this
 #     recipe form, so the build is marked candidate pending an install test.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
-#     post-create step (`pip install catbench==1.1.2`, WITH deps). A real build
+#     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
 #     breaks `catbench.adsorption`, while catbench 1.1.2 with deps does NOT
 #     downgrade the pinned torch+cuXXX wheel. (A bare `--no-deps` line inside a
@@ -41,3 +41,10 @@ dependencies:
       - setuptools==70.2.0
       # deepmd-kit's load_mpi_library() needs the mpich pip package (MPI lib metadata).
       - mpich==5.0.1
+      # Fine-tuning dataset converter (extxyz -> deepmd/npy system layout).
+      # scripts/ft_dataset.py prefers dpdata and only falls back to its own
+      # numpy writer when it is absent; pinning it here makes the fine-tune
+      # path deterministic from the recipe alone (no post-install pip repair).
+      # Pure-python; its deps (h5py, wcmatch, lmdb, msgpack, PyYAML) resolve
+      # against the numpy/scipy the deepmd-kit wheel already pulls.
+      - dpdata==1.1.0

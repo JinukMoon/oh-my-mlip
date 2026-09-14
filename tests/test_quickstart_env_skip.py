@@ -51,14 +51,14 @@ def test_skip_message_when_env_missing(monkeypatch, capsys):
     qs = _load_quickstart()
 
     # No real dataset / interpreter / subprocess involved.
-    monkeypatch.setattr(qs, "_discover_tag", lambda explicit: "demo")
+    monkeypatch.setattr(qs, "_discover_tag", lambda explicit, fetch_python=None: "demo")
     monkeypatch.setattr(qs, "list_models", lambda: ["MACE"])
     fake_spec = {
         "env": "mace",
         "version": "MACE-MPA-0",
         "python": "/nonexistent/envs/mace/bin/python",
     }
-    monkeypatch.setattr(qs, "_resolve_versions_for", lambda model, pins: [fake_spec])
+    monkeypatch.setattr(qs, "_resolve_versions_for", lambda model, pins, **kw: [fake_spec])
     # Interpreter is absent -> not ready.
     monkeypatch.setattr(qs, "_env_ready", lambda spec: False)
 

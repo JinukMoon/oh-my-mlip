@@ -15,3 +15,7 @@ If any model env is not yet materialized, run `/oh-my-mlip:setup <model>` first.
 
 Underlying job templates/emitters: `scripts/catbench_jobgen.py`.
 Result-directory aggregation into a report: `scripts/catbench_report.py`.
+
+Whole-job requests (interview, scoped plan, approval, execution, evidence)
+follow the shared recipe `recipes/catbench.md` — read it after the section
+above; it says which helpers exist today and which are still planned.

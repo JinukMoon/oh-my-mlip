@@ -31,6 +31,15 @@ ONRAMP_SURFACES = [
     "skills/setup/SKILL.md",
     "docs/distillation_onramp.md",
     "docs/catbench_data_format.md",
+    # G1 (end-to-end recipes): the shared workflow recipes layer a job
+    # protocol on AGENTS.md's mechanics sections and must point at them,
+    # never restate them. recipes/README.md is the index + protocol.
+    "recipes/README.md",
+    "recipes/setup.md",
+    "recipes/run.md",
+    "recipes/catbench.md",
+    "recipes/finetune.md",
+    "recipes/distill.md",
 ]
 NGRAM = 10
 

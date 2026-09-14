@@ -14,5 +14,14 @@ returned import/inference lines unmodified; execute with the returned
 interpreter). After a verification passes, `models.local.json` records the
 machine-verified interpreter/weights (exposed as `spec["local_verified"]`).
 
-One-shot from a shell: `run_examples/single_point.py <Model>` / `run_examples/relax.py <Model>`.
-If the model env is not yet materialized, run `/oh-my-mlip:setup <model>` first.
+One-shot from a shell: the two launchers are `run_examples/single_point.py`
+and `run_examples/relax.py`; their command forms (absolute hub path,
+`OH_MY_MLIP_HOME` exported, the interpreter `resolve()` printed for
+`relax.py`, and `--structure <file>` always present) are fixed in
+`recipes/run.md §2` — quote those forms, do not invoke the scripts by a
+relative path or without `--structure`. If the model env is not yet
+materialized, run `/oh-my-mlip:setup <model>` first.
+
+Whole-job requests (interview, scoped plan, approval, execution, evidence)
+follow the shared recipe `recipes/run.md` — read it after the section
+above; it says which helpers exist today and which are still planned.

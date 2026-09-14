@@ -14,7 +14,7 @@
 #   - cuequivariance / e3nn are top-level deps SevenNet needs; small transitive
 #     deps are left to float.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
-#     post-create step (`pip install catbench==1.1.2`, WITH deps). A real build
+#     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
 #     breaks `catbench.adsorption`, while catbench 1.1.2 with deps does NOT
 #     downgrade the pinned torch+cuXXX wheel. (A bare `--no-deps` line inside a
@@ -30,6 +30,15 @@ dependencies:
   - pip
   # CUDA 12.6 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.6.*
+  # openequivariance is sdist-only; 0.6.6 builds a CMake extension at install
+  # that links CUDA::nvrtc. cuda-nvcc alone does not ship nvrtc, so without this
+  # the wheel build fails ("Target oeq_stable_cuda links to: CUDA::nvrtc but the
+  # target was not found").
+  - cuda-nvrtc-dev=12.6.85
+  # oeq's first-use JIT (libtorch_tp_jit) links -lcuda: cuda-driver-dev ships the
+  # libcuda.so link stub (targets/<arch>/lib/stubs, put on LIBRARY_PATH by the
+  # provider). The real driver libcuda is what loads at runtime.
+  - cuda-driver-dev=12.6.77
   # ase pinned 2026-08-17 to the version present in the env whose GPU
   # single-point verified; a bare `- ase` rode each new release into the
   # build (the mattersim/eqnorm breakage class) and verify_determinism
@@ -42,3 +51,10 @@ dependencies:
       - cuequivariance==0.8.0
       - cuequivariance-torch==0.8.0
       - e3nn==0.5.6
+      # OpenEquivariance is the default SevenNet backend here (registry inference
+      # passes enable_oeq=True; `pip install sevenn[oeq]` == openequivariance).
+      # Without it sevenn's patch_oeq only warns and falls back to e3nn.
+      # 0.6.6 = the version in the host-verified local SevenNet env.
+      - openequivariance==0.6.6
+      # oeq JIT-compiles its CUDA extension at first use -> needs ninja on PATH.
+      - ninja==1.13.0

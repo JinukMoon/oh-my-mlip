@@ -14,6 +14,7 @@ JSONL protocol — NEVER an in-process import across conda envs.
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import subprocess
@@ -161,6 +162,35 @@ class Worker:
             existing_ld = child_env.get("LD_LIBRARY_PATH", "")
             child_env["LD_LIBRARY_PATH"] = env_lib + (
                 os.pathsep + existing_ld if existing_ld else ""
+            )
+        # Prepend the env's own pip-wheel CUDA headers (site-packages/nvidia/*/include,
+        # e.g. nvidia-cuda-nvrtc-cu12's nvrtc.h) to CPATH. OpenEquivariance JIT-builds
+        # its extension at first use and needs nvrtc.h; a fresh env has the header
+        # but nothing put it on the include path, so the worker failed to start
+        # ("fatal error: nvrtc.h: no such file or directory"). Only existing dirs.
+        # The conda CUDA toolkit headers (<env>/targets/<arch>/include, e.g.
+        # cuda-crt-dev's crt/host_defines.h that nvrtc/cuda headers #include) are
+        # needed by the same JIT build and are not in the pip wheels.
+        env_prefix = os.path.dirname(env_bin) if env_bin else ""
+        nv_includes = (sorted(glob.glob(os.path.join(
+            env_prefix, "lib", "python3*", "site-packages", "nvidia", "*", "include")))
+            + sorted(glob.glob(os.path.join(env_prefix, "targets", "*", "include")))) if env_prefix else []
+        if nv_includes:
+            existing_cpath = child_env.get("CPATH", "")
+            child_env["CPATH"] = os.pathsep.join(nv_includes) + (
+                os.pathsep + existing_cpath if existing_cpath else ""
+            )
+        # The same JIT build links -lcuda -lnvrtc; gcc/ld search LIBRARY_PATH for
+        # them. The env's conda CUDA libs (unversioned .so and the libcuda link
+        # stub) live under targets/<arch>/lib[/stubs]; the real driver libcuda is
+        # still what loads at runtime.
+        lib_dirs = [d for d in (sorted(glob.glob(os.path.join(env_prefix, "targets", "*", "lib")))
+                                + sorted(glob.glob(os.path.join(env_prefix, "targets", "*", "lib", "stubs"))))
+                    if os.path.isdir(d)] if env_prefix else []
+        if lib_dirs:
+            existing_lp = child_env.get("LIBRARY_PATH", "")
+            child_env["LIBRARY_PATH"] = os.pathsep.join(lib_dirs) + (
+                os.pathsep + existing_lp if existing_lp else ""
             )
         # env_run is already parsed + allowlisted by registry.resolve().
         child_env.update(self.spec["env_run"])
