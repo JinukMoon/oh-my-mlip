@@ -108,6 +108,7 @@ CKPT_GLOBS = {
     "CHGNet": ["chgnet_ft/bestE_*.pth.tar"],
     "UMA": ["runs/ft/checkpoints/final/inference_ckpt.pt"],
     "fairchemv1": ["runs/checkpoints/ft/checkpoint.pt"],
+    "EquFlash": ["runs/ft/checkpoints/checkpoint.pt"],
 }
 GENERIC_CKPT_GLOBS = ["*.model", "*.pth", "*.pt", "*.ckpt"]
 # Family-specific glob prefixes kept IN FRONT of the shipped table (a more

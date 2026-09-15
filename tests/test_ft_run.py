@@ -462,6 +462,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         # fairchem also keeps per-step checkpoints and a resume.yaml next to final/
         "UMA": ["runs/ft/checkpoints/step_1000/inference_ckpt.pt", "runs/ft/checkpoints/final/resume.yaml"],
         "fairchemv1": ["runs/checkpoints/ft/best_checkpoint.pt"],
+        "EquFlash": ["runs/ft/checkpoints/best_checkpoint.pt", "runs/ft/logs/files/log.txt"],
     }
     for fam, globs in ft_run.FAMILY_CHECKPOINT_GLOBS.items():
         assert len(globs) == 1, (fam, globs)
@@ -592,6 +593,27 @@ def test_fairchemv1_builder_uses_checkpoint_config_and_console_script(tmp_path):
     ctx.settings_origins.update({"loss_functions[forces].coefficient": "user", "dataset.train.a2g_args.r_stress": "user"})
     patch = json.loads(ft_run.build_fairchemv1(ctx).config_text)
     assert patch["loss"] == {"forces": 5.0} and patch["stress"] is True
+
+
+def test_equflash_builder_uses_template_finetune_keys_on_checkpoint_config(tmp_path):
+    import json
+    ctx = _ctx("EquFlashV2", tmp_path)
+    spec = ft_run.build_equflash(ctx)
+    argv = spec.argv
+    assert argv[:3] == [ctx.resolved["python"], "-m", "GGNN.main"] and argv[3:5] == ["--mode", "train"]
+    assert argv[argv.index("--config-yml") + 1] == str(ctx.out / "config.yml")
+    assert argv[argv.index("--run-dir") + 1] == str(ctx.out / "runs") and argv[argv.index("--timestamp-id") + 1] == "ft"
+    prestage = spec.extra_files[ctx.out / "equflash_prestage.py"]
+    compile(prestage, "equflash_prestage.py", "exec")
+    for key in ('cfg["trainer"] = "default"', 'cfg["logger"] = "files"', 'optim["total_iters"] = "max_epochs"'):
+        assert key in prestage, key
+    patch = json.loads(spec.config_text)
+    assert patch["checkpoint"].endswith("EquFlashV2.pt") and patch["stress"] is False
+    assert "stress" not in patch["loss"]
+    ctx.settings.update({"stress_coefficient": 0.5})
+    ctx.settings_origins.update({"stress_coefficient": "user"})
+    patch = json.loads(ft_run.build_equflash(ctx).config_text)
+    assert patch["stress"] is True and patch["loss"]["stress"] == 0.5
 
 
 def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):

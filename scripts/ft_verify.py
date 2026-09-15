@@ -375,6 +375,14 @@ from fairchem.core import OCPCalculator
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 atoms.calc = OCPCalculator(checkpoint_path={ckpt}, cpu={device!r} == "cpu")
 ''',
+    # GGNN checkpoints embed their config; UCalculator is the registry's EquFlash inference entry
+    "EquFlash": '''
+import json
+from ase.build import bulk
+from GGNN.common.calculator import UCalculator
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
+atoms.calc = UCalculator(checkpoint_path={ckpt}, cpu={device!r} == "cpu")
+''',
 }
 _LOADER_TEMPLATE["DPA4"] = _LOADER_TEMPLATE["DeePMD"]
 _LOADER_TEMPLATE["Allegro"] = _LOADER_TEMPLATE["NequIP"]

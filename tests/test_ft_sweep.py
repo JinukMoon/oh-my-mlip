@@ -255,6 +255,7 @@ EXPECTED_CKPT = {
     "CHGNet": "chgnet_ft/bestE_epoch10_e1_f1.pth.tar",
     "UMA": "runs/ft/checkpoints/final/inference_ckpt.pt",
     "fairchemv1": "runs/checkpoints/ft/checkpoint.pt",
+    "EquFlash": "runs/ft/checkpoints/checkpoint.pt",
 }
 # Files that ALSO exist in the same tree and must not be chosen
 DECOYS = {
