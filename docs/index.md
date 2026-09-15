@@ -4,11 +4,17 @@
   <img src="assets/logo.png" alt="oh-my-mlip — machine learning interatomic potentials" width="560">
 </p>
 
-**One registry, many MLIPs.** oh-my-mlip installs 20 machine-learning
-interatomic-potential frameworks (32 model variants), each in its own conda
-environment built from a pinned recipe, and gives you the exact lines to use
-them. It drives the real upstream frameworks — MACE, SevenNet, NequIP, ORB,
-UMA, … — and never reimplements a model.
+**One registry, many MLIPs.** oh-my-mlip covers 20 machine-learning
+interatomic-potential frameworks (32 model variants) — MACE, SevenNet, NequIP,
+ORB, UMA, … — and lets you:
+
+- **install** any of them, each in its own conda env from a pinned recipe;
+- **use** them in your own scripts with the exact interpreter and calculator lines;
+- **benchmark** them on adsorption energies with CatBench, including your own VASP calculations;
+- **fine-tune** them on your data through each framework's own trainer;
+- **distill** any of them into an NN-MTP student that runs in LAMMPS.
+
+It drives the real upstream frameworks and never reimplements a model.
 
 ## Get started
 

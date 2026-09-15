@@ -21,7 +21,9 @@ theme:
   logo: assets/icon.png
   favicon: assets/icon.png
   features:
-    - navigation.sections
+    # sidebar: every top-level section on every page, expanded, with its pages
+    # indented beneath it (no tabs, no section flattening)
+    - navigation.expand
     - navigation.top
     - navigation.footer
     - search.suggest
