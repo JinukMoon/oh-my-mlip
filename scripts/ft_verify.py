@@ -367,6 +367,14 @@ from fairchem.core.units.mlip_unit import load_predict_unit
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 atoms.calc = FAIRChemCalculator(load_predict_unit({ckpt}, device="{device}"), task_name={task!r})
 ''',
+    # fairchem 1.x checkpoints embed their config; OCPCalculator defaults to cpu=True
+    "fairchemv1": '''
+import json
+from ase.build import bulk
+from fairchem.core import OCPCalculator
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
+atoms.calc = OCPCalculator(checkpoint_path={ckpt}, cpu={device!r} == "cpu")
+''',
 }
 _LOADER_TEMPLATE["DPA4"] = _LOADER_TEMPLATE["DeePMD"]
 _LOADER_TEMPLATE["Allegro"] = _LOADER_TEMPLATE["NequIP"]

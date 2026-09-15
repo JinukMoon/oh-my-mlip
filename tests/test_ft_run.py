@@ -461,6 +461,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         "GRACE": ["seed/0/checkpoints/checkpoint.index"], "PET": ["model-ft.ckpt"],
         # fairchem also keeps per-step checkpoints and a resume.yaml next to final/
         "UMA": ["runs/ft/checkpoints/step_1000/inference_ckpt.pt", "runs/ft/checkpoints/final/resume.yaml"],
+        "fairchemv1": ["runs/checkpoints/ft/best_checkpoint.pt"],
     }
     for fam, globs in ft_run.FAMILY_CHECKPOINT_GLOBS.items():
         assert len(globs) == 1, (fam, globs)
@@ -568,6 +569,29 @@ def test_uma_builder_stress_steps_and_task_refusal(tmp_path):
     ctx = _ctx("UMA-s-1p2-OC22", tmp_path / "oc22")
     with pytest.raises(ValueError, match="not a fine-tunable UMATask"):
         ft_run.build_uma(ctx)
+
+
+def test_fairchemv1_builder_uses_checkpoint_config_and_console_script(tmp_path):
+    import json
+    ctx = _ctx("eSEN-30M-OAM", tmp_path)
+    spec = ft_run.build_fairchemv1(ctx)
+    argv = spec.argv
+    assert argv[0] == ft_run.entrypoint_bin(ctx.resolved, "fairchem") and argv[1:3] == ["--mode", "train"]
+    assert argv[argv.index("--config-yml") + 1] == str(ctx.out / "config.yml")
+    assert argv[argv.index("--checkpoint") + 1].endswith("esen_30m_oam.pt")
+    assert argv[argv.index("--run-dir") + 1] == str(ctx.out / "runs") and argv[argv.index("--timestamp-id") + 1] == "ft"
+    prestage = spec.extra_files[ctx.out / "esen_prestage.py"]
+    compile(prestage, "esen_prestage.py", "exec")
+    assert "generate_yml_config" in prestage
+    patch = json.loads(spec.config_text)
+    # warmup is an epoch fraction: mlip_trainer multiplies *epochs* scheduler keys by iterations per epoch
+    assert patch["update"]["optim.scheduler_params.warmup_epochs"] == 0.01
+    # loss coefficients stay the checkpoint's own unless the user sets them; stress only when asked
+    assert patch["loss"] == {} and patch["stress"] is False
+    ctx.settings.update({"loss_functions[forces].coefficient": 5.0, "dataset.train.a2g_args.r_stress": True})
+    ctx.settings_origins.update({"loss_functions[forces].coefficient": "user", "dataset.train.a2g_args.r_stress": "user"})
+    patch = json.loads(ft_run.build_fairchemv1(ctx).config_text)
+    assert patch["loss"] == {"forces": 5.0} and patch["stress"] is True
 
 
 def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):

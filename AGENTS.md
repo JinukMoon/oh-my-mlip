@@ -218,8 +218,8 @@ command or config from memory.
      `--allow-partial-seed` accepts that). **1**: usage error or unknown model.
      Pass the message to the user; do not retry with guessed flags.
    - Command builders exist for MACE, SevenNet, DeePMD, DPA4, GRACE, PET, NequIP,
-     Allegro, MatterSim, TACE and CHGNet (`BUILDERS` in `scripts/ft_run.py`).
-     UMA, ORB, Nequix, EquFlash and fairchemv1 currently stop at exit 3.
+     Allegro, MatterSim, TACE, CHGNet and UMA (`BUILDERS` in `scripts/ft_run.py`).
+     ORB, Nequix, EquFlash and fairchemv1 currently stop at exit 3.
    - `<out>/ft_run.json` records inputs, seed scope, the checkpoint to use and
      the command to rebuild the run; per-framework seed behaviour is in
      `recipes/finetune.md`.
