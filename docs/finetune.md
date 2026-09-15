@@ -219,8 +219,6 @@ AseDBDataset reads train_path/valid_path as a directory globbed for *.aselmdb, o
 `Nequix-MP-1`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/, data/ and scripts/preprocess_data.py are repo-only -- not in the installed nequix 0.4.3 wheel; needs a git clone or a vendored config/converter
 python3 $OMM/scripts/ft_run.py Nequix-MP-1 --dataset <your-dataset> --out ft_nequix-mp-1
 ```
 
@@ -291,7 +289,6 @@ ASE sqlite .db (row.energy/row.forces/row.stress read via ase.db). AseSqliteData
 
 ```bash
 # BLOCKED -- ft_run.py exits 3 until:
-#   - finetune.py is not shipped in the orb-models wheel -- curl it from the repo at the tag matching the installed version (v0.5.5)
 #   - wandb is a hard top-level import in v0.5.5's finetune.py and is not installed in the orb env -- pip install wandb (and set WANDB_MODE=offline since --wandb cannot be disabled from the CLI in this version)
 python3 $OMM/scripts/ft_run.py ORB-v3 --dataset <your-dataset> --out ft_orb-v3
 ```
@@ -485,8 +482,6 @@ ASE db (ase_db format, .db written via ase.db.connect + SinglePointCalculator) o
 `eSEN-30M-OAM`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - fairchem_main() resolves to <repo_root>/main.py, which does not exist in the pip-installed fairchemv1 env -- use the installed fairchem console script instead (identical flags)
 python3 $OMM/scripts/ft_run.py eSEN-30M-OAM --dataset <your-dataset> --out ft_esen-30m-oam
 ```
 
@@ -522,8 +517,6 @@ torchrun --nproc_per_node=<N> my_main.py --num-gpus <N> --num-nodes 1 --mode tra
 
 ```bash
 # SOURCE-DERIVED: upstream documents no procedure; this builder follows the installed source
-# BLOCKED -- ft_run.py exits 3 until:
-#   - the installed equiformer_v3 env contains only fairchem/core/ and fairchem/experimental/{models,trainers} -- no configs/, scripts/, tasks/, datasets/, main.py, or my_main.py; every fine-tune command needs the git checkout
 python3 $OMM/scripts/ft_run.py EqV3-OMatMPtrjSalex --dataset <your-dataset> --out ft_eqv3-omatmptrjsalex
 ```
 
@@ -560,40 +553,30 @@ ASE-LMDB (.aselmdb). Doc, verbatim: 'the only requirement is that you have input
 `UMA-m-1p1-OC20`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-m-1p1-OC20 --dataset <your-dataset> --out ft_uma-m-1p1-oc20
 ```
 
 `UMA-m-1p1-OMAT`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-m-1p1-OMAT --dataset <your-dataset> --out ft_uma-m-1p1-omat
 ```
 
 `UMA-s-1p1-OC20`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-s-1p1-OC20 --dataset <your-dataset> --out ft_uma-s-1p1-oc20
 ```
 
 `UMA-s-1p1-OMAT`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-s-1p1-OMAT --dataset <your-dataset> --out ft_uma-s-1p1-omat
 ```
 
 `UMA-s-1p2-OC20`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-s-1p2-OC20 --dataset <your-dataset> --out ft_uma-s-1p2-oc20
 ```
 
@@ -601,7 +584,6 @@ python3 $OMM/scripts/ft_run.py UMA-s-1p2-OC20 --dataset <your-dataset> --out ft_
 
 ```bash
 # BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 #   - oc22 absent from the installed UMATask enum: the enum is ['omol','omat','odac','oc20','oc25','omc'] -- --uma-task=oc22 is rejected by argparse choices, so this variant does NOT inherit the UMA family's runnable_as_installed even relative to the other blockers
 python3 $OMM/scripts/ft_run.py UMA-s-1p2-OC22 --dataset <your-dataset> --out ft_uma-s-1p2-oc22
 ```
@@ -609,16 +591,12 @@ python3 $OMM/scripts/ft_run.py UMA-s-1p2-OC22 --dataset <your-dataset> --out ft_
 `UMA-s-1p2-OC25`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-s-1p2-OC25 --dataset <your-dataset> --out ft_uma-s-1p2-oc25
 ```
 
 `UMA-s-1p2-OMAT`:
 
 ```bash
-# BLOCKED -- ft_run.py exits 3 until:
-#   - configs/uma/finetune/ is not in the fairchem-core wheel (checked in 2.19.1) -- create_uma_finetune_dataset.py hardcodes a relative TEMPLATE_DIR; needs the fairchem repo cloned with cwd at the repo root
 python3 $OMM/scripts/ft_run.py UMA-s-1p2-OMAT --dataset <your-dataset> --out ft_uma-s-1p2-omat
 ```
 
@@ -693,8 +671,6 @@ format: ase_db (fairchem-v1 AseDBDataset) is the safe/tested path — any format
 ```bash
 # LICENCE: CC-BY-NC-SA-4.0 -- https://creativecommons.org/licenses/by-nc-sa/4.0/
 #   Disclosed to users — oh-my-mlip is MIT and redistributes no
-# BLOCKED -- ft_run.py exits 3 until:
-#   - main.py and configs/ are repo-only -- not present in the installed GGNN 0.1 package; use python -m GGNN.main as the installed equivalent
 python3 $OMM/scripts/ft_run.py EquFlashV2 --dataset <your-dataset> --out ft_equflashv2
 ```
 
@@ -703,8 +679,6 @@ python3 $OMM/scripts/ft_run.py EquFlashV2 --dataset <your-dataset> --out ft_equf
 ```bash
 # LICENCE: CC-BY-NC-SA-4.0 -- https://creativecommons.org/licenses/by-nc-sa/4.0/
 #   Disclosed to users — oh-my-mlip is MIT and redistributes no
-# BLOCKED -- ft_run.py exits 3 until:
-#   - main.py and configs/ are repo-only -- not present in the installed GGNN 0.1 package; use python -m GGNN.main as the installed equivalent
 python3 $OMM/scripts/ft_run.py EquFlash-v1 --dataset <your-dataset> --out ft_equflash-v1
 ```
 

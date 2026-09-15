@@ -324,22 +324,30 @@ def live_recheck_blockers(family: str, blockers: list[str], python_bin: str) -> 
         m = _PIP_INSTALL_RE.search(b)
         if m and _importable(python_bin, m.group(1)):
             continue
-        if family in ("DeePMD", "DPA4") and "symlink" in b.lower():
-            continue  # build_deepmd() performs this symlink itself
-        if family == "UMA" and "configs/uma/finetune" in b:
-            continue  # build_uma()'s prestage fetches those templates at the installed fairchem version
-        if family == "fairchemv1" and "fairchem_main()" in b:
-            continue  # build_fairchemv1() runs the installed fairchem console script, as the blocker asks
-        if family == "EquFlash" and "python -m GGNN.main" in b:
-            continue  # build_equflash() runs python -m GGNN.main and takes the config from the checkpoint
-        if family == "Nequix" and "configs/, data/" in b:
-            continue  # build_nequix() takes the config from the .nqx header and writes the db files itself
-        if family == "ORB" and "finetune.py is not shipped" in b:
-            continue  # build_orb()'s prestage fetches finetune.py at the installed orb-models version
-        if family == "EquiformerV3" and "no configs/" in b:
-            continue  # build_equiformerv3() runs the installed fairchem CLI on the checkpoint's own config
+        if builder_handles_blocker(family, b):
+            continue
         remaining.append(b)
     return remaining
+
+
+def builder_handles_blocker(family: str, blocker: str) -> bool:
+    """True when the family's builder itself performs the fix a registry
+    blocker asks for, so the blocker never applies on any host."""
+    if family in ("DeePMD", "DPA4") and "symlink" in blocker.lower():
+        return True  # build_deepmd() performs this symlink itself
+    if family == "UMA" and "configs/uma/finetune" in blocker:
+        return True  # build_uma()'s prestage fetches those templates at the installed fairchem version
+    if family == "fairchemv1" and "fairchem_main()" in blocker:
+        return True  # build_fairchemv1() runs the installed fairchem console script, as the blocker asks
+    if family == "EquFlash" and "python -m GGNN.main" in blocker:
+        return True  # build_equflash() runs python -m GGNN.main and takes the config from the checkpoint
+    if family == "Nequix" and "configs/, data/" in blocker:
+        return True  # build_nequix() takes the config from the .nqx header and writes the db files itself
+    if family == "ORB" and "finetune.py is not shipped" in blocker:
+        return True  # build_orb()'s prestage fetches finetune.py at the installed orb-models version
+    if family == "EquiformerV3" and "no configs/" in blocker:
+        return True  # build_equiformerv3() runs the installed fairchem CLI on the checkpoint's own config
+    return False
 
 
 def resolve_foundation_checkpoint(version: str, resolved: dict) -> str:
@@ -1632,6 +1640,10 @@ for split, src in (("train", patch["train"]), ("val", patch["valid"])):
     dbs[split] = str(db)
 
 update = dict(patch["update"])
+# models/esen/trainers/trainer.py saves checkpoint.pt every checkpoint_every steps (default:
+# eval_every) and at each epoch end only when checkpoint_every is -1; a run shorter than
+# eval_every would otherwise leave no checkpoint
+update.setdefault("optim.checkpoint_every", -1)
 # mlip_trainer turns warmup_epochs into int(warmup_epochs * iterations per epoch) and its
 # cosine lambda divides by that count; keep at least one warmup step for small data sets
 n_train = len(read(patch["train"], ":"))
@@ -2164,6 +2176,10 @@ cfg["logger"] = "tensorboard"
 optim = cfg["optim"]
 optim["load_pretrained_weights"] = patch["checkpoint"]
 optim["use_denoising_pos"] = False
+# the trainer saves checkpoint.pt every checkpoint_every steps (default: eval_every) and at each
+# epoch end only when checkpoint_every is -1; a run shorter than eval_every would leave none
+if "checkpoint_every" not in patch["optim"]:
+    optim["checkpoint_every"] = -1
 scheduler_keys = ("warmup_factor", "warmup_epochs", "lr_min_factor")
 for key, value in patch["optim"].items():
     if key == "weight_decay":

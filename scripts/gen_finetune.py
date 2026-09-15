@@ -71,7 +71,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 
 from upstream_finetune import UPSTREAM_FT  # noqa: E402
-from ft_run import _LICENCE_URLS  # noqa: E402
+from ft_run import _LICENCE_URLS, builder_handles_blocker  # noqa: E402
 
 DOC = REPO / "docs" / "finetune.md"
 
@@ -142,11 +142,14 @@ def render_command_block(fam: str, version: str, ft: dict) -> list[str]:
         lines.append(f"# LICENCE: {licence}" + (f" -- {url}" if url else ""))
         lines.append("#   Disclosed to users — oh-my-mlip is MIT and redistributes no")
 
-    if ft.get("runnable_as_installed"):
+    # Blockers the builder fixes itself never stop ft_run.py; only the rest
+    # (typically a missing package on the host) are rendered as BLOCKED.
+    blockers = [b for b in ft.get("blockers") or [] if not builder_handles_blocker(fam, b)]
+    if ft.get("runnable_as_installed") or not blockers:
         lines.append(invocation)
     else:
         lines.append("# BLOCKED -- ft_run.py exits 3 until:")
-        for b in ft.get("blockers") or []:
+        for b in blockers:
             lines.append(f"#   - {b}")
         lines.append(invocation)
 
