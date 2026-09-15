@@ -882,10 +882,13 @@ def build_pet(ctx: Context) -> CommandSpec:
 
     config_path = ctx.out / "options.yaml"
     config_text = yaml.safe_dump(cfg, sort_keys=False)
+    # Relative to the run dir the command runs in: after exporting, `mtt train` copies the
+    # model to `<hydra outputs dir> / <-o>` (metatrain cli/train.py), and an absolute -o
+    # makes that the same file, so the finished run exits with SameFileError.
     argv = [
         entrypoint_bin(ctx.resolved, "mtt"), "train", str(config_path),
-        "-o", str(ctx.out / "model-ft.pt"),
-        "-e", str(ctx.out / "extensions"),
+        "-o", "model-ft.pt",
+        "-e", "extensions",
     ]
     return CommandSpec(argv=argv, config_path=config_path, config_text=config_text)
 

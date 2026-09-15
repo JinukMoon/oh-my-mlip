@@ -322,7 +322,9 @@ def test_pet_builder_uses_training_checkpoint_not_exported_pt(tmp_path):
     ctx = _ctx("PET-OAM-XL", tmp_path)
     spec = ft_run.build_pet(ctx)
     assert spec.argv[:2] == [ft_run.entrypoint_bin(ctx.resolved, "mtt"), "train"]
-    assert "-o" in spec.argv and spec.argv[spec.argv.index("-o") + 1] == str(ctx.out / "model-ft.pt")
+    # relative: mtt train copies <-o> into its outputs dir, and an absolute -o is the same file
+    assert "-o" in spec.argv and spec.argv[spec.argv.index("-o") + 1] == "model-ft.pt"
+    assert spec.argv[spec.argv.index("-e") + 1] == "extensions"
     cfg = yaml.safe_load(spec.config_text)
     ft = cfg["architecture"]["training"]["finetune"]
     assert ft["method"] == "full" and ft["read_from"].endswith("pet-oam-xl-v1.0.0.ckpt")
@@ -537,7 +539,8 @@ def test_designated_checkpoint_glob_matches_the_builders_own_layout(tmp_path):
     assert ft_run.FAMILY_CHECKPOINT_GLOBS["MACE"] == ["{version}.model"]
     ctx = _ctx("PET-OAM-XL", tmp_path)
     spec = ft_run.build_pet(ctx)
-    assert spec.argv[spec.argv.index("-o") + 1] == str(ctx.out / ft_run.FAMILY_CHECKPOINT_GLOBS["PET"][0])
+    # -o is relative to the run dir (the script cd's there), as the checkpoint glob is
+    assert spec.argv[spec.argv.index("-o") + 1] == ft_run.FAMILY_CHECKPOINT_GLOBS["PET"][0]
     ctx = _ctx("NequIP-OAM-L", tmp_path)
     import yaml
     cb = yaml.safe_load(ft_run.build_nequip_framework(ctx).config_text)["trainer"]["callbacks"][0]
