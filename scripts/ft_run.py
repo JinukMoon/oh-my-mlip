@@ -811,18 +811,24 @@ def build_pet(ctx: Context) -> CommandSpec:
         "validation_set": _pet_dataset_spec(str(valid_path)) if valid_path else 0.1,
         "test_set": 0.0,
     }
-    # Add stress to the energy target if enabled
-    if include_stress:
-        cfg["training_set"]["targets"]["energy"]["stress"] = {
-            "read_from": str(train_path), "reader": "ase", "key": "stress"
-        }
-    # Add loss weights if specified
+    # An energy target gets a stress section by default (utils/omegaconf.py CONF_ENERGY),
+    # so stress is switched off explicitly unless requested.
+    for split, path in (("training_set", train_path), ("validation_set", valid_path)):
+        if isinstance(cfg[split], dict):
+            cfg[split]["targets"]["energy"]["stress"] = (
+                {"read_from": str(path), "reader": "ase", "key": "stress"} if include_stress else False)
+    # Loss weights live under architecture.training.loss.<target>, with the energy
+    # shorthands forces -> gradients.positions and stress -> gradients.strain
+    # (utils/loss.py LossSpecification, utils/omegaconf.py expand_loss_config).
+    loss_energy: dict = {}
     if loss_energy_weight is not None:
-        cfg["training_set"]["targets"]["energy"]["loss_weight"] = float(loss_energy_weight)
+        loss_energy["weight"] = float(loss_energy_weight)
     if loss_force_weight is not None:
-        cfg["training_set"]["targets"]["energy"]["forces"]["loss_weight"] = float(loss_force_weight)
+        loss_energy["forces"] = {"weight": float(loss_force_weight)}
     if loss_stress_weight is not None and include_stress:
-        cfg["training_set"]["targets"]["energy"]["stress"]["loss_weight"] = float(loss_stress_weight)
+        loss_energy["stress"] = {"weight": float(loss_stress_weight)}
+    if loss_energy:
+        cfg["architecture"]["training"]["loss"] = {"energy": loss_energy}
 
     config_path = ctx.out / "options.yaml"
     config_text = yaml.safe_dump(cfg, sort_keys=False)

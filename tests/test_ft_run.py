@@ -270,6 +270,25 @@ def test_pet_builder_uses_training_checkpoint_not_exported_pt(tmp_path):
     assert yaml.safe_load(ft_run.build_pet(_ctx("PET-OAM-XL", tmp_path, device="cpu")).config_text)["device"] == "cpu"
 
 
+def test_pet_loss_weights_go_to_training_loss_and_stress_is_explicit(tmp_path):
+    import yaml
+    ctx = _ctx("PET-OAM-XL", tmp_path)
+    ctx.settings.update({"loss.<target>.weight": 2.0, "loss.<target>.gradients.positions.weight": 5.0,
+                         "loss.<target>.gradients.strain.weight": 9.0})
+    cfg = yaml.safe_load(ft_run.build_pet(ctx).config_text)
+    # metatrain rejects loss_weight inside dataset targets; weights belong to architecture.training.loss
+    assert cfg["architecture"]["training"]["loss"] == {"energy": {"weight": 2.0, "forces": {"weight": 5.0}}}
+    energy_target = cfg["training_set"]["targets"]["energy"]
+    assert "loss_weight" not in energy_target and "loss_weight" not in energy_target["forces"]
+    # an energy target has a stress section by default, so "no stress" must be written out
+    assert cfg["training_set"]["targets"]["energy"]["stress"] is False
+    assert cfg["validation_set"]["targets"]["energy"]["stress"] is False
+    ctx.settings["targets.<energy>.stress"] = True
+    cfg = yaml.safe_load(ft_run.build_pet(ctx).config_text)
+    assert cfg["training_set"]["targets"]["energy"]["stress"]["key"] == "stress"
+    assert cfg["architecture"]["training"]["loss"]["energy"]["stress"] == {"weight": 9.0}
+
+
 @pytest.mark.parametrize("version", ["NequIP-OAM-XL", "NequIP-OAM-L", "Allegro-OAM-L"])
 def test_nequip_framework_builder_prestages_package_and_fills_literals(tmp_path, version):
     import yaml
