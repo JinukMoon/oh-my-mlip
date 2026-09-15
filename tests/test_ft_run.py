@@ -629,7 +629,11 @@ def test_nequix_builder_uses_nqx_header_config_and_offline_wandb(tmp_path):
     import json
     ctx = _ctx("Nequix-MP-1", tmp_path)
     spec = ft_run.build_nequix(ctx)
-    assert spec.argv == [ft_run.entrypoint_bin(ctx.resolved, "nequix_train"), str(ctx.out / "config.yml")]
+    assert spec.argv == [ctx.resolved["python"], str(ctx.out / "nequix_launch.py"), str(ctx.out / "config.yml")]
+    launcher = spec.extra_files[ctx.out / "nequix_launch.py"]
+    compile(launcher, "nequix_launch.py", "exec")
+    # forked loader workers close the inherited lmdb handle before reopening, then nequix's own main runs
+    assert "env.close()" in launcher and "from nequix.train import main" in launcher
     assert spec.extra_env == {"WANDB_MODE": "offline", "WANDB_DIR": str(ctx.out)}
     prestage = spec.extra_files[ctx.out / "nequix_prestage.py"]
     compile(prestage, "nequix_prestage.py", "exec")
