@@ -13,8 +13,8 @@ and keeps both byte-for-byte in sync (CI runs `--check`):
      in `README.md`. One row per framework, variant names comma-joined — just
      enough to see what is available, scannable and short.
 
-  2. The FULL detailed table (Model / Framework / Weights / Gated / v1 tarball —
-     one row per model+version) for `docs/model_status.md`, between
+  2. The FULL detailed table (Model / Framework / Weights / Gated / v1 tarball /
+     Code — one row per model+version) for `docs/model_status.md`, between
 
          <!-- STATUS_TABLE_DETAILED_START -->
          <!-- STATUS_TABLE_DETAILED_END -->
@@ -108,12 +108,17 @@ def render_simple_list(models: dict) -> str:
 
 
 def render_detailed_table(models: dict) -> str:
-    """Render the full detailed markdown table (no trailing newline)."""
-    header = "| Model | Framework | Weights | Gated | v1 tarball |"
-    sep = "|---|---|---|---|---|"
+    """Render the full detailed markdown table (no trailing newline). The last
+    column links each framework's upstream repository (`repo` in models.json)
+    as a small button: an `attr_list` class styled in docs/stylesheets/extra.css."""
+    repos = {fw: info.get("repo") for fw, info in models.items() if not fw.startswith("_")}
+    header = "| Model | Framework | Weights | Gated | v1 tarball | Code |"
+    sep = "|---|---|---|---|---|---|"
     lines = [header, sep]
     for model, framework, weights, gated, shipped in _detailed_rows(models):
-        lines.append(f"| {model} | {framework} | {weights} | {gated} | {shipped} |")
+        repo = repos.get(framework)
+        code = f"[GitHub]({repo}){{ .md-button .omm-repo }}" if repo else "-"
+        lines.append(f"| {model} | {framework} | {weights} | {gated} | {shipped} | {code} |")
     return "\n".join(lines)
 
 
