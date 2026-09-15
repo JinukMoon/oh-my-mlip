@@ -1,0 +1,48 @@
+# oh-my-mlip
+
+**One registry, many MLIPs.** oh-my-mlip installs 20 machine-learning
+interatomic-potential frameworks (32 model variants), each in its own conda
+environment built from a pinned recipe, and gives you the exact lines to use
+them. It drives the real upstream frameworks — MACE, SevenNet, NequIP, ORB,
+UMA, … — and never reimplements a model.
+
+## Get started
+
+```bash
+git clone https://github.com/JinukMoon/oh-my-mlip.git && cd oh-my-mlip
+source env.sh
+./install.sh MACE                                  # MACE's own conda env
+python scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on your GPU
+python run_examples/single_point.py MACE           # a first calculation
+```
+
+With Claude Code, install the plugin once and ask in plain language
+("install MACE", "benchmark my adsorption set"):
+
+```
+/plugin marketplace add JinukMoon/oh-my-mlip
+/plugin install oh-my-mlip@oh-my-mlip
+```
+
+## What you can do
+
+| Task | Guide |
+|---|---|
+| Install one, several or all models | [Install models](howto/install.md) |
+| Use a model in your own script | [Use a model](howto/use-a-model.md) |
+| Benchmark adsorption energies | [Benchmark with CatBench](howto/catbench.md) |
+| Turn your VASP calculations into a benchmark | [Convert VASP results](howto/vasp-to-catbench.md) |
+| Fine-tune a foundation model on your data | [Fine-tune](howto/finetune.md) |
+| Distill a model into a LAMMPS student | [Distill](howto/distill.md) |
+
+## How it works
+
+- **One env per framework.** Their torch and CUDA stacks conflict, so each
+  framework lives in its own conda env; `resolve()` tells you which
+  interpreter and which calculator lines belong together.
+- **Recipes, not improvisation.** Package sets are pinned in `envs/<env>.yml`,
+  and verified builds are recorded as exact lock files in `envs/locks/`.
+- **Every procedure is a file.** Job scripts, training commands and reports
+  are written to disk before they run, so you can rerun them without an agent.
+- **Weights are never hosted here.** They come from each framework's official
+  channel; gated models use your own Hugging Face token.

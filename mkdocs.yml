@@ -1,0 +1,68 @@
+site_name: oh-my-mlip
+site_description: One registry for many machine-learning interatomic potentials — install, run, benchmark, fine-tune, distill.
+site_url: https://jinukmoon.github.io/oh-my-mlip/
+repo_url: https://github.com/JinukMoon/oh-my-mlip
+repo_name: JinukMoon/oh-my-mlip
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+# Internal working records stay in the repo but are not part of the site.
+exclude_docs: |
+  build_attempt*.md
+  equiv_*.md
+  source_research.md
+  ground_truth_reclassification.md
+  weights_source_review.md
+  distillation_onramp.md
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - How-to:
+      - Install models: howto/install.md
+      - Use a model: howto/use-a-model.md
+      - Benchmark with CatBench: howto/catbench.md
+      - Convert VASP results for CatBench: howto/vasp-to-catbench.md
+      - Fine-tune: howto/finetune.md
+      - Distill: howto/distill.md
+  - Reference:
+      - Python API: reference/api.md
+      - Supported models: model_status.md
+      - Environment recipes: recipes.md
+      - Fine-tuning per framework: finetune.md
+      - Gated models: gated_models.md
+      - Hugging Face token: hf_token.md
+      - CatBench data format: catbench_data_format.md
+      - GPU-architecture compilation: arch_first_run_compile.md
+      - Accelerator compile: compile.md
+      - Weight integrity: weights_integrity.md
+      - Model licenses: model_licenses.md
+      - Host requirements: host_requirements.md
+      - Claude Code plugin: claude_plugin.md

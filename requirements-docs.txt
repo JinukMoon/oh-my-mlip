@@ -1,0 +1,4 @@
+# oh-my-mlip — documentation site (MkDocs)
+# Build locally:  pip install -r requirements-docs.txt && mkdocs serve
+mkdocs==1.6.1
+mkdocs-material==9.7.7

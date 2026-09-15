@@ -16,6 +16,8 @@ versioned recipe. Facts live in `models.json`; every procedure is a file on
 disk you can rerun without an agent. It drives the real upstream frameworks
 and never reimplements a model.
 
+**Documentation:** https://jinukmoon.github.io/oh-my-mlip/
+
 | | Feature | Command |
 |---|---|---|
 | 1 | [Install & environments](#install--environments) | `/oh-my-mlip:setup MACE` |
@@ -43,34 +45,49 @@ Then ask in plain language — "install MACE", "benchmark my adsorption set",
 ```bash
 git clone https://github.com/JinukMoon/oh-my-mlip.git && cd oh-my-mlip
 source env.sh
-./install.sh MACE                                   # build from envs/mace.yml
-python run_examples/single_point.py MACE            # energy + forces on your GPU
-python scripts/setup_verify.py MACE-MPA-0 --json    # the completion check
+./install.sh MACE                                  # its own conda env, from envs/mace.yml
+python scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on your GPU
 ```
 
-- **Recipes, not improvisation.** `envs/<env>.yml` (+ `.build.sh` where needed)
-  pins the package set; `install.sh` runs the steps in a fixed order —
-  create env, catbench, weight preparation, first-use compilation
-  (NequIP with OpenEquivariance, Allegro with CuEquivariance), D3.
-- **Exact replay.** `envs/locks/<env>.{conda,pip}.txt` record the full
-  package set of a verified build; `OMM_USE_LOCK=1 ./install.sh <env>`
-  reinstalls exactly that set (no dependency resolution).
-- **Fresh-environment proof.** `scripts/setup_sweep.py --fresh-root` builds
-  each env in a disposable root, verifies every variant on the GPU, preserves
-  the evidence and removes the root.
-- **Bring your own env.** `scripts/adopt_env.py MACE ~/miniconda3/envs/MACE`.
+Every framework gets its own env (their torch/CUDA stacks conflict), built from a
+pinned recipe. `OMM_USE_LOCK=1 ./install.sh <env>` replays a verified build
+exactly (`envs/locks/`); an env you already have can be adopted with
+`scripts/adopt_env.py MACE <prefix>`. Details: [`recipes/setup.md`](recipes/setup.md).
+
+## Use a model
+
+**In your own script** (MD, relax, anything long) — copy the lines once, run with
+that env's interpreter; oh-my-mlip is not needed at run time:
+
+```python
+import sys; sys.path.insert(0, "<repo>")        # or $OH_MY_MLIP_HOME
+from oh_my_mlip import resolve
+spec = resolve("MACE")                          # or a version, e.g. "MACE-MH-1-OMAT"
+print(spec["python"], spec["imports"], spec["inference"], spec["env_run"])
+```
+
+```python
+# my_run.py  ->  <spec["python"]> my_run.py   (export spec["env_run"] first, if any)
+from ase.io import read
+from mace.calculators import mace_mp            # spec["imports"], verbatim
+atoms = read("POSCAR")
+calc = mace_mp(model='medium-mpa-0', dispersion=False, default_dtype='float64', device='cuda')  # spec["inference"]
+atoms.calc = calc
+```
+
+**Several models from one script** (quick comparisons) — each model runs in its
+own env process, so the calling Python needs no model installed:
 
 ```python
 import oh_my_mlip
-from ase.build import bulk
-
-out = oh_my_mlip.run("MACE", bulk("Cu", "fcc", a=3.61, cubic=True))
-print(out["energy"])
+out = oh_my_mlip.run("MACE", atoms)             # one call -> {"energy": ..., "forces": ...}
+with oh_my_mlip.WorkerPool() as pool:           # many calls: workers stay alive
+    for name in ("MACE", "SevenNet"):
+        print(name, pool.request(name, atoms)["results"]["energy"])
 ```
 
-`resolve(model)` returns the exact interpreter, import and calculator lines to
-paste into your own scripts. Per-framework procedures:
-[`docs/recipes.md`](docs/recipes.md); whole workflows: [`recipes/`](recipes/).
+Every call crosses a process boundary — use the first way for MD loops.
+Per-framework lines and weights: [`docs/recipes.md`](docs/recipes.md).
 
 ## Benchmark (catbench)
 

@@ -24,6 +24,9 @@ envs/*/
 # exact-replay locks (scripts/gen_env_lock.py) are small text and ARE source
 !envs/locks/
 
+# --- MkDocs build output ---
+site/
+
 # --- Model weights / checkpoints (gated weights must never be committed) ---
 *.pt
 *.pt2

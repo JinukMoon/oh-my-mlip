@@ -1,7 +1,7 @@
 # Model status — validation, gating, and v1 distribution
 
 This is the detailed companion to the README's
-[`## Supported MLIPs`](../README.md#supported-mlips) list. The table below is
+[`## Supported MLIPs`](https://github.com/JinukMoon/oh-my-mlip#supported-mlips) list. The table below is
 **generated from `models.json`** by `scripts/gen_status_table.py` (CI runs
 `--check` to keep it byte-for-byte in sync — this doc and the README can never
 drift from the registry, which is the guard against an "all validated"
