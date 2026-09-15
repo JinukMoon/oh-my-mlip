@@ -65,7 +65,8 @@ def test_loader_families_covers_the_demo_trio():
 # ── every template: head binds, witness tail computes ────────────────────────
 @pytest.mark.parametrize("family", sorted(ft_verify._LOADER_TEMPLATE))
 def test_every_template_defers_the_forward_to_a_backend_witness(family):
-    script = ft_verify.build_script(family, "/tmp/fake.ckpt", "cuda")
+    # a UMA checkpoint is loaded with the task it was fine-tuned for
+    script = ft_verify.build_script(family, "/tmp/fake.ckpt", "cuda", task="omat" if family == "UMA" else None)
     compile(script, f"<{family}>", "exec")  # the inline child script must at least parse
     tail = ft_verify.witness_tail(family)
     assert script.endswith(tail)

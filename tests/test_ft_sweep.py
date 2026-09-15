@@ -253,6 +253,7 @@ EXPECTED_CKPT = {
     "NequIP": "checkpoints/last.ckpt", "Allegro": "checkpoints/last.ckpt",
     "MatterSim": "results/best_model.pth", "TACE": "checkpoints_epoch/last.ckpt",
     "CHGNet": "chgnet_ft/bestE_epoch10_e1_f1.pth.tar",
+    "UMA": "runs/ft/checkpoints/final/inference_ckpt.pt",
 }
 # Files that ALSO exist in the same tree and must not be chosen
 DECOYS = {

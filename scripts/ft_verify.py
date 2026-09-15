@@ -356,6 +356,17 @@ model_dir = os.path.dirname({ckpt}) if {ckpt}.endswith("saved_model.pb") else {c
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 atoms.calc = TPCalculator(model_dir)
 ''',
+    # fairchem's fine-tune writes checkpoints/final/inference_ckpt.pt; it loads with
+    # load_predict_unit and must be used with the task it was trained on (the registry's
+    # inference task_name), fairchem-core docs/core/common_tasks/fine_tuning.md.
+    "UMA": '''
+import json
+from ase.build import bulk
+from fairchem.core import FAIRChemCalculator
+from fairchem.core.units.mlip_unit import load_predict_unit
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
+atoms.calc = FAIRChemCalculator(load_predict_unit({ckpt}, device="{device}"), task_name={task!r})
+''',
 }
 _LOADER_TEMPLATE["DPA4"] = _LOADER_TEMPLATE["DeePMD"]
 _LOADER_TEMPLATE["Allegro"] = _LOADER_TEMPLATE["NequIP"]
@@ -369,6 +380,17 @@ def loader_families() -> list[str]:
 
 
 _MODAL_RE = re.compile(r"""modal=['"]([^'"]+)['"]""")
+_TASK_RE = re.compile(r"""task_name=['"]([^'"]+)['"]""")
+
+
+def _extract_task(inference_lines: list[str]) -> str | None:
+    """A fine-tuned UMA checkpoint is used with the task it was trained on -- the
+    same task_name the registry's inference line carries for that variant."""
+    for line in inference_lines:
+        m = _TASK_RE.search(line)
+        if m:
+            return m.group(1)
+    return None
 
 
 def _extract_modal(inference_lines: list[str]) -> str | None:
@@ -391,15 +413,19 @@ def witness_tail(model: str) -> str:
     return _WITNESS_FOR.get(model, _TORCH_WITNESS_TAIL)
 
 
-def build_script(model: str, ckpt: str, device: str, modal: str | None = None) -> str:
+def build_script(model: str, ckpt: str, device: str, modal: str | None = None,
+                 task: str | None = None) -> str:
     template = _LOADER_TEMPLATE.get(model)
     if template is None:
         raise SystemExit(
             f"[ft_verify] no checkpoint-loader template for {model!r}; "
             f"supported: {loader_families()}"
         )
+    if model == "UMA" and not task:
+        raise SystemExit("[ft_verify] a UMA checkpoint needs the task it was fine-tuned for (task_name)")
     modal_kwarg = f", modal={modal!r}" if modal else ""
-    head = template.format(ckpt=repr(str(Path(ckpt).resolve())), device=device, modal_kwarg=modal_kwarg)
+    head = template.format(ckpt=repr(str(Path(ckpt).resolve())), device=device, modal_kwarg=modal_kwarg,
+                           task=task)
     return f"DEVICE = {device!r}\n" + head + witness_tail(model)
 
 
@@ -478,7 +504,8 @@ def verify(model: str, ckpt: str, device: str = "cpu", version: str | None = Non
     resolved = reg.resolve(model, version)
     family = resolved["model"]
     modal = _extract_modal(resolved.get("inference") or []) if family == "SevenNet" else None
-    script = build_script(family, ckpt, device, modal)
+    task = _extract_task(resolved.get("inference") or []) if family == "UMA" else None
+    script = build_script(family, ckpt, device, modal, task)
     proc = subprocess.run(
         [resolved["python"], "-c", script],
         capture_output=True, text=True, env=_child_env(resolved, device),

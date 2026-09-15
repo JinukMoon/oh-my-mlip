@@ -106,6 +106,7 @@ CKPT_GLOBS = {
     "MatterSim": ["results/best_model.pth"],
     "TACE": ["checkpoints_epoch/last.ckpt"],
     "CHGNet": ["chgnet_ft/bestE_*.pth.tar"],
+    "UMA": ["runs/ft/checkpoints/final/inference_ckpt.pt"],
 }
 GENERIC_CKPT_GLOBS = ["*.model", "*.pth", "*.pt", "*.ckpt"]
 # Family-specific glob prefixes kept IN FRONT of the shipped table (a more

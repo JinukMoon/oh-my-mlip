@@ -459,6 +459,8 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         "CHGNet": ["chgnet_ft/epoch0_e1_f2.pth.tar", "chgnet_ft/bestF_epoch0_e1_f2.pth.tar"],
         "DeePMD": ["dpa-3.1-3m-ft.pt", "input.json"], "DPA4": ["dpa-4.0.1-pro-mptrj.pt"],
         "GRACE": ["seed/0/checkpoints/checkpoint.index"], "PET": ["model-ft.ckpt"],
+        # fairchem also keeps per-step checkpoints and a resume.yaml next to final/
+        "UMA": ["runs/ft/checkpoints/step_1000/inference_ckpt.pt", "runs/ft/checkpoints/final/resume.yaml"],
     }
     for fam, globs in ft_run.FAMILY_CHECKPOINT_GLOBS.items():
         assert len(globs) == 1, (fam, globs)
@@ -529,6 +531,43 @@ def test_sevennet_builder_defers_preset_to_prestage_and_seeds(tmp_path):
     assert cfg["train"]["random_seed"] == 7 and cfg["train"]["epoch"] == 100 and cfg["train"]["per_epoch"] == 1
     assert cfg["data"]["batch_size"] == 4 and cfg["train"]["continue"]["checkpoint"] == "7net-mf-ompa"
     assert "load_mpa_validset_path" not in cfg["data"] and "load_validset_path" in cfg["data"]
+
+
+def test_uma_builder_runs_upstream_generator_then_fairchem(tmp_path):
+    import json
+    ctx = _ctx("UMA-s-1p2-OMAT", tmp_path)
+    spec = ft_run.build_uma(ctx)
+    assert spec.argv == [ft_run.entrypoint_bin(ctx.resolved, "fairchem"), "-c",
+                         str(ctx.out / "uma_data" / "uma_sm_finetune_template.yaml")]
+    assert spec.pre_steps == [[ctx.resolved["python"], str(ctx.out / "uma_prestage.py")]]
+    prestage = spec.extra_files[ctx.out / "uma_prestage.py"]
+    compile(prestage, "uma_prestage.py", "exec")
+    assert "fairchem.core.scripts.create_uma_finetune_dataset" in prestage
+    assert "raw.githubusercontent.com/facebookresearch/fairchem/" in prestage
+    patch = json.loads(spec.config_text)
+    # task and base model follow the registry variant, not the template's uma-s-1p1
+    assert patch["uma_task"] == "omat" and patch["base_model"] == "uma-s-1p2"
+    assert patch["train_yaml"]["base_model_name"] == "uma-s-1p2"
+    # defaults: upstream's fine-tune template values; stress is not trained unless asked for
+    assert patch["regression_tasks"] == "ef" and "stress" not in patch["loss_coefficients"]
+    assert patch["loss_coefficients"] == {"energy": 20.0, "forces": 2.0}
+    assert patch["train_yaml"]["batch_size"] == 2 and patch["train_yaml"]["lr"] == 4e-4
+    assert patch["train_yaml"]["job.run_dir"] == str(ctx.out / "runs") and patch["train_yaml"]["job.timestamp_id"] == "ft"
+    assert ft_run.FAMILY_CHECKPOINT_GLOBS["UMA"] == ["runs/ft/checkpoints/final/inference_ckpt.pt"]
+
+
+def test_uma_builder_stress_steps_and_task_refusal(tmp_path):
+    import json
+    ctx = _ctx("UMA-s-1p2-OMAT", tmp_path)
+    ctx.settings.update({"stress loss coefficient": 1.0, "steps": 50})
+    ctx.settings_origins.update({"stress loss coefficient": "user", "steps": "user"})
+    patch = json.loads(ft_run.build_uma(ctx).config_text)
+    assert patch["regression_tasks"] == "efs" and patch["loss_coefficients"]["stress"] == 1.0
+    # epochs and steps are exclusive upstream: steps wins, epochs is written as null
+    assert patch["train_yaml"]["steps"] == 50 and patch["train_yaml"]["epochs"] is None
+    ctx = _ctx("UMA-s-1p2-OC22", tmp_path / "oc22")
+    with pytest.raises(ValueError, match="not a fine-tunable UMATask"):
+        ft_run.build_uma(ctx)
 
 
 def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):
