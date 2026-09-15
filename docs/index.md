@@ -4,9 +4,10 @@
   <img src="assets/logo.png" alt="oh-my-mlip — machine learning interatomic potentials" width="560">
 </p>
 
-**One registry, many MLIPs.** oh-my-mlip covers 20 machine-learning
-interatomic-potential frameworks (32 model variants) — MACE, SevenNet, NequIP,
-ORB, UMA, … — and lets you:
+**Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 20
+machine-learning interatomic-potential frameworks (32 model variants) — MACE,
+SevenNet, NequIP, ORB, UMA, … — behind one registry, and your coding agent
+(Claude Code or Codex) does the work when you ask:
 
 - **install** any of them, each in its own conda env from a pinned recipe;
 - **use** them in your own scripts with the exact interpreter and calculator lines;

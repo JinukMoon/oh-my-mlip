@@ -67,9 +67,12 @@ Every call crosses a process boundary, so use the first way for MD loops.
 
 ## Ready-made scripts
 
+From the repository root:
+
 ```bash
 python run_examples/single_point.py MACE --structure POSCAR
-<spec["python"]> run_examples/relax.py MACE --structure POSCAR    # writes relaxed.extxyz
+PY=$(python -c 'from oh_my_mlip import resolve; print(resolve("MACE")["python"])')
+"$PY" run_examples/relax.py MACE --structure POSCAR    # writes relaxed.extxyz
 ```
 
 ## D3 dispersion

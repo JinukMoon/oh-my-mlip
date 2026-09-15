@@ -8,23 +8,18 @@
 [![Docs](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/docs.yml/badge.svg)](https://jinukmoon.github.io/oh-my-mlip/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**One registry, many MLIPs.** 20 machine-learning interatomic-potential
-frameworks (32 model variants), each in its own conda env built from a pinned
-recipe — installed, used, benchmarked, fine-tuned and distilled the same way.
-It drives the real upstream frameworks and never reimplements a model.
+**Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 20
+machine-learning interatomic-potential frameworks (32 model variants) behind
+one registry: each installs into its own conda env from a pinned recipe, and
+every one is installed, used, benchmarked, fine-tuned and distilled the same
+way. Ask Claude Code or Codex, and it does the whole job for you. It drives the
+real upstream frameworks and never reimplements a model.
 
 **Documentation: https://jinukmoon.github.io/oh-my-mlip/**
 
-## Install
+## Quick start
 
-```bash
-git clone https://github.com/JinukMoon/oh-my-mlip.git && cd oh-my-mlip
-source env.sh
-./install.sh MACE                                  # MACE in its own conda env
-python scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on your GPU
-```
-
-Or let Claude Code do it — add the plugin, then ask "install MACE":
+**Claude Code** — add the plugin, then ask "install MACE and check it runs on my GPU":
 
 ```
 /plugin marketplace add JinukMoon/oh-my-mlip
@@ -32,6 +27,23 @@ Or let Claude Code do it — add the plugin, then ask "install MACE":
 
 ```
 /plugin install oh-my-mlip@oh-my-mlip
+```
+
+**Codex or another coding agent** — tell it:
+
+```text
+Clone https://github.com/JinukMoon/oh-my-mlip, read its AGENTS.md and the
+documentation at https://jinukmoon.github.io/oh-my-mlip/, and use it for the
+MLIP work I ask for.
+```
+
+**From the terminal**, without an agent:
+
+```bash
+git clone https://github.com/JinukMoon/oh-my-mlip.git && cd oh-my-mlip
+source env.sh
+./install.sh MACE                                  # MACE in its own conda env
+python scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on your GPU
 ```
 
 Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](https://jinukmoon.github.io/oh-my-mlip/gated_models/).

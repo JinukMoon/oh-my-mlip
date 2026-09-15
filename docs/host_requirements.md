@@ -1,81 +1,57 @@
-# Host requirements & equivalence matrix
+# Host requirements
 
-Each env is pinned to a specific torch/CUDA build, so the **host must meet that
-recipe's NVIDIA-driver floor** (and, for a few, a GPU-arch compile). This is the
-honest portability story: oh-my-mlip removes the env/calculator/weights pain on a
-**compatible host** — it is not magic universal portability. Driver floors are
-approximate Linux minimums for the bundled CUDA runtime.
+Every env pins its own PyTorch (or TensorFlow) and CUDA build, so what your
+machine needs depends on which models you install.
 
-**Real-usage bar (builds + runs).** On the maintainer's RTX 4060 Ti (sm89, CUDA
-12.8) all **20/20 envs build and compute energy + forces** — 17 on the GPU
-directly, and **dpa4 / tace / matris on CPU** (their cu130 build needs a CUDA-13
-driver). The only out-of-the-box gap is a **weights auto-download** quirk in a
-couple of upstream packages on some networks (eqnorm / matris — see their notes),
-which has a one-line recovery.
+## In short
 
-**Stricter bar (bit-reproduces our reference).** Equivalence = single-point energy
-vs the validated /TGM hub on BackSingle2018 (per-atom, tol 1e-3 eV/atom).
-**17/20 envs matched** (most ≤ 1e-6, several bit-identical), across PyTorch +
-TensorFlow, incl. both gated envs. The other 3 are **not wrong-value failures**:
-AlphaNet runs and uses the **same weights** (slab energies are bit-identical) but
-the public commit's gas-phase energies drift ~0.24 eV/atom (owner must pin the
-exact commit); MatRIS and Nequix are simply **not in /TGM**, so there is no
-reference to compare. See `docs/equiv_results.md` for the full per-model numbers.
+- **Linux with an NVIDIA GPU.** Installation counts as done only after the model
+  computes energy and forces on the GPU.
+- **conda or mamba** on `PATH`.
+- **An NVIDIA driver new enough for the env's CUDA build** — see the table. Check
+  yours with `nvidia-smi` (the CUDA version at the top right).
+- **Disk:** each env takes several GB, plus the model weights.
+- **Host RAM:** 16 GB is enough for every model except `UMA-m-1p1-*`, which needs
+  32 GB or more.
 
-**Host RAM floors.** Driver and GPU arch are the usual gates, but one model is
-bounded by ordinary system memory instead. A checkpoint is materialized in host
-RAM before it reaches the GPU, so the floor scales with checkpoint size, not
-VRAM:
+## Per env
 
-| model | checkpoint | host RAM floor | evidence |
-|---|---|---|---|
-| `UMA-m-1p1-*` (both task variants) | 11.2 GB | **≥ 32 GB** (19 GB is not enough) | 2026-08-17, RTX 4060 Ti / WSL2, 19 GB RAM: `get_predict_unit('uma-m-1p1')` is SIGKILLed by the OOM killer (**exit 137**) ~30 s into the load. `setup_verify` sees only `worker produced no handshake`. All five `UMA-s-*` variants passed on the same host in the same sweep. |
-| every other variant | ≤ 2.9 GB | 16 GB comfortably | 29/31 variants verified on the 19 GB host |
+| Env | Python | Framework | CUDA | Driver | Notes |
+|---|---|---|---|---|---|
+| allegro | 3.11 | torch 2.8.0 | 12.8 | 570+ | compiled for your GPU at install (CuEquivariance) |
+| alphanet | 3.11 | torch 2.1.2 | 12.1 | 525+ | |
+| chgnet | 3.11 | torch 2.7.1 | 12.6 | 525+ | |
+| deepmd | 3.11 | torch 2.8.0 | 12.8 | 570+ | |
+| dpa4 | 3.11 | torch 2.11.0 | 13.0 | 580+ | |
+| eqnorm | 3.11 | torch 2.6.0 | 11.8 | 450+ | |
+| equflash | 3.12 | torch 2.9.1 | 12.6 | 525+ | |
+| equiformer_v3 | 3.11 | torch 2.7.1 | 12.8 | 570+ | |
+| fairchemv1 | 3.11 | torch 2.4.1 | 12.1 | 525+ | gated weights (eSEN) |
+| grace | 3.11 | TensorFlow 2.16.2 | 12.3 | 525+ | |
+| mace | 3.11 | torch 2.7.1 | 12.6 | 525+ | |
+| matris | 3.11 | torch 2.12.1 | 13.0 | 580+ | |
+| mattersim | 3.10 | torch 2.6.0 | 12.4 | 525+ | |
+| nequip | 3.11 | torch 2.9.1 | 12.8 | 570+ | compiled for your GPU at install (OpenEquivariance) |
+| nequix | 3.11 | torch 2.10.0 | 12.6 | 525+ | |
+| orb | 3.11 | torch 2.7.1 | 12.6 | 525+ | |
+| pet | 3.11 | torch 2.9.1 | 12.8 | 570+ | 2.8 GB checkpoint |
+| sevennet | 3.11 | torch 2.7.1 | 12.6 | 525+ | OpenEquivariance kernels built at install |
+| tace | 3.11 | torch 2.11.0 | 13.0 | 580+ | |
+| uma | 3.11 | torch 2.8.0 | 12.8 | 570+ | gated weights; `UMA-m-1p1-*` needs 32 GB+ host RAM |
 
-A **no-handshake verdict with a short, benign stderr is the OOM signature** — run
-the loader directly and read the exit code before suspecting the model. This is a
-distinct failure from the model-load *stall* reported on an A4500 host (see the
-`UMA-m-1p1-OC20` note in `models.json`): same variant, two different hosts, two
-different causes.
+Versions come from the lock files in `envs/locks/`; driver floors are the
+approximate Linux minimums for each CUDA build.
 
-| env | status | py | torch | CUDA | driver floor | equivalence | host requirement / note |
-|---|---|---|---|---|---|---|---|
-| chgnet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
-| deepmd | clean | 3.10.19 | 2.8.0 | cu128 | 570+ | ✅ matched (1.5e-07 eV/atom) | needs pip `mpich` |
-| dpa4 | candidate | 3.11.15 | 2.11.0 | cu130 | 580+ (CUDA 13) | ✅ matched (CPU) (2.2e-07 eV/atom) | needs CUDA-13 driver for GPU; ran CPU on CUDA-12 box; pip `mpich` |
-| eqnorm | clean | 3.11.13 | 2.6.0 | cu118 | 450+ | ✅ matched (0.0 (all bit-identical)) | runs on GPU; pkg auto-dl can 202-block on some nets → install.sh auto-prestages the weight (scripts/prestage_eqnorm_weights.py) |
-| equiformer_v3 | candidate | 3.11.15 | 2.7.1 | cu128 | 570+ | ✅ matched (0.0 (all bit-identical)) | vendored-fairchem editable build; owner-pin sha pending |
-| fairchemv1 | clean | 3.11.13 | 2.4.1 | cu121 | 525+ | ✅ matched (0.0 (all bit-identical)) | gated weights (HF token) |
-| grace | clean | 3.11.11 | (TF) | — | — | ✅ matched (machine precision (TensorFlow)) | TF-only; no GPU driver floor for inference |
-| mace | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (machine precision (float64)) | — |
-| mattersim | clean | 3.10.16 | 2.6.0 | cu124 | 525+ | ✅ matched (0.0 (all bit-identical)) | — |
-| orb | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (7.5e-05 eV/atom (float32-high)) | — |
-| pet | clean | 3.11.14 | 2.9.1 | cu128 | 570+ | ✅ matched (9.2e-07 eV/atom) | 2.8GB model |
-| sevennet | clean | 3.11.13 | 2.7.1 | cu126 | 525+ | ✅ matched (9.2e-07 eV/atom) | — |
-| tace | candidate | 3.11.15 | 2.11.0 | cu130 | 580+ (CUDA 13) | ✅ matched (CPU) (1.9e-06 eV/atom) | C/CUDA ext compiles; needs CUDA-13 driver for GPU |
-| uma | clean | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (1.6e-07 eV/atom) | gated weights (HF token); UMA proven via HF_TOKEN_PATH. **`uma-m-1p1` needs ≥32 GB host RAM** (OOM-killed at 19 GB — see the RAM table above); the five `uma-s` variants have no such floor |
-| allegro | candidate | 3.11.13 | 2.8.0 | cu128 | 570+ | ✅ matched (2.9e-07 eV/atom via AOT .pt2) | needs cueq-ops kernels + a per-arch .pt2 (nequip-compile on the user GPU) |
-| alphanet | candidate | 3.11.13 | 2.1.2 | cu121 | 525+ | ⚠ version drift (public HEAD ≠ /TGM) | owner must pin the exact commit (gas energies drift 0.24 eV/atom) |
-| equflash | candidate | 3.12.13 | 2.9.1 | cu126 | 525+ | ✅ matched (9.8e-07 eV/atom, multi-pass) | needs a 2-pass install (fairchem --no-deps) + nvalchemi-toolkit-ops; install.sh multi-pass pending |
-| matris | candidate | 3.11.15 | 2.12.1 | cu130 | 580+ (CUDA 13) | not in /TGM (no ref) | builds+runs (CPU here; GPU needs CUDA-13 driver); install.sh auto-prestages the weight (scripts/prestage_matris_weights.py) |
-| nequip | candidate | 3.11.13 | 2.9.1 | cu128 | 570+ | ✅ matched (3.8e-07 eV/atom via AOT .pt2) | oeq JIT needs ninja + nvrtc.h on CPATH; + a per-arch .pt2 (nequip-compile) |
-| nequix | candidate | 3.10.20 | 2.10.0 | cu126 | 525+ | ✅ builds+imports (no ref) | needs ninja + nvrtc.h on CPATH; extjax(JAX) accel build still fails (optional); not in /TGM |
+## Common problems
 
-## The two host-floor limits (found empirically)
-
-1. **`torch +cu130` needs a CUDA-13-class driver** (≈ 580+). On a CUDA-12.8 box
-   (driver 576) `torch.cuda.is_available()` is False → those envs (**dpa4, tace,
-   matris**) run **CPU-only**. CPU still reproduces /TGM (float64), just slower.
-2. **`openequivariance` needs torch ≥ 2.10** for its precompiled extension, else it
-   JIT-compiles against nvcc — which can fail. Affects **nequip** (won't load) and
-   **nequix** (wheel build fails). Allegro avoids it (uses cuequivariance) but still
-   needs an AOT-compiled `.pt2`.
-
-## How to read this for your host
-- Check your driver: `nvidia-smi` (top-right CUDA version) vs the **driver floor** column.
-- A `clean` row with a met floor → `install.sh <env>` then run; weights fetch on first use.
-- A `cu130` row on a CUDA-12 host → works on **CPU** (set `device='cpu'`), or upgrade the driver.
-- Gated rows (fairchemv1/eSEN, uma) → set up an HF token (see `docs/hf_token.md`).
-- `⏳`/`❌`/`⚠` rows → see the per-env `# candidate-reason:` in `envs/<env>.yml` and
-  `docs/equiv_results.md` for the exact blocker and the path to resolve it.
-
+- **Driver too old for a CUDA 13.0 env** (dpa4, matris, tace):
+  `torch.cuda.is_available()` is `False`. Upgrade the driver, or run those models
+  on the CPU (slower).
+- **A different GPU than the one you installed on:** NequIP and Allegro load a
+  model compiled for a specific GPU architecture. See
+  [GPU-architecture compilation](arch_first_run_compile.md).
+- **Loading `UMA-m-1p1-*` dies with no error message:** the checkpoint (11.2 GB)
+  is loaded into host RAM first, and the kernel's out-of-memory killer ends the
+  process (exit code 137). Use a machine with 32 GB or more, or a `UMA-s-*` model.
+- **Gated models** (UMA, eSEN) need your own Hugging Face login — see
+  [Hugging Face token](hf_token.md).
