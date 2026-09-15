@@ -848,15 +848,17 @@ def heldout_raw_path(work_dir_abs: Path) -> Path:
 def render_drop_frame0(*, raw: str) -> str:
     """The hub-owned step between D's teacher_md.py and the held-out file.
     teacher_md.py calls save_frame() once BEFORE dyn.run() for every
-    TEACHER_SEED, so its frame 0 is the init structure byte-for-byte -- the
-    same frame the AL pool's own teacher MD starts with. A held-out set that
-    keeps it shares a frame with the pool; this drops it (nothing else) and
-    refuses an empty remainder. Pure python, no ase: extxyz is
-    `natoms / comment / natoms lines` per frame."""
+    TEACHER_SEED, and the same observer is attached to the dynamics, which ASE
+    also calls at step 0 -- so the trajectory starts with the init structure,
+    possibly twice, byte-for-byte identical. The AL pool's own teacher MD starts
+    the same way. A held-out set that keeps any of those frames shares a frame
+    with the pool; this drops frame 0 and every following frame whose atom block
+    is identical to it (nothing else), and refuses an empty remainder. Pure
+    python, no ase: extxyz is `natoms / comment / natoms lines` per frame."""
     return textwrap.dedent(f'''\
-        # teacher_md.py saves the init structure as frame 0 BEFORE the first MD
-        # step (for any seed) and the pool's trajectory starts with that very
-        # frame: drop it here, hub-owned, engine untouched. Empty remainder => exit 1.
+        # teacher_md.py saves the init structure before the first MD step, and its
+        # step-0 observer call can save it again: drop every leading copy here,
+        # hub-owned, engine untouched. Empty remainder => exit 1.
         python - {_q(raw)} "$HELDOUT" <<'PY'
     import sys
     raw, out = sys.argv[1], sys.argv[2]
@@ -869,13 +871,16 @@ def render_drop_frame0(*, raw: str) -> str:
         n = int(lines[i].split()[0])
         frames.append(lines[i:i + n + 2])
         i += n + 2
-    if len(frames) < 2:
-        sys.exit(f"[run_distill] held-out MD wrote {{len(frames)}} frame(s) to {{raw}}; dropping the pre-MD "
-                 "frame 0 (shared with the pool) leaves nothing -- raise --heldout-steps (>= --heldout-save-every)")
+    drop = 1 if frames else 0
+    while drop < len(frames) and frames[drop][2:] == frames[0][2:]:
+        drop += 1
+    if len(frames) - drop < 1:
+        sys.exit(f"[run_distill] held-out MD wrote {{len(frames)}} frame(s) to {{raw}}; dropping the init "
+                 "structure frames (shared with the pool) leaves nothing -- raise --heldout-steps (>= --heldout-save-every)")
     with open(out, "w", encoding="utf-8") as fh:
-        fh.writelines(line for frame in frames[1:] for line in frame)
-    print(f"[run_distill] held-out: dropped frame 0 (init structure, shared with the pool); "
-          f"kept {{len(frames) - 1}} of {{len(frames)}} -> {{out}}", flush=True)
+        fh.writelines(line for frame in frames[drop:] for line in frame)
+    print(f"[run_distill] held-out: dropped {{drop}} leading init-structure frame(s) (shared with the pool); "
+          f"kept {{len(frames) - drop}} of {{len(frames)}} -> {{out}}", flush=True)
     PY''')
 
 
@@ -1074,8 +1079,9 @@ def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Pa
             "steps": args.heldout_steps,
             "save_every": args.heldout_save_every,
             "raw_path": str(heldout_raw_path(work)),
-            "drops_frame0": "teacher_md.py saves the init structure before its first MD step for any seed; "
-                            "run_distill.sh drops that frame (the pool starts with the same one)",
+            "drops_frame0": "teacher_md.py saves the init structure before its first MD step for any seed, and "
+                            "its step-0 observer call can save it again; run_distill.sh drops every leading copy "
+                            "(the pool starts with the same frames)",
         }
     split_heldout.update({
         "path": str(heldout),

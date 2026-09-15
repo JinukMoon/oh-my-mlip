@@ -400,7 +400,7 @@ def test_acceptance_run_sh_generates_heldout_outside_run_dir(accepted, fake_d):
             f'{db._q(raw)} {db.DEFAULT_HELDOUT_STEPS} {db.DEFAULT_HELDOUT_SAVE_EVERY}') in text
     # teacher_md.py's pre-MD frame 0 (the init structure, also the pool's first
     # frame) is dropped by a hub-owned step between the raw MD and $HELDOUT
-    assert f'python - {db._q(raw)} "$HELDOUT" <<\'PY\'' in text and "frames[1:]" in text
+    assert f'python - {db._q(raw)} "$HELDOUT" <<\'PY\'' in text and "frames[drop:]" in text
     # the pool seeding keeps the flag-given size, and the loop is still D's script
     assert f'python {teacher_md} "$WORK/teacher_md.extxyz" 40 8' in text
     assert 'python -m ontheflydistill.merge_xyz "$WORK/dataset.extxyz" "$WORK/teacher_md.extxyz"' in text
@@ -743,7 +743,7 @@ def test_generated_heldout_drops_the_shared_frame0(tmp_path, fake_d, cu_structur
     _prime_pool_only(work)
     proc = _run_sh(work)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "dropped frame 0" in proc.stdout and "kept 3 of 4" in proc.stdout
+    assert "dropped 1 leading init-structure frame(s)" in proc.stdout and "kept 3 of 4" in proc.stdout
     raw = dv.frame_fingerprints(work / "heldout" / "heldout_md_raw.extxyz")
     kept = dv.frame_fingerprints(work / "heldout" / "heldout.extxyz")
     assert len(raw) == 4 and len(kept) == 3 and kept < raw
@@ -758,6 +758,27 @@ def test_generated_heldout_drops_the_shared_frame0(tmp_path, fake_d, cu_structur
     # rerun: the held-out is kept, not regenerated (idempotent like the pool seeding)
     before = (work / "heldout" / "heldout.extxyz").read_bytes()
     assert _run_sh(work).returncode == 0 and (work / "heldout" / "heldout.extxyz").read_bytes() == before
+
+
+def test_generated_heldout_drops_a_duplicated_init_frame(tmp_path, fake_d, cu_structure):
+    # the real teacher_md.py saves the init structure explicitly AND through its
+    # step-0 observer call: two identical leading frames. Both must be dropped,
+    # otherwise the second copy is shared with the pool.
+    import os
+    import distill_verify as dv
+    _install_fake_teacher_md(fake_d)
+    (fake_d / "scripts" / "teacher_md.py").write_text(
+        FAKE_TEACHER_MD.replace("    fh.write(frame(0.0))", "    fh.write(frame(0.0))\n    fh.write(frame(0.0))"))
+    work = _acc_main(tmp_path, fake_d, cu_structure, *ACC_BASE, "--heldout-steps", "30", "--heldout-save-every", "10")
+    _prime_pool_only(work)
+    proc = _run_sh(work)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "dropped 2 leading init-structure frame(s)" in proc.stdout and "kept 3 of 5" in proc.stdout
+    kept = dv.frame_fingerprints(work / "heldout" / "heldout.extxyz")
+    pool_raw = work / "pool_check.extxyz"
+    subprocess.run([sys.executable, str(fake_d / "scripts" / "teacher_md.py"), str(pool_raw), "20", "10"],
+                   check=True, env={**os.environ, "TEACHER_SEED": str(db.POOL_TEACHER_SEED)})
+    assert len(kept) == 3 and not (kept & dv.frame_fingerprints(pool_raw))
 
 
 def test_generated_heldout_with_only_frame0_is_refused_at_run_time(tmp_path, fake_d, cu_structure):
@@ -950,7 +971,7 @@ def test_hostile_paths_are_used_literally_end_to_end(tmp_path, fake_d, cu_struct
     _prime_pool_only(work)
     proc = _run_sh(work)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "dropped frame 0" in proc.stdout
+    assert "leading init-structure frame(s)" in proc.stdout
     # nothing was expanded: no `pwned` anywhere, nothing redirected into a stray file
     assert not list(tmp_path.rglob("pwned")) and not list(Path.cwd().glob("pwned"))
     assert (work / "heldout" / "heldout.extxyz").is_file() and (work / "run" / ".al_status").is_file()
