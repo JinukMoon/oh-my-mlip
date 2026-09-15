@@ -243,6 +243,17 @@ def test_cpu_run_pins_no_gpu_in_child_env(monkeypatch):
     assert captured["cmd"][0] == reg.resolve("MACE")["python"]
 
 
+def test_child_env_puts_env_lib_first_and_env_run_wins(tmp_path, monkeypatch):
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "lib").mkdir()
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/usr/lib/wsl/lib")
+    resolved = {"python": str(tmp_path / "bin" / "python")}
+    env = ft_verify._child_env(resolved, "cuda")
+    assert env["LD_LIBRARY_PATH"] == f"{tmp_path / 'lib'}:/usr/lib/wsl/lib"
+    env = ft_verify._child_env({**resolved, "env_run": {"LD_LIBRARY_PATH": ""}}, "cuda")
+    assert env["LD_LIBRARY_PATH"] == ""
+
+
 def test_non_finite_energy_fails(monkeypatch):
     _stub_child(monkeypatch, json.dumps(_torch_line(energy_ev=float("nan"))))
     v = ft_verify.verify("MACE", "/tmp/x.model", "cuda")

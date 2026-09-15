@@ -137,6 +137,20 @@ def test_render_sh_exports_env_run(tmp_path):
     assert 'export LD_LIBRARY_PATH=""' in text
 
 
+def test_render_sh_puts_env_lib_first_and_env_run_after(tmp_path):
+    env = tmp_path / "env"
+    (env / "bin").mkdir(parents=True)
+    (env / "lib").mkdir()
+    resolved = {"python": str(env / "bin" / "python"), "env_run": {}}
+    lines = ft_run.render_sh(resolved, [str(env / "bin" / "gracemaker")], tmp_path).splitlines()
+    assert f'export LD_LIBRARY_PATH="{env / "lib"}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"' in lines
+    resolved["env_run"] = {"LD_LIBRARY_PATH": ""}
+    lines = ft_run.render_sh(resolved, [str(env / "bin" / "dp")], tmp_path).splitlines()
+    # env_run's override is exported after the prepend, so it wins
+    assert lines.index('export LD_LIBRARY_PATH=""') > next(
+        i for i, ln in enumerate(lines) if ln.startswith(f'export LD_LIBRARY_PATH="{env / "lib"}'))
+
+
 def test_slurm_body_identical_below_header(tmp_path):
     resolved = {"python": "/fake/env/bin/python", "env_run": {}}
     argv = ["/fake/env/bin/mace_run_train"]

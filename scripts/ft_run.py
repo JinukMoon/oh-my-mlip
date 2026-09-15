@@ -1437,6 +1437,12 @@ FAMILY_CHECKPOINT_GLOBS = {
 def _render_body(resolved: dict, argv: list[str], out_dir: Path, *,
                  pre_steps: list | None = None, extra_env: dict | None = None) -> str:
     lines = [_GEN_COMMENT, "set -eu", f'cd "{Path(out_dir).resolve()}"']
+    # The env's own lib dir goes first on the loader path, as oh_my_mlip/provider.py does for
+    # inference (we never `conda activate`): GRACE's TensorFlow finds its cuDNN 8 only there and
+    # otherwise registers no GPU. env_run is exported after this, so its overrides still win.
+    env_lib = Path(os.path.expandvars(resolved.get("python", ""))).parent.parent / "lib"
+    if resolved.get("python") and env_lib.is_dir():
+        lines.append(f'export LD_LIBRARY_PATH="{env_lib}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"')
     for key, value in (resolved.get("env_run") or {}).items():
         lines.append(f'export {key}="{value}"')
     for key, value in (extra_env or {}).items():

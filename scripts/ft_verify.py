@@ -360,7 +360,16 @@ def build_script(model: str, ckpt: str, device: str, modal: str | None = None) -
 
 
 def _child_env(resolved: dict, device: str) -> dict:
-    env = dict(os.environ, **(resolved.get("env_run") or {}))
+    env = dict(os.environ)
+    # The env's own lib dir first on the loader path, as oh_my_mlip/provider.py does for
+    # inference: GRACE's TensorFlow finds its cuDNN 8 only there and otherwise registers no
+    # GPU. env_run is applied after this, so its overrides (e.g. LD_LIBRARY_PATH="") still win.
+    python = os.path.expandvars(resolved.get("python") or "")
+    env_lib = os.path.join(os.path.dirname(os.path.dirname(python)), "lib") if python else ""
+    if env_lib and os.path.isdir(env_lib):
+        existing = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + existing if existing else "")
+    env.update(resolved.get("env_run") or {})
     if device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""
         env["DEVICE"] = "cpu"  # deepmd.pt.utils.env honours this literal
