@@ -30,6 +30,17 @@
   }
 }
 
+/* Below the desktop breakpoint Material hides the tabs and the header logo;
+   keep both on tablet and laptop widths (the sidebar stays in the drawer). */
+@media screen and (min-width: 45em) and (max-width: 76.234375em) {
+  .md-tabs {
+    display: block;
+  }
+  .md-header__button.md-logo {
+    display: inline-block;
+  }
+}
+
 /* "Ask your LLM" prompts are ```text blocks: wrap them instead of scrolling. */
 .md-typeset .language-text pre code {
   white-space: pre-wrap;

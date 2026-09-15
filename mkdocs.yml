@@ -25,6 +25,7 @@ theme:
     # every section, expanded, with its pages indented (docs/stylesheets/extra.css
     # undoes the tabs' "active section only" sidebar)
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.expand
     - navigation.top
     - navigation.footer
@@ -55,10 +56,13 @@ markdown_extensions:
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
 
 nav:
   - Home: index.md
   - Getting started:
+      - Get started: start.md
       - Install models: howto/install.md
       - Use a model: howto/use-a-model.md
       - Use with Claude Code: claude_plugin.md
