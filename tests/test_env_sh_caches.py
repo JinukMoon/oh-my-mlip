@@ -1,12 +1,12 @@
 """Tests for env.sh weight-cache semantics (framework-native by default).
 
-Pins the 2026-07-20 design decision:
+Pins the design decision for cache handling:
   * DEFAULT: env.sh must not redirect any download cache (no HF_HOME /
     FAIRCHEM_CACHE_DIR / TORCH_HOME / CACHED_PATH_CACHE_ROOT exports) — the
-    always-on redirect forked users' existing caches (13 GB UMA re-download)
-    and moved the HF login-token lookup, turning gated fetches anonymous;
+    always-on redirect forked users' existing caches and moved the HF
+    login-token lookup, turning gated fetches anonymous;
   * a user's own pre-set HF_HOME is left untouched;
-  * OMM_SHARED_CACHE_ROOT opts back in EXPLICITLY (shared /TGM-style hubs),
+  * OMM_SHARED_CACHE_ROOT opts in EXPLICITLY (for shared multi-user hubs),
     rooting every cache under it and preserving the standard HF login via
     HF_TOKEN_PATH (a path export, never a token value).
 """

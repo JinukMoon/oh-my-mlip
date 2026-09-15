@@ -1,6 +1,6 @@
 """oh_my_mlip.mcp_server — a thin MCP adapter over the public oh_my_mlip API.
 
-This module exposes the existing tiered teacher-provider interface
+This module exposes the existing teacher-provider interface
 (``list_models`` / ``resolve`` / ``run`` / ``Worker`` / ``fetch_env``) as
 Model-Context-Protocol tools so a tool-calling agent can drive the hub the same
 way a human follows ``AGENTS.md``. It REIMPLEMENTS NOTHING — every tool is a
@@ -159,7 +159,7 @@ _VALIDATION_LABEL = {
     "validated_sm89": "validated (sm89)",
     "gpu_pending": "gpu pending",
     "cpu_only": "cpu only",
-    "tier1_cpu_driver_skew": "tier-1 CPU (driver skew)",
+    "tier1_cpu_driver_skew": "CPU only (GPU driver too old)",
 }
 
 

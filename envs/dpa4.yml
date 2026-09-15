@@ -1,19 +1,15 @@
 # build_status: candidate
-# candidate-reason: torch cu130 needs an NVIDIA driver >= the CUDA-13 floor; on a CUDA-12 host it runs CPU-only. Recipe completed + CPU-verified vs /TGM (2e-7 eV/atom); GPU inference unverified here (our test box is CUDA 12.8).
+# candidate-reason: torch cu130 requires an NVIDIA driver at the CUDA 13.0+ level. GPU inference requires appropriate driver support.
 # oh-my-mlip env recipe: DPA-4 (deepmd-kit 3.2 line)
 #
-# Pins mirror the validated internal setup:
-#   python 3.11.15 / torch 2.11.0+cu130.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# Pins: python 3.11.15 / torch 2.11.0+cu130.
+# install.sh build-from-recipe is the PRIMARY install path.
 #
-#   - torch is pinned to the CUDA 13.0 build (cu130) from the official PyTorch
-#     wheel index; the host NVIDIA driver must satisfy the cu130 min-driver floor.
-#   - cuda-nvcc 13.0.* is included so the D3 dispersion kernel can compile on
-#     first run (matching the torch CUDA minor).
-#   - deepmd-kit is pinned to the 3.2.0b0 pre-release used for DPA-4. It needs an
-#     MPI runtime (mpich) and pulls a large nvidia-cu13 stack; neither has been
-#     smoke-tested in this recipe form, so the build is marked candidate.
+#   - torch is pinned to CUDA 13.0 (cu130) from the official PyTorch wheel index;
+#     the host NVIDIA driver must satisfy the cu130 min-driver floor.
+#   - cuda-nvcc 13.0.* is included for D3 dispersion kernel compilation.
+#   - deepmd-kit is pinned to the 3.2.0b0 pre-release for DPA-4. Requires MPI runtime
+#     (mpich) and pulls a large nvidia-cu13 stack.
 #   - models.json sets env_run: LD_LIBRARY_PATH="" for this env to avoid host MPI
 #     library clashes at inference time.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a

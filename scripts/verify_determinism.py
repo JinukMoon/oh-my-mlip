@@ -17,7 +17,7 @@ Bare packages and range constraints (>=, <=, ~=, >, <, !=) are failures. This
 half of the gate exists because pip pins alone did NOT make a rebuild
 reproducible: a floating conda ``- ase`` silently rode the newest release into
 the env and broke mattersim/eqnorm, and pinning ase per env was the fix — a
-hole this checker was blind to until 2026-08-17.
+hole this checker was previously blind to.
 
 A pip requirement is deterministic only when it is one of:
 

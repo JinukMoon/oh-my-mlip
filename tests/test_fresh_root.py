@@ -84,7 +84,7 @@ def test_allowlist_is_generated_from_approved_part31_list(tmp_path):
     data = json.loads(out.read_text())
     assert data["patterns"] == fr.APPROVED_NEW_PATHS
     assert "recipes/*.md" in data["patterns"] and "scripts/fresh_root.py" in data["patterns"]
-    # the coordinator-approved G1 contract test is an EXACT path, no blanket allow
+    # the approved contract test is an EXACT path, no blanket allow for tests/*
     assert "tests/test_recipe_contract.py" in data["patterns"]
     assert not any(p in ("tests/*.py", "tests/*", "*") for p in data["patterns"])
     assert "Part 3.1" in data["source"]

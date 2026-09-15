@@ -19,16 +19,16 @@ fi
 # its own upstream location (~/.cache/huggingface, ~/.cache/fairchem,
 # ~/.cache/torch, ~/.cache/mace, ...), which ADOPTS whatever the user already
 # downloaded and leaves `hf auth login` token discovery untouched.
-# Why (both host-proven 2026-07-20): the old always-on redirect (a) forked the
+# Why this is NOT redirected: the old always-on redirect (a) forked the
 # user's existing caches — a 13 GB UMA re-download of byte-identical weights —
 # and (b) moved huggingface_hub's login-token lookup to $HF_HOME/token, so
-# every gated fetch under env.sh went out anonymous and 401'd despite a valid
-# login. The registry's verified ledger (models.local.json) records the real
-# resolved paths per model, so no central directory is needed for lookup.
+# every gated fetch went out anonymous and 401'd despite valid credentials.
+# The models.json registry records resolved weight paths per model, so no
+# central cache directory is needed for lookup.
 #
-# Building a SHARED hub (multi-user /TGM-style install, HPC home-quota
-# setups): set OMM_SHARED_CACHE_ROOT to an absolute path BEFORE sourcing
-# env.sh and every framework cache is explicitly redirected under it:
+# Building a SHARED hub (multi-user setup, HPC home-quota constraints):
+# set OMM_SHARED_CACHE_ROOT to an absolute path BEFORE sourcing env.sh
+# and every framework cache is explicitly redirected under it:
 if [ -n "${OMM_SHARED_CACHE_ROOT:-}" ]; then
   export HF_HOME="${OMM_SHARED_CACHE_ROOT}/hf"
   # HF_HOME moves huggingface_hub's LOGIN-TOKEN lookup to $HF_HOME/token; keep

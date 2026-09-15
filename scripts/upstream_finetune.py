@@ -5,9 +5,7 @@ foundation-checkpoint path: `mace_run_train --foundation_model=...`,
 `sevenn train input.yaml` with `train.continue.checkpoint`, and so on for all
 20 registry families. Every command, config key and blocker below is either
 quoted verbatim from official upstream documentation, or excavated from the
-source of the version actually installed in `/home/jumoon/miniconda3/envs/`
-(read-only research, 2026-08-22; full write-ups: `.omc/research/finetune/
-{A-major-cli,B-deepmodeling-meta,C-misc-torch,D-rest}.md`). Provenance is
+source of an installed copy of that package. Provenance is
 carried through from those reports: **[DOC]** = verbatim from official docs,
 **[CODE]** = excavated from installed package source / `--help` output,
 **[LOCAL-VERIFIED]** = flag/key confirmed present in our pinned version.
@@ -58,9 +56,8 @@ Field guide (one row per family; per-variant divergences live in
                             running (EquFlash: CC BY-NC-SA 4.0; MACE MH-1
                             checkpoints: ASL) — None everywhere else. This repo
                             is MIT and redistributes no weights either way; the
-                            field is disclosure, not a legal gate (Part 8
-                            decision (a) in the consensus plan: advertise +
-                            disclose, do not refuse).
+                            field is disclosure, not a legal gate (the licence
+                            is shown, the run is not refused).
   note                      free-form caveats a fine-tune codegen must respect
   evidence                  list[str] of URLs; populated only for the two
                             not-supported families (Eqnorm, MatRIS), where

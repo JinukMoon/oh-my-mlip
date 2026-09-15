@@ -126,7 +126,7 @@ def test_resolve_arch_pinned_nequip(monkeypatch):
     assert spec86["arch"] == "sm86" and spec89["arch"] == "sm89"
     assert any("sm86" in line for line in spec86["inference"])
     assert any("sm89" in line for line in spec89["inference"])
-    # arch omitted -> host auto-detect (beta-test fix: an sm86 host must not
+    # arch omitted -> host auto-detect (an sm86 host must not
     # silently get the sm89 artifact); monkeypatch detect for determinism.
     monkeypatch.setattr(reg, "detect_host_arch", lambda: "sm86")
     spec_auto = resolve("NequIP", "NequIP-OAM-XL")
@@ -158,7 +158,7 @@ def test_resolve_unknown_arch_uses_template():
         assert spec["arch"] == "sm120"
         assert any("compiled/sm120/" in line for line in spec["inference"]), spec["inference"]
         assert not any("${OMM_ARCH}" in line for line in spec["inference"])
-        # explicit blocks still win for the two host-verified arches
+        # explicit architecture blocks still win when specified
         spec89 = resolve(model, ver, arch="sm89")
         assert any("compiled/sm89/" in line for line in spec89["inference"])
 
@@ -228,8 +228,8 @@ def test_parse_env_run_rejects_unsafe(bad):
 
 
 def test_dpa4_env_run_parses_from_registry():
-    # DPA4 pins env_run LD_LIBRARY_PATH to the WSL driver mount (evicts the
-    # Intel oneAPI paths while keeping libcuda visible) -> must parse.
+    # DPA4 requires specific LD_LIBRARY_PATH configuration for compatibility.
+    # The env_run must parse correctly from the registry.
     spec = resolve("DPA4", "DPA-4.0.1-pro-MPtrj")
     assert spec["env_run"] == {"LD_LIBRARY_PATH": "/usr/lib/wsl/lib"}
     assert spec["env_run_raw"] == 'LD_LIBRARY_PATH="/usr/lib/wsl/lib"'
@@ -291,7 +291,7 @@ def _make_popen(stdout_lines, captured):
 
 
 def test_worker_arch_flag_in_cmd_for_arch_pinned():
-    # Beta-test fix: the launcher must propagate the resolved arch to the
+    # The launcher must propagate the resolved arch to the
     # in-env worker; an sm86 caller-forced arch was previously silently lost.
     captured = {}
     handshake = json.dumps({"ready": True, "model": "NequIP"}) + "\n"
@@ -359,7 +359,7 @@ def test_worker_env_run_applied_as_subprocess_env():
 
 
 def test_worker_env_prepends_env_lib_when_present(tmp_path):
-    # Beta-test fix (Fedora-36 CXXABI): the worker child env must have the
+    # Old system libstdc++ (CXXABI): the worker child env must have the
     # env's own lib dir first on LD_LIBRARY_PATH when that dir exists on disk.
     bin_dir = tmp_path / "envs" / "mace" / "bin"
     lib_dir = tmp_path / "envs" / "mace" / "lib"

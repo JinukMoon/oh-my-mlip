@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
-# sweep_watchdog.sh — keep the local MLIP env sweep alive across WSL restarts.
+# sweep_watchdog.sh — keep the local MLIP env sweep alive across machine restarts.
 #
 # Idempotent + safe to run every minute from cron (and @reboot):
 #   - flock prevents double-launch races.
 #   - relaunches sweep_local.py ONLY if it is not already running AND the sweep
 #     is not finished (no .sweep/DONE sentinel).
 #   - the sweep is resumable (skips already-passed envs via results.jsonl), so a
-#     relaunch after a WSL/Windows reboot just continues where it left off.
+#     relaunch after a reboot just continues where it left off.
 #
 # Install (cron, matching the user's existing @reboot + per-minute pattern):
-#   @reboot   /home/jumoon/01_2026/17_MLIP_HUB/oh-my-mlip/scripts/sweep_watchdog.sh
-#   * * * * * /home/jumoon/01_2026/17_MLIP_HUB/oh-my-mlip/scripts/sweep_watchdog.sh
+#   @reboot   /path/to/oh-my-mlip/scripts/sweep_watchdog.sh
+#   * * * * * /path/to/oh-my-mlip/scripts/sweep_watchdog.sh
+#
+# The hub root is derived from this script's own location (override with
+# OH_MY_MLIP_HOME). cron does not load your shell profile, so if conda is not
+# found set CONDA_EXE (e.g. CONDA_EXE=$HOME/miniforge3/bin/conda) in the crontab.
 #
 # Stop it permanently:  touch .sweep/DONE   (and/or remove the cron lines)
 
 set -euo pipefail
 
-HOME_DIR="/home/jumoon/01_2026/17_MLIP_HUB/oh-my-mlip"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOME_DIR="${OH_MY_MLIP_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 SWEEP_DIR="$HOME_DIR/.sweep"
 LOCK="$SWEEP_DIR/watchdog.lock"
 WLOG="$SWEEP_DIR/watchdog.log"
@@ -76,9 +81,15 @@ if [ -n "$ORPHANS" ]; then
   kill -9 $ORPHANS 2>/dev/null || true
 fi
 # cron does NOT source the user's profile, so conda may be off PATH. install.sh
-# needs conda -> prepend the miniconda bin dir so the whole subprocess tree finds it.
-for CB in /home/jumoon/miniconda3/bin /home/jumoon/miniconda3/condabin; do
-  [ -d "$CB" ] && case ":$PATH:" in *":$CB:"*) ;; *) PATH="$CB:$PATH";; esac
+# needs conda -> prepend the conda bin dirs (from $CONDA_EXE / $CONDA_PREFIX)
+# so the whole subprocess tree finds it.
+CONDA_DIRS=()
+if [ -n "${CONDA_EXE:-}" ]; then CONDA_DIRS+=("$(dirname "$CONDA_EXE")"); fi
+if [ -n "${CONDA_PREFIX:-}" ]; then CONDA_DIRS+=("$CONDA_PREFIX/bin" "$CONDA_PREFIX/condabin"); fi
+for CB in ${CONDA_DIRS[@]+"${CONDA_DIRS[@]}"}; do
+  if [ -d "$CB" ]; then
+    case ":$PATH:" in *":$CB:"*) ;; *) PATH="$CB:$PATH";; esac
+  fi
 done
 export PATH
 echo "[$(ts)] watchdog: sweep not running -> relaunching (resume); conda=$(command -v conda || echo MISSING)" >>"$WLOG"

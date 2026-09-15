@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""evidence_report.py -- the Part 5 verdict layers over a campaign ledger.
+"""evidence_report.py -- verdict layers over a fresh-root sweep ledger.
 
 Reads ONLY the campaign ledger written by `setup_sweep.py --fresh-root`
 (kind=inference rows from setup_verify, kind=finetune rows from ft_sweep,
@@ -16,7 +16,7 @@ cleanup) and prints three layers:
                          finetune: every variant of the DYNAMIC required set
                          `passed` -- baseline = models.json `finetune.status`
                          starting with `documented`; plus any not-supported /
-                         code-excavation-needed candidate the current-campaign
+                         code-excavation-needed candidate the per-run support
                          audit (--audit) marks `supported: true`. Printed as
                          `passed/required`; every excluded candidate is listed
                          with its citation.
@@ -26,12 +26,12 @@ cleanup) and prints three layers:
                          failed(*); any blocked or failed required row =>
                          INCOMPLETE, nonzero exit.
                          Rows tagged `adopted-regression` never count toward
-                         fresh coverage (G3b), they are listed separately.
+                         fresh coverage; they are listed separately.
 
 --bundle DIR writes evidence_bundle.md + evidence_bundle.json (table with
 INCOMPLETE marks, guard rows, budget history vs estimate, cleanup records) --
-it works on a paused/terminated campaign exactly as on a finished one (G9:
-the bundle exists in either case; the strict verdict is what changes).
+it works on a paused/terminated campaign exactly as on a finished one (the
+bundle exists in either case; the strict verdict is what changes).
 
 Exit code: --strict => 0 iff complete; otherwise 0 whenever the ledger parsed.
 
@@ -96,7 +96,7 @@ def load_audit(path: Path | None) -> dict:
 
 
 def required_sets(models: dict, audit: dict) -> dict:
-    """Dynamic required sets (Part 3.2 / Part 5). Returns
+    """Dynamic required sets Returns
     {inference: [...], finetune: [...], excluded: [{variant, status, citation}]}"""
     variants = registry_variants(models)
     inference = [v["variant"] for v in variants]
@@ -189,9 +189,9 @@ def evaluate(rows: list[dict], models: dict, audit: dict, *, allow_degraded: boo
                           "manifest_sha256": (row or {}).get("manifest_sha256"),
                           "evidence": (row or {}).get("evidence"), "verdict": (row or {}).get("verdict"),
                           "seq": (row or {}).get("seq")})
-    # An exclusion from the required set is only valid with a citation (Part 5):
+    # An exclusion from the required set is only valid with a citation:
     # audit citation, models.json evidence, or the ledger's own cited
-    # `unsupported` row. A candidate with none of those means the G4 step-0
+    # `unsupported` row. A candidate with none of those means the support
     # audit never happened for it -- the required set is not final => incomplete.
     uncited_exclusions = []
     for ex in req["excluded"]:
@@ -343,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--ledger", required=True, type=Path)
     ap.add_argument("--models", default=None, help="models.json (default: $OH_MY_MLIP_HOME/models.json)")
-    ap.add_argument("--audit", default=None, help="current-campaign FT support audit JSON")
+    ap.add_argument("--audit", default=None, help="FT support audit JSON for this run")
     ap.add_argument("--strict", action="store_true", help="exit nonzero unless every required row passed")
     ap.add_argument("--allow-degraded", action="store_true",
                     help="DISPLAY ONLY: count a degraded CPU pass / unwitnessed GPU as passed; refused with --strict")

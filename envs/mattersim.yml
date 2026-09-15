@@ -1,17 +1,14 @@
 # build_status: clean
 # oh-my-mlip env recipe: MatterSim (mattersim)
 #
-# Validated, buildable recipe. Pins mirror the validated internal setup:
-#   python 3.10.16 / torch 2.6.0+cu124.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# Pins: python 3.10.16 / torch 2.6.0+cu124.
+# install.sh build-from-recipe is the PRIMARY install path.
 #
-#   - torch is pinned to the CUDA 12.4 build (cu124) from the official PyTorch
-#     wheel index; the host NVIDIA driver must satisfy the cu124 min-driver floor.
-#   - cuda-nvcc 12.4.* is included so the D3 dispersion kernel can compile on
-#     first run (matching the torch CUDA minor).
-#   - mattersim is installed from its validated git sha; torch-geometric and e3nn
-#     are top-level deps it needs.
+#   - torch is pinned to CUDA 12.4 (cu124) from the official PyTorch wheel index;
+#     the host NVIDIA driver must satisfy the cu124 min-driver floor.
+#   - cuda-nvcc 12.4.* is included for D3 dispersion kernel compilation.
+#   - mattersim is installed from a specific git commit. torch-geometric and e3nn
+#     are public dependencies.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -27,9 +24,9 @@ dependencies:
   - pip
   # CUDA 12.4 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.4.*
-  # ase pinned to the validated /TGM version: mattersim imports
-  # full_3x3_to_voigt_6_stress from ase.constraints, which newer ASE (>=3.25)
-  # moved/removed — an unpinned ase floats to a breaking version.
+  # ase is pinned because mattersim uses full_3x3_to_voigt_6_stress from
+  # ase.constraints, which was moved/removed in ASE >= 3.25. Unpinned ase floats
+  # to a breaking version.
   - ase=3.24.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu124
@@ -37,6 +34,6 @@ dependencies:
       - mattersim @ git+https://github.com/microsoft/mattersim.git@bf13be6f6fd470fd4e299855c755ad13968620bb
       - torch-geometric==2.6.1
       - e3nn==0.5.6
-      # mattersim imports pkg_resources at runtime; setuptools>=81 removed it, so
-      # pin the validated /TGM version that still ships pkg_resources.
+      # mattersim imports pkg_resources at runtime; setuptools>=81 removed it.
+      # Pin a version that still ships pkg_resources.
       - setuptools==75.8.0

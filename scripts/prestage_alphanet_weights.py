@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pre-stage the AlphaNet weight + config into models/alphanet/.
 
-Beta-test finding (RTX A4500 host, 2026-07): the alphanet sidecar builds the env
+Why this exists: the alphanet sidecar builds the env
 and fetch.py stages the figshare checkpoint, but the required `oma.json` config
 (referenced by the registry inference line) was never auto-fetched, so
 single_point failed until it was pulled manually. This helper stages BOTH files
@@ -28,7 +28,7 @@ from pathlib import Path
 
 _SHA = "65f8ea9330459e0106867d1c694aec4139c6cb19"  # pinned public AlphaNet SHA
 
-# filename -> (url, sha256, size_bytes). Fingerprints host-verified 2026-07-16;
+# filename -> (url, sha256, size_bytes). Fingerprints recorded from verified downloads;
 # the ckpt fingerprint mirrors models.json AlphaNet-v1-OMA weights_sha256.
 FILES: dict[str, tuple[str, str, int]] = {
     "alex_0410.ckpt": (

@@ -6,7 +6,7 @@ real chain `ft_run.py` (which itself converts the dataset via ft_dataset.py,
 writes the rerunnable finetune_<variant>.sh and executes it) -> checkpoint
 discovery -> `ft_verify.py <ckpt> --device cuda --json` (reload + energy/
 forces witness). Every phase appends one JSONL row; the terminal row of each
-variant carries exactly one `state` from the plan's vocabulary:
+variant carries exactly one `state` from this vocabulary:
 
   passed            train rc 0 AND a real (non-stub) builder AND ft_run's
                     ft_run.json provenance record AND a checkpoint the train
@@ -42,9 +42,9 @@ checked DEFENSIVELY: should any rendering ever label itself a stub again, it
 is failed(generic_stub) rather than a pass on a stub's leftover file. It is
 not an expected path in the current contract.
 
-Classification source: models.json `finetune.status` (Part 3.2). The two
+Classification source: models.json `finetune.status`. The two
 `code-excavation-needed` candidates and the two `not-supported` variants are
-re-audited per campaign through `--audit PATH` (JSON {variant: {supported:
+re-audited per sweep run through `--audit PATH` (JSON {variant: {supported:
 bool, citation: str}}); a candidate found `supported: true` is ATTEMPTED and
 joins the required set (evidence_report.py reads the same file). Without an
 audit entry a code-excavation-needed variant is failed(audit_missing) -- the
@@ -84,12 +84,11 @@ STUB_MARKER = "_generic_stub"
 
 # Checkpoint discovery per family: ordered glob preferences under <out>.
 # The authoritative table is the SHIPPED ft_run.py's FAMILY_CHECKPOINT_GLOBS
-# (the builders' own output conventions, source-cited by the FT owner),
+# (the builders' own output conventions, each source-cited),
 # read from the runtime copy without importing it (`family_checkpoint_globs`).
 # This local table is only the fallback for a shipped ft_run.py that does not
 # export the table (unreadable, or without FAMILY_CHECKPOINT_GLOBS). It is a
-# MIRROR of the shipped table as frozen by the FT owner (ft_run.py
-# d94f7920, 2026-09-14: one designating pattern per family) and is pinned to
+# MIRROR of the shipped table (one designating pattern per family) and is pinned to
 # it by tests/test_ft_sweep.py whenever the shipped file is readable, so a
 # second drift fails loudly instead of surviving behind a generic glob.
 # DeePMD/DPA4: `model.ckpt.pt` is a SYMLINK the discovery filter rejects; the
@@ -515,7 +514,7 @@ def main() -> int:
     ap.add_argument("--dataset", required=True, type=Path)
     ap.add_argument("--ledger", required=True, type=Path)
     ap.add_argument("--out-root", default=None, help="default: $OH_MY_MLIP_HOME/.ft/<env>")
-    ap.add_argument("--audit", default=None, help="current-campaign FT support audit JSON")
+    ap.add_argument("--audit", default=None, help="FT support audit JSON for this run")
     ap.add_argument("--campaign-id", default=None)
     ap.add_argument("--manifest-sha256", default=None)
     ap.add_argument("--epochs", type=int, default=2)

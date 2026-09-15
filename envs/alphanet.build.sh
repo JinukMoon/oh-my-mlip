@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # alphanet.build.sh — build sidecar for the alphanet env.
 # The AlphaNet framework (github.com/zmyybc/AlphaNet) is a git-source package
-# (setup.py, editable in upstream docs). install.sh auto-runs this sidecar when
-# present (PREFIX=$1) and still owns catbench + D3 + sentinel afterwards.
+# (setup.py). install.sh auto-runs this sidecar when present (PREFIX=$1) and
+# installs catbench, D3, and sentinel afterwards.
 #
-# Owner repo provided by the user: https://github.com/zmyybc/AlphaNet
-# Pinned to an immutable public SHA (not a floating remote). NOTE: this public
-# build computes energy+forces (tier PASS) but gas-molecule accuracy differs
-# from the internal /TGM build (documented in models.json) — see candidate-reason.
+# AlphaNet is pinned to a specific public commit for reproducibility.
+# See models.json for framework version differences (gas-phase accuracy may vary).
 set -uo pipefail
 PREFIX="${1:?usage: alphanet.build.sh <env-prefix>}"
-CONDA_BIN="$(command -v conda || echo /home/jumoon/miniconda3/condabin/conda)"
+CONDA_BIN="$(command -v conda || true)"
+[ -n "$CONDA_BIN" ] || { echo "conda not found on PATH"; exit 1; }
 PIP="$PREFIX/bin/pip"
 SHA="65f8ea9330459e0106867d1c694aec4139c6cb19"
 

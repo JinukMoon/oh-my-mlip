@@ -1,18 +1,14 @@
 # build_status: clean
 # oh-my-mlip env recipe: GRACE (tensorpotential) — TensorFlow backend
 #
-# Pins mirror the validated internal setup + the OFFICIAL GRACE install
-# (gracemaker.readthedocs.io): python 3.11 / tensorflow[and-cuda]==2.16.2 /
-# tensorpotential==0.5.3 — all PUBLIC PyPI. install.sh build-from-recipe is the
-# PRIMARY path. (conda-pack tarballs are planned but not yet hosted.)
+# Pins mirror the official GRACE install (gracemaker.readthedocs.io):
+# python 3.11 / tensorflow[and-cuda]==2.16.2 / tensorpotential==0.5.3 — all PUBLIC PyPI.
+# install.sh build-from-recipe is the PRIMARY path.
 #
 #   - GRACE is TensorFlow-ONLY — the upstream docs state there is NO PyTorch
-#     dependency. The validated /TGM env carried torch only for the optional D3
-#     dispersion correction; GRACE itself does not need it. Dropping torch removes
-#     the tensorflow[and-cuda] <-> torch+cu121 nvidia-cuda-nvrtc-cu12 conflict that
-#     made the earlier torch-bundled recipe fail to resolve, so this recipe is a
-#     clean single-pass pip install. (D3 is simply unavailable for GRACE; catbench
-#     runs fine without it.)
+#     dependency. PyTorch and tensorflow[and-cuda] conflict on nvidia-cuda-nvrtc;
+#     dropping torch provides a clean single-pass pip install. (D3 dispersion is
+#     unavailable for GRACE; catbench runs fine without it.)
 #   - tensorflow[and-cuda]==2.16.2 is the upstream-recommended GPU pin (avoids a
 #     known >2.16 GPU memory-leak); it bundles its own nvidia-cu12 wheels, so no
 #     system CUDA toolkit / --extra-index-url is needed.
@@ -29,10 +25,8 @@ channels:
 dependencies:
   - python=3.11.11
   - pip
-  # ase pinned 2026-08-17 to the version present in the env whose GPU
-  # single-point verified; a bare `- ase` rode each new release into the
-  # build (the mattersim/eqnorm breakage class) and verify_determinism
-  # was pip-only, so nothing caught it.
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.29.0
   - pip:
       # TensorFlow-only stack (no torch -> no nvrtc conflict). Public PyPI.

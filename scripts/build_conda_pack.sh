@@ -78,7 +78,7 @@ fixed=0
 while IFS= read -r f; do
   # If it references an absolute author path that won't exist post-relocation,
   # remove the editable pointer file entirely.
-  if grep -qE '(/home/|/TGM/|/root/|/Users/)' "$f" 2>/dev/null; then
+  if grep -qE '(/home/|/root/|/Users/)' "$f" 2>/dev/null; then
     rm -f "$f" && fixed=$((fixed + 1))
   fi
 done < <(find "$ENV_PREFIX" \

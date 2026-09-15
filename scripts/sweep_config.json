@@ -1,6 +1,6 @@
 {
-  "_doc": "Local WSL GPU sweep order for the self-healing setup test. Host: RTX 4060 Ti, sm89, nvcc 12.8, conda 25.7. For each entry: install env -> verify energy+force on GPU via single_point.py (assert GPU PID) -> on PASS delete env + clean caches -> next. Self-heal per AGENTS.md section 8; stall-stop via setup_guardrail.py (same error signature 2x). Gated entries: attempt ONLY if HF_TOKEN valid + license accepted, else record skipped(gated) and continue (never auto-retry, AGENTS.md section 5).",
-  "host": {"gpu": "RTX 4060 Ti", "arch": "sm89", "vram_gb": 16, "nvcc": "12.8", "disk_ceiling_gb": 30},
+  "_doc": "Local GPU sweep order for the self-healing setup test. For each entry: install env -> verify energy+force on GPU via single_point.py (assert GPU PID) -> on PASS delete env + clean caches -> next. Self-heal per AGENTS.md section 8; stall-stop via setup_guardrail.py (same error signature 2x). Gated entries: attempt ONLY if HF_TOKEN valid + license accepted, else record skipped(gated) and continue (never auto-retry, AGENTS.md section 5).",
+  "host": {"disk_ceiling_gb": 30},
   "order": [
     {"family": "MACE",         "env": "mace",          "verify_model": "MACE-MPA-0",          "gated": false, "compile": false, "tier": "validated"},
     {"family": "SevenNet",     "env": "sevennet",      "verify_model": "SevenNet-MF-OMPA",    "gated": false, "compile": false, "tier": "validated"},

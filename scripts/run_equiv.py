@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""run_equiv.py — the per-MLIP equivalence harness (T2a single-point / T2b relax).
+"""run_equiv.py — the per-MLIP equivalence harness (single-point / relax).
 
 Emits a normalized ``equiv_result.json`` carrying a full provenance block plus,
 per mode, the numbers ``scripts/compare_equiv.py`` checks against a reference
-run. Two modes (see ``docs/equiv_protocol.md`` for the tier model):
+run. Two modes:
 
-  --mode single-point  (T2a) — a CUSTOM per-structure loop over the dataset's
+  --mode single-point — a CUSTOM per-structure loop over the dataset's
       ASE Atoms. catbench has NO single-point API (AdsorptionCalculation always
       relaxes), so this attaches the calculator to each fixed structure and
       records energy + forces-max WITHOUT any optimizer. Cross-GPU tolerant
       because a single-point is a pure function of the fixed geometry.
 
-  --mode relax  (T2b/T3) — runs catbench AdsorptionCalculation on the dataset
+  --mode relax — runs catbench AdsorptionCalculation on the dataset
       (n_crit_relax=5, save_files=True), then reads the per-system relaxed
       energies + timing from its result json and harvests terminal coordinates
       from the on-disk ``traj/<key>`` extxyz final frames. Same-GPU only.
@@ -23,8 +23,8 @@ so ``--help`` and CI shape-checks need no GPU and no model env.
 
 Usage:
     python scripts/run_equiv.py --mode single-point --model MACE \\
-        [--version V] [--tag BackSingle2018] [--calc-num 1] [--d3] \\
-        [--timestamp 2026-06-24T00:00:00Z] [--out equiv_result.json]
+        [--version V] [--tag DATASET_TAG] [--calc-num 1] [--d3] \\
+        [--timestamp YYYY-MM-DDTHH:MM:SSZ] [--out equiv_result.json]
 
     python scripts/run_equiv.py --mode relax --model MACE \\
         [--n-crit-relax 5] [--calc-num 3] ...
@@ -178,7 +178,7 @@ def _build_calc(spec: dict, d3: bool):
     return calc
 
 
-# ── mode: single-point (T2a) ──────────────────────────────────────────────────
+# ── mode: single-point ────────────────────────────────────────────────────────
 
 def _iter_systems(d: dict):
     for k in d:
@@ -229,7 +229,7 @@ def run_single_point(args, tag: str, dataset_path: Path) -> dict:
     return out
 
 
-# ── mode: relax (T2b/T3) ──────────────────────────────────────────────────────
+# ── mode: relax ───────────────────────────────────────────────────────────────
 
 def _read_terminal_geom(traj_dir: Path):
     """Read the FINAL frame of the first extxyz under traj/<key>. Returns

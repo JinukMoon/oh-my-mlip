@@ -17,8 +17,7 @@ Per family the doc carries four blocks:
                                         per variant, gated by that variant's own
                                         `finetune` block:
                                           - documented + runnable_as_installed:
-                                            the real invocation (licence-gated
-                                            per Part 8 decision (a)/option B --
+                                            the real invocation (licence-gated:
                                             EquFlash and MACE-MH-1 rows print
                                             the checkpoint licence + URL right
                                             above the command, then proceed);
@@ -47,9 +46,9 @@ Two guards, mirroring gen_recipes.py:
 
 Every variant must resolve to a classification (its `finetune.status` is
 read straight from models.json, which the tests/schema/models.schema.json
-`required` gate already enforces at the JSON level -- P2b makes it live).
+`required` gate already enforces at the JSON level).
 
-The output is HERMETIC: no host-specific paths, no `/home/jumoon`, no host
+The output is HERMETIC: no host-specific or home-directory paths, no host
 GPU arch (arch never enters this doc at all -- fine-tuning commands are not
 arch-pinned the way compiled-accelerator recipes are). `ft_run.py` invocation
 lines use `$OMM` for this clone, never an absolute path -- so `--check` is

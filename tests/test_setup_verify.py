@@ -44,8 +44,8 @@ def test_verdict_gpu_not_used_is_fail():
 
 
 def test_verdict_gpu_mem_witness_passes_without_pid():
-    # Hosts whose driver hides compute-apps PIDs (WSL 610.x) still pass via
-    # the worker's realized CUDA allocation.
+    # Some hosts' drivers may hide compute-app PIDs; the system still passes via
+    # the worker's realized CUDA allocation when memory usage is confirmed.
     w = dict(WITNESS, gpu_mem_allocated_bytes=200_000_000)
     got = oracle.decide_verdict(NO_SKEW, 0, False, w, "")
     assert got["pass"] is True

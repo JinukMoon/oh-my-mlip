@@ -2,9 +2,9 @@
 """distill_bootstrap.py <--teacher V> <--structure FILE> <--work DIR>
 [--repo PATH] [--target-ps F] [--lmp-bin PATH] -- render everything a run of
 onthefly-distill (`D`, GPL-2.0, orchestrated -- never absorbed) needs to
-distill one oh-my-mlip teacher into a CPU LAMMPS NN-MTP student (P4.2).
+distill one oh-my-mlip teacher into a CPU LAMMPS NN-MTP student.
 
-Deterministic, write-then-execute (Principle 2): every artifact below is
+Deterministic, write-then-execute: every artifact below is
 written to the ABSOLUTE work dir before anything computes. Each step is
 printed to stdout and appended to `<work>/bootstrap.log`.
 

@@ -76,12 +76,12 @@ from oh_my_mlip import registry as reg  # noqa: E402
 #
 # torch: a TorchDispatchMode sees every ATen op the forward dispatches,
 # including ops issued from inside TorchScript modules (metatomic/PET exports
-# are scripted) -- host-probed 2026-09-14 in the MACE (torch 2.6.0+cu124) and
+# are scripted) -- checked in the MACE (torch 2.6.0+cu124) and
 # pet (torch 2.9.1+cu128) envs: a CUDA forward of a python or scripted module
 # records addmm/tanh/sum/... with CUDA inputs, while a CPU forward run next to
 # torch.empty/zeros/ones(device="cuda") or an H2D copy records zero
 # CUDA-input compute ops. torch.profiler was rejected for this job because
-# kineto captured no CUDA activity at all on this WSL2 host (CUPTI), i.e. it
+# kineto captured no CUDA activity at all on some hosts (CUPTI), i.e. it
 # would fail a genuine GPU forward too.
 _TORCH_WITNESS_TAIL = '''
 import torch
@@ -140,11 +140,11 @@ print(json.dumps({
 # (OpType): /job:.../device:GPU:0" and execute.cc "Executing op X in device
 # ..."). The C++ log goes to fd 2, so fd 2 is redirected to a temp file for
 # the forward only; non-placement lines are re-emitted to stderr afterwards.
-# Host-probed 2026-09-14 (grace env, TF 2.16.2): eager and jit_compile'd
-# tf.function ops both log placement lines in this exact format. On THIS host
-# the grace env registers no GPU device at all ("Cannot dlopen some GPU
-# libraries"), so the GPU branch of this witness could only be exercised on
-# a host where TF sees the GPU -- it fails closed here, which is the truth.
+# Checked in the grace env (TF 2.16.2): eager and jit_compile'd
+# tf.function ops both log placement lines in this exact format. On a host
+# where the grace env registers no GPU device at all ("Cannot dlopen some GPU
+# libraries"), the GPU branch of this witness cannot pass -- it fails closed,
+# which is the correct verdict.
 _TF_WITNESS_TAIL = '''
 import os
 import re
@@ -330,7 +330,7 @@ _MODAL_RE = re.compile(r"""modal=['"]([^'"]+)['"]""")
 def _extract_modal(inference_lines: list[str]) -> str | None:
     """SevenNet multi-fidelity checkpoints (e.g. 7net-mf-ompa) need the same
     `modal=` kwarg at load time that the registry's own `inference` line
-    already carries for single-point use (host-verified, 2026-08-23:
+    already carries for single-point use (without it,
     SevenNetCalculator raises `modal argument missing` without it)."""
     for line in inference_lines:
         m = _MODAL_RE.search(line)

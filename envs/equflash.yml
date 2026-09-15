@@ -1,25 +1,19 @@
 # build_status: clean
-# build_note: equflash: ENERGY-VERIFIED (EquFlashV2, cueq-only) — matches /TGM to 9.8e-07 eV/atom, and tier-2 GPU host-verified on RTX 4060 Ti sm89 (2026-06-30): energy=-16.391567 eV, torch.cuda alloc ~191MB. The single conda-env-create pip block FAILS (fairchem-core 1.10 <-> torch 2.9.1 ResolutionImpossible); the 2-PASS install is now AUTOMATED by the multi-pass sidecar envs/equflash.build.sh, which install.sh auto-runs when present. NOTE: v1 (flashTP) additionally needs the SNU-ARC/flashTP CUDA compile (optional accel; the default EquFlashV2 path is cueq-only and does not need it).
-# oh-my-mlip env recipe: EquFlash (SamsungDS/GGNN; flashTP v1 only)
+# build_note: EquFlashV2 (cueq-only) requires a 2-pass pip install due to a resolver conflict (fairchem-core 1.10 <-> torch 2.9.1 ResolutionImpossible); the multi-pass sidecar envs/equflash.build.sh automates this. EquFlash v1 (flashTP) requires optional CUDA compilation (see Compile note below); v2 does not.
+# oh-my-mlip env recipe: EquFlash (SamsungDS/GGNN)
 #
-# Pins mirror the validated internal setup:
-#   python 3.12.13 / torch 2.9.1+cu126.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# Pins: python 3.12.13 / torch 2.9.1+cu126.
+# install.sh build-from-recipe is the PRIMARY install path.
 #
-#   - torch is pinned to the CUDA 12.6 build (cu126) from the official PyTorch
-#     wheel index; the host NVIDIA driver must satisfy the cu126 min-driver floor.
-#   - cuda-nvcc 12.6.* is included so the D3 dispersion kernel can compile on
-#     first run (matching the torch CUDA minor).
-#   - fairchem-core, torch-geometric and the matching torch_scatter / torch_sparse
-#     (pt29cu126) wheels are the resolvable parts of the stack.
+#   - torch is pinned to CUDA 12.6 (cu126) from the official PyTorch wheel index;
+#     the host NVIDIA driver must satisfy the cu126 min-driver floor.
+#   - cuda-nvcc 12.6.* is included for first-run D3 dispersion kernel compilation.
+#   - fairchem-core, torch-geometric, and matching torch_scatter/torch_sparse
+#     (pt29cu126) wheels are publicly available.
 #   - The framework is the public SamsungDS/GGNN package. EquFlashV2 is cueq-only
-#     (FullConv uses cuequivariance exclusively), so the cuequivariance==0.6.0
-#     pins from GGNN's requirements.txt are the resolvable runtime for v2.
-#   - flashTP_e3nn is the PUBLIC github.com/SNU-ARC/flashTP repo (pinned to the
-#     validated commit d52e4145...), needed ONLY by EquFlash v1's flashtp backend
-#     — not by v2. It is a deterministic public source; the recipe stays candidate
-#     only because the flashTP CUDA extension build is not yet foreign-host-verified.
+#     and uses cuequivariance==0.6.0 from GGNN's requirements.txt.
+#   - flashTP_e3nn (github.com/SNU-ARC/flashTP) is needed only for EquFlash v1's
+#     flashtp backend; v2 does not require it. Compilation requires CUDA build tools.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -52,10 +46,8 @@ dependencies:
   - pip
   # CUDA 12.6 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.6.*
-  # ase pinned 2026-08-17 to the version present in the env whose GPU
-  # single-point verified; a bare `- ase` rode each new release into the
-  # build (the mattersim/eqnorm breakage class) and verify_determinism
-  # was pip-only, so nothing caught it.
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu126

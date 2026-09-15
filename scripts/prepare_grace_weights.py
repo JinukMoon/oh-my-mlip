@@ -32,7 +32,7 @@ def _find_saved_model_root(base: Path) -> Path | None:
 def _cache_roots() -> list[Path]:
     """Places grace_models may have written the SavedModel instead of cwd.
 
-    Beta-test finding (grace_models 0.5.3, RTX A4500 host, 2026-07): the CLI
+    Observed with grace_models 0.5.3: the CLI
     ignores the working directory and downloads into ~/.cache/grace/<name>/...,
     so the in-target flatten search found nothing and the weight had to be
     copied manually. $GRACE_CACHE (when set) takes precedence."""

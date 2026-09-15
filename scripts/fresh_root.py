@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """fresh_root.py -- content-addressed working-tree snapshot + disposable
-runtime roots for fresh isolated validation cycles (plan ADR-OMM-05, Part 1.1,
-3.3, 3.4).
+runtime roots for fresh isolated validation cycles.
 
 The candidate code under test is the WORKING TREE (uncommitted edits
 included), never `git archive HEAD` -- so every cycle snapshots the tree
@@ -11,10 +10,9 @@ the real hub / user envs were never written.
 
 Subcommands (each prints ONE JSON object on stdout; exit 0 iff `ok`):
 
-  allowlist   write the approved new-path allowlist (generated from the plan's
-              Part 3.1 list -- an off-list addition is a scope change, so it
-              is NOT auto-added here; it must be approved and added to
-              APPROVED_NEW_PATHS).
+  allowlist   write the approved new-path allowlist (generated from
+              APPROVED_NEW_PATHS -- a new untracked file is NOT auto-added
+              here; add it to APPROVED_NEW_PATHS explicitly).
   snapshot    build the manifest {path: sha256} from tracked paths (read from
               the working tree) + allowlisted new paths; fail closed on
               unexpected untracked code, tracked deletions, symlink escape.
@@ -61,7 +59,7 @@ runs with -- inherited cache overrides dropped, every route (HOME included:
 <root>/home) inside the root, the user's read-only inputs (HF token file,
 condarc) supplied as PATH exports. `verify --routes` is run on that env.
 
-Failure classes are the plan's literal strings, e.g.
+Failure classes are stable literal strings, e.g.
 `failed(snapshot:unexpected_untracked)`, `failed(source_mutated)`,
 `failed(isolation)`, `failed(routes:out_of_root)`, `failed(cleanup:not_owned)`.
 
@@ -97,7 +95,7 @@ ENV_EXPORT_FILE = ".omm_fresh_env.sh"
 MANIFEST_FILE = "manifest.json"
 TARBALL_FILE = "snapshot.tar"
 PRESERVED_FILE = "preserved.json"
-# Every free-space number this harness records is GiB (2^30), matching the G0
+# Every free-space number this harness records is GiB (2^30), matching the
 # preflight's schema-2 `*_gib` fields; decimal-GB inputs are converted once.
 GIB = 1024 ** 3
 GB_PER_GIB = 1.073741824
@@ -111,12 +109,12 @@ PRESERVE_DIRS = (".sweep", ".ft", ".catbench", ".distill")
 # alone is forgeable by anything that can write inside the root.
 OWNED_ROOTS_FILE = "owned_roots.json"
 
-# Part 1.1 "Fail closed": an untracked, non-ignored path with one of these
+# Fail closed: an untracked, non-ignored path with one of these
 # suffixes outside the allowlist aborts the snapshot (it is candidate code
 # the snapshot would otherwise silently omit).
 CODE_SUFFIXES = {".py", ".sh", ".md", ".json", ".yml", ".yaml"}
 
-# Part 1.1 "Exclude": never enters a snapshot whether tracked or not. Local
+# Exclude: never enters a snapshot whether tracked or not. Local
 # state, weights, materialized envs, ledgers, build products.
 EXCLUDE_TOP_DIRS = {
     ".git", "models", ".sweep", "dist", ".omc", ".pytest_cache", ".ruff_cache",
@@ -130,11 +128,10 @@ EXCLUDE_ANY_DIR_NAMES = {"__pycache__"}
 # the token-free docs/hf_token.md, tests/test_fetch_token.py, ...).
 EXCLUDE_UNTRACKED_GLOBS = [".reloc_gate*", "*token*", ".env", "*.log", "*.pyc"]
 
-# Plan Part 3.1 "New" list as globs, plus the exact implementation/test paths
-# the coordinator approved afterwards within the assigned scope (each marked
-# with its own comment; exact paths, never a widened glob). The allowlist FILE
-# is generated from this constant; any path outside it needs scope approval
-# first.
+# New (not yet tracked) paths a snapshot may include: globs for new source
+# families plus exact implementation/test paths (exact paths, never a widened
+# glob). The allowlist FILE is generated from this constant; any other
+# untracked code path fails the snapshot until it is added here.
 APPROVED_NEW_PATHS = [
     "recipes/*.md",
     "scripts/fresh_root.py",
@@ -145,13 +142,11 @@ APPROVED_NEW_PATHS = [
     "scripts/catbench_version.py",
     "scripts/distill_verify.py",
     "scripts/evidence_report.py",
-    # NequIP/Allegro per-arch .pt2 compile step run by install.sh (user-approved
-    # install work 2026-09-14; exact paths).
+    # NequIP/Allegro per-arch .pt2 compile step run by install.sh (exact paths).
     "scripts/prepare_nequip_weights.py",
     "scripts/prepare_allegro_weights.py",
     # Exact-replay env locks (conda @EXPLICIT + pip --no-deps) generated from a
-    # passing fresh-root campaign inventory, and their generator (user-approved
-    # install work 2026-09-14).
+    # passing fresh-root campaign inventory, and their generator.
     "scripts/gen_env_lock.py",
     "envs/locks/*.txt",
     "tests/test_fresh_root.py",
@@ -162,27 +157,24 @@ APPROVED_NEW_PATHS = [
     "tests/test_catbench_version.py",
     "tests/test_distill_verify.py",
     "tests/test_evidence_report.py",
-    # G1 recipe-contract test: approved by the coordinator 2026-09-14 as an
-    # in-scope final-product test (exact path, no blanket allow).
+    # Recipe-contract test (exact path, no blanket allow).
     "tests/test_recipe_contract.py",
-    # Exact-path approvals by the coordinator 2026-09-14 (no glob widening):
-    # G1 explicit-input relax test, G3 ft_verify loader test, G5/G6 CatBench
-    # report test.
+    # Exact paths (no glob widening): explicit-input relax test, ft_verify
+    # loader test, CatBench report test.
     "tests/test_relax_input.py",
     "tests/test_ft_verify.py",
     "tests/test_catbench_report.py",
-    # G5 quickstart passthrough test: exact path approved by the coordinator
-    # 2026-09-14 (applied after the G2 review pass, as instructed).
+    # CatBench quickstart passthrough test (exact path).
     "tests/test_catbench_quickstart.py",
     "docs/host_sessions/*.md",
 ]
 
-# Part 1.1 "Materialize": designated writable outputs inside the runtime copy.
+# Materialize: designated writable outputs inside the runtime copy.
 WRITABLE_DIRS = ["envs", "models", ".sweep", ".ft", ".catbench", ".distill", "work", "cache", "tmp", "home",
                  "cache/conda_pkgs", "cache/pip", "cache/shared", "cache/torch_ext", "cache/xdg",
                  "cache/triton", "cache/nv", "cache/inductor"]
 
-# Part 3.3 route verification: every one of these must resolve inside the
+# Route verification: every one of these must resolve inside the
 # runtime root before any compute. They are checked on the EFFECTIVE child
 # environment (what the children are actually spawned with), not on the
 # export list alone.
@@ -218,7 +210,7 @@ EXTRA_EXPORT_VARS: list[str] = []
 
 
 class FreshRootError(Exception):
-    """Carries the plan's failure class (`failed(<class>)`) plus detail."""
+    """Carries the failure class (`failed(<class>)`) plus detail."""
 
     def __init__(self, state: str, detail=None):
         super().__init__(state)
@@ -244,13 +236,13 @@ def sha256_text(text: str) -> str:
 
 def aggregate_manifest_sha256(files: dict[str, str]) -> str:
     """sha256 over the sorted `path  sha` lines -- the value every ledger row
-    of a cycle carries (Part 1.1 "Manifest")."""
+    of a cycle carries."""
     lines = "".join(f"{p}  {files[p]}\n" for p in sorted(files))
     return sha256_text(lines)
 
 
 def hash_or_absent(path: Path) -> str:
-    """Targeted-hash helper for the attribution guard (Part 3.4): the sha256
+    """Targeted-hash helper for the attribution guard: the sha256
     of a file, or the literal 'absent' so a file appearing later is detected
     exactly like one changing."""
     if path.is_file():
@@ -309,8 +301,8 @@ def git_dirty_tracked(repo: Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def default_state_dir(repo: Path) -> Path:
-    """`.omc/state` of the WORKSPACE (repo parent) when it exists -- where G0
-    wrote omm-e2e-preflight.json -- else the repo's own (gitignored) .omc."""
+    """`.omc/state` of the WORKSPACE (repo parent) when it exists -- where the
+    preflight writes omm-e2e-preflight.json -- else the repo's own (gitignored) .omc."""
     ws = repo.parent / ".omc" / "state"
     if ws.is_dir():
         return ws
@@ -395,7 +387,7 @@ def _symlink_escapes(repo: Path, rel: str) -> bool:
 
 def build_manifest(repo: Path, allowlist: list[str]) -> dict:
     """The whole fail-closed decision, as data. Raises FreshRootError with the
-    plan's failure class; returns the manifest dict on success."""
+    failure class; returns the manifest dict on success."""
     repo = repo.resolve()
     tracked = git_tracked(repo)
     deleted = git_deleted(repo)
@@ -461,7 +453,7 @@ def build_manifest(repo: Path, allowlist: list[str]) -> dict:
 
 def write_snapshot(repo: Path, manifest: dict, campaign_dir: Path) -> dict:
     """Immutable canonical snapshot: tarball + manifest under
-    <campaign_dir>/snapshot/<sha12>/, files chmod 0444 (Part 1.1). A second
+    <campaign_dir>/snapshot/<sha12>/, files chmod 0444. A second
     call with the same manifest is a no-op (content-addressed)."""
     repo = repo.resolve()
     sha = manifest["manifest_sha256"]
@@ -517,7 +509,7 @@ def load_manifest(snapshot_dir: Path) -> dict:
 
 def route_exports(runtime: Path) -> dict[str, str]:
     """The env-var routing that pins every cache/tmp/pkgs write inside the
-    runtime root (Part 3.3). OMM_SHARED_CACHE_ROOT drives env.sh's own
+    runtime root. OMM_SHARED_CACHE_ROOT drives env.sh's own
     HF_HOME/FAIRCHEM_CACHE_DIR/TORCH_HOME/CACHED_PATH_CACHE_ROOT redirect; the
     same four are exported explicitly so a caller that does not source env.sh
     is routed identically."""
@@ -641,7 +633,7 @@ def materialize(snapshot_dir: Path, runtime: Path, *, campaign_id: str,
     (`snapshot --check` semantics, mandatory before EVERY materialization) and
     its manifest_sha256 must equal the snapshot's -- otherwise the snapshot no
     longer represents the candidate code and materialization is refused
-    (`--allow-stale` records the mismatch instead, for G8 re-materialization
+    (`--allow-stale` records the mismatch instead, for re-materialization
     from a pinned manifest).
 
     `owned_registry` (default: <snapshot_dir>/../../owned_roots.json, i.e. the
@@ -755,7 +747,7 @@ def seed_cache(runtime: Path, items: dict[str, str]) -> dict:
     items: {dst_relative_to_runtime: src_absolute}. Sources are read-only
     inputs -- copied, never symlinked or moved; a source inside the runtime,
     a destination outside it, or an existing destination refuses (no clobber).
-    Every seeded file is recorded with its sha256 (Part 3.3/3.4)."""
+    Every seeded file is recorded with its sha256."""
     runtime = Path(runtime).resolve()
     if read_ownership(runtime) is None:
         raise FreshRootError("failed(seed:not_owned)", str(runtime))
@@ -1590,7 +1582,7 @@ def cleanup(runtime: Path, evidence_ledger: Path, *, preserved: Path | None = No
     same canonical root, parent, manifest_sha256 and campaign_id as the
     in-root marker -- the marker alone is never trusted.
     Durable evidence = the campaign ledger OUTSIDE the root carrying this
-    root's manifest_sha256 (Part 3.1 "ledger copy -> owned cleanup") AND a
+    root's manifest_sha256 AND a
     preserved.json (`preserve`) whose every copy re-verifies by hash -- a
     ledger row alone is not proof that the logs and final artifacts made it
     out. Mounts: any mount point at or below the root (kernel mount table +
@@ -1749,7 +1741,7 @@ def cleanup(runtime: Path, evidence_ledger: Path, *, preserved: Path | None = No
 
 def du_bytes(root: Path, errors: list[str] | None = None) -> int:
     """Hardlink-aware apparent usage of one tree: each inode counted once
-    (Part 3.3 accounting) -- the same answer `du -s` gives on one root.
+    -- the same answer `du -s` gives on one root.
     Symlinks are never followed. Anything that could not be listed or
     stat'ed is skipped AND, when `errors` is given, appended to it -- a
     caller that needs a COMPLETE measurement (a budget) must treat a

@@ -46,9 +46,9 @@ summary line ``{"all_variants": true, "pass": <all passed>, "variants":
 cycle can cover a family's whole variant list with one user-runnable
 command -- it is the oracle looping, not a new judgment.
 
-``--no-local-record`` (plan v4 change 1): NEVER write ``models.local.json``,
+``--no-local-record``: NEVER write ``models.local.json``,
 even on PASS. This is the read-only regression witness for already-adopted
-envs (G3b): the real hub's local state must hash identical before and after,
+envs: the real hub's local state must hash identical before and after,
 so the materialize-on-verify upsert is skipped and the verdict carries
 ``local_record: "skipped(--no-local-record)"``.
 """
@@ -137,8 +137,8 @@ def decide_verdict(
         verdict["reason"] = skew["reason"]
         return verdict
     # GPU proof: either independent witness suffices — a sampled descendant
-    # PID (unavailable on hosts whose driver hides compute-apps, e.g. WSL
-    # 610.x) or the worker's realized CUDA allocation (unavailable in
+    # PID (unavailable on hosts whose driver hides compute-apps, e.g. some
+    # virtualized drivers) or the worker's realized CUDA allocation (unavailable in
     # torch-less TF/JAX envs). Both absent => honest fail.
     if not gpu_seen and not (gpu_mem and gpu_mem > 0):
         verdict["reason"] = "gpu_not_used"
@@ -207,7 +207,7 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
         # Materialize-on-verify: freeze the facts that just computed (exact
         # interpreter, weight paths, evidence) into models.local.json so every
         # later session resolves them deterministically — incremental upsert,
-        # so each newly installed model adds its own entry. A ledger-write
+        # so each newly installed model adds its own entry. A local-record write
         # failure is reported in the verdict but never flips a computed pass.
         sys.path.insert(0, str(home))
         try:

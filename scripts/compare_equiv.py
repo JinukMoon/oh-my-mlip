@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""compare_equiv.py — the honesty gate for the 4-tier equivalence model.
+"""compare_equiv.py — the pass/fail gate for MLIP run equivalence.
 
 Diffs two normalized ``equiv_result.json`` files (an OURS and a REF, each emitted
 by ``scripts/run_equiv.py``) and prints a per-check PASS/FAIL verdict table. Exit
 code 0 means the two runs are equivalent within tolerance; non-zero means a
 breach (and the reasons are printed).
 
-The comparison is tier-aware (see ``docs/equiv_protocol.md``):
+The comparison runs these checks:
 
   * provenance  — HARD-FAIL on a mismatch of any field that makes two runs not
     comparable: catbench_version, dataset_sha256, model, weights_sha256 (only
     when both are non-null), d3.
   * keys        — HARD-FAIL on any missing/extra system/structure key.
-  * single-point (T2a) — per-structure energy max-abs-diff PER ATOM > --tol, or
+  * single-point — per-structure energy max-abs-diff PER ATOM > --tol, or
     forces max-abs-diff > --force-tol.
-  * relax (T2b) — per-system relaxed-adsorption-energy diff > --tol (per atom if
+  * relax — per-system relaxed-adsorption-energy diff > --tol (per atom if
     natoms known, else absolute), OR terminal-geometry coordinate RMSD >
     --geom-tol. Terminal geometry MUST be present in BOTH files for relax; absent
     on either side is a FAIL. Positions are compared by RMSD, NEVER by hash.
-  * time (T3)   — mean time_per_step ratio must fall inside --time-band, but ONLY
+  * time        — mean time_per_step ratio must fall inside --time-band, but ONLY
     when both provenance gpu_name values are equal AND non-null. Otherwise the
     time check is SKIPPED (printed) and never fails the run.
 
@@ -235,7 +235,7 @@ def _overall_time(doc: dict) -> float | None:
 
 
 def check_time(ours: dict, ref: dict, band: tuple[float, float]) -> Check:
-    """Time (T3) is compared ONLY when both gpu_name are equal and non-null."""
+    """Time is compared ONLY when both gpu_name are equal and non-null."""
     go = _prov(ours).get("gpu_name")
     gr = _prov(ref).get("gpu_name")
     if not go or not gr or go != gr:
@@ -301,7 +301,7 @@ def _parse_band(s: str) -> tuple[float, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("ours", help="OURS equiv_result.json")
-    ap.add_argument("ref", help="REF (e.g. /TGM) equiv_result.json")
+    ap.add_argument("ref", help="REF (reference run) equiv_result.json")
     ap.add_argument("--tol", type=float, default=1e-3, help="energy max-abs-diff per atom (eV/atom)")
     ap.add_argument("--force-tol", type=float, default=1e-2, help="forces max-abs-diff (eV/Angstrom)")
     ap.add_argument("--geom-tol", type=float, default=1e-2, help="terminal-geometry RMSD (Angstrom)")

@@ -39,10 +39,8 @@ dependencies:
   # libcuda.so link stub (targets/<arch>/lib/stubs, put on LIBRARY_PATH by the
   # provider). The real driver libcuda is what loads at runtime.
   - cuda-driver-dev=12.6.77
-  # ase pinned 2026-08-17 to the version present in the env whose GPU
-  # single-point verified; a bare `- ase` rode each new release into the
-  # build (the mattersim/eqnorm breakage class) and verify_determinism
-  # was pip-only, so nothing caught it.
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.28.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu126
@@ -54,7 +52,7 @@ dependencies:
       # OpenEquivariance is the default SevenNet backend here (registry inference
       # passes enable_oeq=True; `pip install sevenn[oeq]` == openequivariance).
       # Without it sevenn's patch_oeq only warns and falls back to e3nn.
-      # 0.6.6 = the version in the host-verified local SevenNet env.
+      # 0.6.6 = the pinned OpenEquivariance version for reproducibility.
       - openequivariance==0.6.6
       # oeq JIT-compiles its CUDA extension at first use -> needs ninja on PATH.
       - ninja==1.13.0

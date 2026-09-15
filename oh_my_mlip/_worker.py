@@ -140,8 +140,8 @@ def compute(calc, atoms, properties) -> dict:
         results["stress"] = atoms.get_stress().tolist()
     # Realized-GPU witness: bytes actually allocated on the CUDA context AFTER
     # compute — real evidence, not an echo of the requested device. Needed
-    # because some hosts cannot attribute GPU use by PID (WSL driver 610.x
-    # returns an empty nvidia-smi compute-apps list). Key absent = this env has
+    # because some hosts cannot attribute GPU use by PID (some virtualized
+    # drivers return an empty nvidia-smi compute-apps list). Key absent = this env has
     # no torch (TF/JAX frameworks); honest "witness unavailable", not a claim.
     mem = _gpu_witness_bytes()
     if mem is not None:

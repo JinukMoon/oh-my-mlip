@@ -180,6 +180,6 @@ evidence about the candidate and are not reported as such.
 
 Recipes state technical requirements — a CUDA-capable NVIDIA GPU, a host
 driver at or above the CUDA runtime of the env's torch build, Linux or WSL —
-and never hardware product names, measured numbers, host counts, or claims
-that tie validation to one named machine. Validation evidence lives in the
+and never hardware product names, measured numbers, host counts, or
+claims that tie validation to one named machine. Validation evidence lives in the
 generated status docs and in job ledgers, not in recipe text.

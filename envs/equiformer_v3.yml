@@ -1,24 +1,21 @@
 # build_status: clean
-# owner-approved: atomicarchitects/equiformer_v3@a7300c58 pinned with owner approval (2026-07-01). HOST BUILD+GPU-VERIFIED on RTX 4060 Ti sm89 (2026-06-30) via install.sh single-pass with the pinned sha: single_point.py EquiformerV3 energy=-16.392015 eV, torch.cuda max_mem 752MB (torch 2.7.1+cu128). The vendored fairchem-core (subdirectory build, sha a7300c58) provides OCPCalculator + the EqV3 model and REPRODUCES /TGM BIT-IDENTICAL; deps (lmdb numba torchtnt wandb pydantic huggingface_hub pymatgen hydra-core) resolve transitively, and scipy is pinned to 1.16.0 (>=1.17 removed scipy.special.sph_harm used by the gemnet layers).
+# Note: Equiformer V3 is pinned to atomicarchitects/equiformer_v3@a7300c58 for reproducibility.
+# The repo vendors fairchem-core (requires editable install). scipy is pinned to 1.16.0
+# because >=1.17 removed scipy.special.sph_harm used by the gemnet layers.
 # oh-my-mlip env recipe: Equiformer V3 (atomicarchitects/equiformer_v3 + vendored fairchem-core)
 #
-# Pins mirror the validated internal setup:
-#   python 3.11.15 / torch 2.7.1+cu128.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# Pins: python 3.11.15 / torch 2.7.1+cu128.
+# install.sh build-from-recipe is the PRIMARY install path.
 #
-#   - torch is pinned to the CUDA 12.8 build (cu128) from the official PyTorch
-#     wheel index; the host NVIDIA driver must satisfy the cu128 min-driver floor.
-#   - cuda-nvcc 12.8.* is included so the D3 dispersion kernel can compile on
-#     first run (matching the torch CUDA minor).
-#   - torch-geometric and the matching torch_scatter / torch_sparse / torch_cluster
-#     / torch_spline_conv (pt27cu128) wheels are the resolvable parts of the stack.
-#   - The framework source needs an owner-approved immutable public pin; do not
-#     install a floating git remote in a deterministic recipe.
-#   - That repo VENDORS its own fairchem-core under packages/fairchem-core
-#     (upstream facebookresearch/fairchem @ 977a80328f2be44649b414a9907a1d6ef2f81e95),
-#     installed EDITABLE (`pip install -e packages/fairchem-core`). The editable
-#     vendored build is why this recipe stays a candidate until build-verified.
+#   - torch is pinned to CUDA 12.8 (cu128) from the official PyTorch wheel index;
+#     the host NVIDIA driver must satisfy the cu128 min-driver floor.
+#   - cuda-nvcc 12.8.* is included for D3 dispersion kernel compilation.
+#   - torch-geometric and matching torch_scatter/torch_sparse/torch_cluster/torch_spline_conv
+#     (pt27cu128) wheels are publicly available.
+#   - The framework source is pinned to a specific public commit for reproducibility;
+#     do not use a floating git remote.
+#   - The repo vendors fairchem-core under packages/fairchem-core and requires
+#     editable installation (`pip install -e packages/fairchem-core`).
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -36,10 +33,8 @@ dependencies:
   - pip
   # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=12.8.*
-  # ase pinned 2026-08-17 to the version present in the env whose GPU
-  # single-point verified; a bare `- ase` rode each new release into the
-  # build (the mattersim/eqnorm breakage class) and verify_determinism
-  # was pip-only, so nothing caught it.
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu128

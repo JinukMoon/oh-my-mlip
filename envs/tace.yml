@@ -1,21 +1,16 @@
 # build_status: candidate
-# candidate-reason: tace: the TACE C/CUDA extension COMPILED on a CUDA-12.8 box and CPU single-point matches /TGM to 1.9e-06 eV/atom (TESTED). Only cu130 GPU inference is unverified here (torch 2.11.0+cu130 needs an NVIDIA driver at the CUDA-13 floor; our box is CUDA 12.8 -> ran CPU).
+# candidate-reason: TACE C/CUDA extension requires a CUDA toolkit for compilation. GPU inference requires a driver at the CUDA 13.0+ level (torch 2.11.0+cu130).
 # oh-my-mlip env recipe: TACE (tace)
 #
-# Pins mirror the validated internal setup:
-#   python 3.11.15 / torch 2.11.0+cu130.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# Pins: python 3.11.15 / torch 2.11.0+cu130.
+# install.sh build-from-recipe is the PRIMARY install path.
 #
-#   - torch is pinned to the CUDA 13.0 build (cu130) from the official PyTorch
-#     wheel index; the host NVIDIA driver must satisfy the cu130 min-driver floor.
-#   - cuda-nvcc 13.0.* is included so the D3 dispersion kernel can compile on
-#     first run (matching the torch CUDA minor).
-#   - torch-geometric and e3nn are resolvable top-level deps of the stack.
-#   - The framework package TACE is the PUBLIC github.com/xvzemin/tace repo,
-#     pinned to the exact commit the validated setup used (2b2214e0...). It is a
-#     deterministic public source; the recipe stays candidate only because the
-#     C/CUDA extension build is not yet foreign-host-verified.
+#   - torch is pinned to CUDA 13.0 (cu130) from the official PyTorch wheel index;
+#     the host NVIDIA driver must satisfy the cu130 min-driver floor.
+#   - cuda-nvcc 13.0.* is included for first-run D3 dispersion kernel compilation.
+#   - torch-geometric and e3nn are public dependencies.
+#   - TACE is the public github.com/xvzemin/tace repo, pinned to a specific commit
+#     for reproducibility. Requires CUDA build tools for the C/CUDA extension.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -31,10 +26,8 @@ dependencies:
   - pip
   # CUDA 13.0 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=13.0.*
-  # ase pinned 2026-08-17 to the version present in the env whose GPU
-  # single-point verified; a bare `- ase` rode each new release into the
-  # build (the mattersim/eqnorm breakage class) and verify_determinism
-  # was pip-only, so nothing caught it.
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu130

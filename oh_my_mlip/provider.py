@@ -151,8 +151,8 @@ class Worker:
             existing = child_env.get("PATH", "")
             child_env["PATH"] = env_bin + (os.pathsep + existing if existing else "")
         # Prepend the env's own lib dir to LD_LIBRARY_PATH (conda-activate-
-        # equivalent for the LOADER). Beta-test finding (Fedora-36 host, 2026-07):
-        # GRACE/TACE scipy imports need CXXABI_1.3.15, which the old system
+        # equivalent for the LOADER). On hosts with an old system
+        # libstdc++ (e.g. Fedora 36), GRACE/TACE scipy imports need CXXABI_1.3.15, which the old system
         # libstdc++ lacks; the env ships a new-enough libstdc++ but — since we
         # never `conda activate` — it was not on the loader path. env_run still
         # wins below (DPA4/DeePMD's LD_LIBRARY_PATH="" override is applied after

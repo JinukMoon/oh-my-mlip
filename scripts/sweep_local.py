@@ -36,7 +36,28 @@ STATE_DIR = SWEEP_DIR / "state"
 RESULTS_JSONL = SWEEP_DIR / "results.jsonl"
 RESULTS_MD = SWEEP_DIR / "results.md"
 HF_TOKEN_FILE = ROOT / "huggging_token"
-MINICONDA_BIN = Path("/home/jumoon/miniconda3/bin")
+
+
+def _conda_bin_dirs() -> list[Path]:
+    """Directories to put on PATH so install.sh finds conda when the sweep is
+    launched without a login shell (e.g. from cron). Resolution order:
+    $CONDA_EXE's directory, then $CONDA_PREFIX/bin and $CONDA_PREFIX/condabin,
+    then the directory of a `conda` already on PATH. Missing dirs are skipped."""
+    dirs: list[Path] = []
+    conda_exe = os.environ.get("CONDA_EXE")
+    if conda_exe:
+        dirs.append(Path(conda_exe).resolve().parent)
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        dirs.extend([Path(conda_prefix) / "bin", Path(conda_prefix) / "condabin"])
+    on_path = shutil.which("conda")
+    if on_path:
+        dirs.append(Path(on_path).resolve().parent)
+    seen: list[Path] = []
+    for d in dirs:
+        if d.is_dir() and d not in seen:
+            seen.append(d)
+    return seen
 
 MAX_REPEAT = 2
 # Bounded self-heal stop set (mirrors setup_guardrail.py defaults; AGENTS.md section 8):
@@ -46,7 +67,7 @@ CUMULATIVE_MAX = 5
 WALLCLOCK_MAX_S = None
 GPU_SAMPLE_SECONDS = 0.5
 
-# Shared deterministic core (extracted 2026-07-18): the proc/GPU/parse
+# Shared deterministic core: the proc/GPU/parse
 # machinery lives in scripts/_setup_common.py so the setup oracle, the sweep
 # driver, and this sweep share ONE implementation.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -93,12 +114,12 @@ def ensure_dirs() -> None:
 def sweep_env() -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("OH_MY_MLIP_HOME", str(ROOT))
-    if MINICONDA_BIN.is_dir():
-        current_path = env.get("PATH", "")
-        parts = current_path.split(os.pathsep) if current_path else []
-        miniconda = str(MINICONDA_BIN)
-        if miniconda not in parts:
-            env["PATH"] = os.pathsep.join([miniconda] + parts)
+    current_path = env.get("PATH", "")
+    parts = current_path.split(os.pathsep) if current_path else []
+    for conda_dir in reversed(_conda_bin_dirs()):
+        if str(conda_dir) not in parts:
+            parts.insert(0, str(conda_dir))
+    env["PATH"] = os.pathsep.join(parts)
     return env
 
 

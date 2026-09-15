@@ -1,5 +1,5 @@
 """oh_my_mlip.registry — load + validate models.json / dist_manifest.json and
-resolve a model into a machine-readable codegen dict (Layer 1 of the tiered
+resolve a model into a machine-readable codegen dict (the base layer of the
 teacher-provider interface).
 
 This is the LOCKED `resolve()` contract:
@@ -48,10 +48,10 @@ class RegistryError(Exception):
 
 # ── Host GPU arch detection (stdlib-only; no torch) ─────────────────────────
 # `resolve()` uses this when the caller does not pass an explicit arch for an
-# arch-pinned model. Beta-test finding (RTX A4500 / sm86 host, 2026-07): the
-# launcher spawned workers with --model only, so resolve() silently defaulted
-# to sm89 and the sm86 host could never verify Allegro/NequIP through the
-# public launcher. Detecting the host compute capability here makes every
+# arch-pinned model. Without it, a launcher that spawns workers with --model
+# only would make resolve() silently default to sm89, so a host with a
+# different arch (e.g. sm86) could never run Allegro/NequIP through the public
+# launcher. Detecting the host compute capability here makes every
 # layer (resolve / get_calculator / Worker / run) host-correct by construction.
 _HOST_ARCH_UNSET = object()
 _host_arch_cache: Any = _HOST_ARCH_UNSET
@@ -144,12 +144,12 @@ def local_env_map(home_path: str | None = None) -> dict:
 
 
 def local_models_path(home_path: str | None = None) -> Path:
-    """Per-machine verified-model ledger (``models.local.json`` at hub root)."""
+    """Per-machine verified-model record (``models.local.json`` at hub root)."""
     return Path(home_path or home()) / "models.local.json"
 
 
 def load_local_models(home_path: str | None = None) -> dict:
-    """Read the verified-model ledger. Absent file -> {}; invalid -> RegistryError.
+    """Read the verified-model record. Absent file -> {}; invalid -> RegistryError.
 
     Shape: {<version-key>: {model, env, python, device, degraded, energy_ev,
     forces_shape, weights, verified_at}} — written by scripts/setup_verify.py
@@ -487,7 +487,7 @@ def resolve(
         # sm120, ...) resolves without a hand-added inference_<arch> block — the
         # per-arch .pt2 is then materialized by the first-run compile flow
         # (nequip-compile targets whatever GPU is present). Explicit
-        # inference_<arch> blocks still win when present (host-verified paths).
+        # inference_<arch> blocks still win when present (explicitly pinned paths).
         inference = [line.replace("${OMM_ARCH}", use_arch) for line in inference]
     else:
         inference = vinfo.get("inference")

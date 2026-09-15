@@ -99,8 +99,8 @@ written. What it adds, in order, each step logged to `<work>/verify/verify.log`:
                       round 0 in a fixture is `unmet(fixture:no_relabel)`.
 
 Outputs `<work>/verify/distill_verify.json` and appends one JSONL row to
-`<work>/.distill/ledger.jsonl` (or `--ledger`) in the shape the other
-campaign ledgers use (`kind`, `phase`, `state`, `verdict`, `evidence`,
+`<work>/.distill/ledger.jsonl` (or `--ledger`) in the shape the sweep
+ledgers (setup_sweep.py --fresh-root, ft_sweep.py) use (`kind`, `phase`, `state`, `verdict`, `evidence`,
 `manifest_sha256`, `campaign_id`). Exit 0 iff the state is `passed`.
 
 Held-out metrics come from the `.pt` (torch) model; the exported `.bin`
@@ -1104,7 +1104,7 @@ def main(argv=None) -> int:
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     ledger = args.ledger or (work / ".distill" / "ledger.jsonl")
     teacher = (acc.get("provenance") or {}).get("teacher") or {}
-    # Same keys the other campaign ledgers carry (env/family/variant/kind/phase/
+    # Same keys the sweep ledgers carry (env/family/variant/kind/phase/
     # state/verdict/evidence/manifest_sha256/campaign_id) so evidence_report.py
     # keys the row as ("distill", <teacher variant>); any state other than
     # "passed" reads there as not-passed, and a missing manifest as INCOMPLETE.

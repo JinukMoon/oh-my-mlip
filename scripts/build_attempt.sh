@@ -3,7 +3,8 @@
 #
 # PURPOSE
 #   Record a per-STAGE status for each env (or a subset) into a structured,
-#   commit-safe report (docs/build_attempt_results.md). The point is to find
+#   commit-safe report (report/build_attempt_results.md by default;
+#   override with BUILD_ATTEMPT_REPORT). The point is to find
 #   what fails so the roster can be iterated env-by-env. The runbook lives in
 #   docs/build_attempt.md.
 #
@@ -26,7 +27,7 @@
 #                     install.sh --dry-run for ALL envs. Fast and safe.
 #   subset  lint, plus a REAL env-create for the small set named via --envs a,b
 #           and a weights-download attempt for those envs.
-#   full    REAL env-create for ALL envs. Owner/overnight only; NOT a default.
+#   full    REAL env-create for ALL envs. Slow (hours); NOT a default.
 #
 # TOKEN SAFETY (critical):
 #   The HF token is the user's. This driver NEVER inlines, echoes, or commits it.
@@ -47,7 +48,8 @@
 #                      anything (proves the report + redaction logic; CI-safe)
 #     -h, --help       show this header and exit
 #
-# Output: docs/build_attempt_results.md (the tracked deliverable) — a table
+# Output: report/build_attempt_results.md (gitignored runtime output; set
+#   BUILD_ATTEMPT_REPORT=/some/path.md to write elsewhere) — a table
 #   env | stage | status(ok|fail|gpu-required-deferred|skipped) | detail
 #   plus a FAILURE LIST summary. The report is safe to commit (no token).
 #
@@ -61,14 +63,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENVS_DIR="$REPO_ROOT/envs"
 INSTALL_SH="$REPO_ROOT/install.sh"
-REPORT="$REPO_ROOT/docs/build_attempt_results.md"
+REPORT="${BUILD_ATTEMPT_REPORT:-$REPO_ROOT/report/build_attempt_results.md}"
 
 # ── Defaults / arg parsing ──
 TIER="lint"
 SUBSET_CSV=""
 DRY_RUN_SELF=0
 
-usage() { sed -n '2,69p' "${BASH_SOURCE[0]:-$0}"; }
+usage() { sed -n '2,57p' "${BASH_SOURCE[0]:-$0}"; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -350,6 +352,7 @@ gpu_label=$([ "$GPU_OK" -eq 1 ] && echo "present" || echo "absent (compile/run d
 conda_label="${CONDA_BIN:-none}"
 self_label=$([ "$DRY_RUN_SELF" -eq 1 ] && echo "yes (no builds run)" || echo "no")
 
+mkdir -p "$(dirname "$REPORT")"
 {
   echo "# build_attempt results"
   echo

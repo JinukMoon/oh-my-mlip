@@ -125,10 +125,9 @@ def _run_warn_driver_skew(tmp_path: Path, recipe: Path, host_mm: str | None) -> 
     assert fn.startswith("warn_driver_skew()"), "install.sh function extraction failed"
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
-    # Always stub nvidia-smi (the real one exists on this WSL host, so an
-    # absent-stub PATH would leak the real driver into the test). host_mm=None
-    # emulates an unusable nvidia-smi: empty output -> unparseable host CUDA
-    # -> warn_driver_skew's install.sh:206 early return.
+    # Always stub nvidia-smi to isolate the test from the host environment.
+    # host_mm=None emulates an unusable nvidia-smi: empty output -> unparseable
+    # host CUDA -> warn_driver_skew's install.sh:206 early return.
     smi = bindir / "nvidia-smi"
     body = f"echo 'CUDA Version: {host_mm}'" if host_mm is not None else ":"
     smi.write_text(f"#!/bin/sh\n{body}\n")

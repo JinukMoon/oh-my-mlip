@@ -2,7 +2,7 @@
 
 The catbench and distill on-ramp contracts are documented in dedicated
 "frozen" surfaces (skills/catbench/SKILL.md -> AGENTS.md §3B ->
-run_examples/catbench_quickstart.py; docs/distillation_onramp.md). The single
+run_examples/catbench_quickstart.py). The single
 source of truth for agent strategy is AGENTS.md; the on-ramp surfaces must
 POINT to it, never re-encode it. This guard asserts there is no duplicated
 knowledge block — zero shared 10-grams between each on-ramp surface and
@@ -29,7 +29,6 @@ ONRAMP_SURFACES = [
     "skills/distill/SKILL.md",
     "skills/run/SKILL.md",
     "skills/setup/SKILL.md",
-    "docs/distillation_onramp.md",
     "docs/catbench_data_format.md",
     # G1 (end-to-end recipes): the shared workflow recipes layer a job
     # protocol on AGENTS.md's mechanics sections and must point at them,

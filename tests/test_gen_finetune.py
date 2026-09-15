@@ -139,7 +139,7 @@ def test_dpa_3_1_3m_ft_divergence_is_descriptive_not_variant_args(models: dict):
 
 
 def test_uma_s_1p2_oc22_does_not_inherit_runnable(models: dict):
-    """Report B:487-489 -- the installed UMATask enum has no 'oc22'. This
+    """The installed UMATask enum has no 'oc22'. This
     variant must classify explicitly as blocked, not inherit the UMA
     family's runnable_as_installed."""
     ft = gen_finetune.variant_finetune(models, "UMA", "UMA-s-1p2-OC22")

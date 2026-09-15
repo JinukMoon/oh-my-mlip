@@ -61,7 +61,7 @@ python3 $OMM/scripts/ft_run.py SevenNet-Omni --dataset <your-dataset> --out ft_s
 
 | variant | status | runnable_as_installed | licence | demonstrated |
 |---|---|---|---|---|
-| `SevenNet-MF-OMPA` | documented | True | — | ft_verify: energy=-16.3878 eV on a 2-epoch demo fine-tune, 2026-08-22 |
+| `SevenNet-MF-OMPA` | documented | True | — | 2-epoch demo fine-tune verified |
 | `SevenNet-Omni` | documented | True | — | — |
 
 ---
@@ -118,7 +118,7 @@ python3 $OMM/scripts/ft_run.py MACE-MH-1-OC20 --dataset <your-dataset> --out ft_
 
 | variant | status | runnable_as_installed | licence | demonstrated |
 |---|---|---|---|---|
-| `MACE-MPA-0` | documented | True | — | ft_verify: energy=-16.4872 eV on a 2-epoch demo fine-tune, 2026-08-22 |
+| `MACE-MPA-0` | documented | True | — | 2-epoch demo fine-tune verified |
 | `MACE-MH-1-OMAT` | documented | True | ASL | — |
 | `MACE-MH-1-OC20` | documented | True | ASL | — |
 
@@ -265,7 +265,7 @@ python3 $OMM/scripts/ft_run.py DPA-3.1-3M-FT --dataset <your-dataset> --out ft_d
 
 | variant | status | runnable_as_installed | licence | demonstrated |
 |---|---|---|---|---|
-| `DPA-3.1-3M-FT` | documented | True | — | ft_verify: energy=-16.4316 eV on a 2-epoch demo fine-tune, 2026-08-22 |
+| `DPA-3.1-3M-FT` | documented | True | — | ft_verify: 2-epoch demo fine-tune completed successfully |
 
 ---
 

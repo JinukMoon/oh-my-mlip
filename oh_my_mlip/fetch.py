@@ -707,8 +707,7 @@ def _conda_unpack(install_dir: Path) -> None:
     # Invoke the shim VIA THE ENV'S OWN INTERPRETER: the shim's shebang is
     # `/usr/bin/env python`, and a bare `python` does not exist on many hosts
     # (python3-only distros) — running it directly fails with
-    # "/usr/bin/env: 'python': No such file or directory" (host-proven
-    # 2026-07-18 on the WSL box during the tarball relocation e2e).
+    # "/usr/bin/env: 'python': No such file or directory".
     env_python = install_dir / "bin" / "python"
     if not env_python.exists():
         raise FetchError(f"env interpreter missing under {install_dir}/bin")

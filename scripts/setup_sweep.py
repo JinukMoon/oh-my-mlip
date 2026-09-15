@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """setup_sweep.py -- deterministic batch driver for `setup all` sweeps.
 
-Complete-then-batch-recover (the consensus decision): the driver NEVER stops
+Complete-then-batch-recover: the driver NEVER stops
 on a failed target. Every phase of every target is appended to a JSONL ledger,
 and the final report is generated STRICTLY from that ledger -- never from
 anyone's memory of what happened. Agent recovery reasoning runs only after
@@ -23,16 +23,16 @@ Usage:
   python3 scripts/setup_sweep.py --targets MACE,SevenNet,ORB
   python3 scripts/setup_sweep.py report [--ledger PATH]
   python3 scripts/setup_sweep.py --fresh-root --targets mace --ft-dataset ft_demo.traj \\
-      [--preflight ../.omc/state/omm-e2e-preflight.json] [--campaign-id ID]
+      [--preflight PREFLIGHT.json] [--campaign-id ID]
 
 Test-only: --install-cmd / --verify-cmd replace the real commands (explicit
 injection, no monkeypatching); the target/env is appended as the last arg.
 
---fresh-root (plan G2, ADR-OMM-05): one DISPOSABLE runtime root per env,
+--fresh-root: one DISPOSABLE runtime root per env,
 serialized. Per target env the cycle is, in this exact order, each step a
 ledger row carrying the snapshot's `manifest_sha256`:
 
-  start gate: MEASURED free space (GiB) >= G0 conservative peak + start
+  start gate: MEASURED free space (GiB) >= preflight conservative peak + start
   reserve, and >= the mid-cycle floor (a planned/projected figure is never
   used) -> snapshot --check (fail-closed, before EVERY materialization) ->
   snapshot -> materialize (W/.omm_fresh/<env>_<runid>) -> seed-cache (copy
@@ -45,7 +45,7 @@ ledger row carrying the snapshot's `manifest_sha256`:
   failed(source_mutated)) -> targeted hashes of the real hub's local state +
   the user env's conda-meta/history before/after (change =>
   failed(attribution), campaign PAUSES) -> budget row (du peak, wall time vs
-  the G0 band, GiB) -> PRESERVE: verified copies of every log/ledger/config
+  the preflight band, GiB) -> PRESERVE: verified copies of every log/ledger/config
   and every final artifact (fine-tune checkpoints, ...) into the campaign dir
   -> guarded owned cleanup (needs the preserved record; refusals are
   recorded, never forced) -> post-cleanup row (owned path absent? + df).
@@ -63,7 +63,7 @@ resource-blocks the fine-tune phase unless --ft-download-gib supplies an
 explicit conservative bound. --ft-download-gib works for every family and
 is ADDITIVE: it is added to the measured known part, never replaces it,
 and is the bound for the unknown items; --peak-gib never covers
-downloads). The peak itself comes from the G0 preflight or, for an env it
+downloads). The peak itself comes from the preflight JSON or, for an env it
 does not estimate, ONLY from --peak-gib (an explicit conservative figure):
 without one the cycle is resource-blocked, because the floor monitor stops
 a filling disk but is not proof that the install/FT peak fits.
@@ -228,7 +228,7 @@ def sweep(targets: list[str], home: Path, ledger: Path,
 
 
 # ---------------------------------------------------------------------------
-# --fresh-root: disposable-root cycle (plan G2)
+# --fresh-root: disposable-root cycle 
 # ---------------------------------------------------------------------------
 
 LOCK_NAME = "campaign.lock"
@@ -252,7 +252,7 @@ class FreshHooks:
     importlib.spec_from_file_location without registering it in sys.modules,
     which the dataclass decorator cannot tolerate under postponed annotations.
 
-    Disk numbers are GiB (2^30) throughout, matching the G0 preflight's
+    Disk numbers are GiB (2^30) throughout, matching the preflight JSON's
     schema-2 `*_gib` fields. `min_free_gib` is the MEASURED mid-cycle floor
     (checked before every phase and while every child runs); `start_reserve_gib`
     is the margin above an env's conservative peak estimate that the measured
@@ -301,7 +301,7 @@ class FreshHooks:
         # complete measurement.
         self.cold_cache_gib = None if cold_cache_gib is None else float(cold_cache_gib)
         self.ft_download_gib = None if ft_download_gib is None else float(ft_download_gib)
-        # operator's CONSERVATIVE install/FT peak (GiB) for an env the G0
+        # operator's CONSERVATIVE install/FT peak (GiB) for an env the
         # preflight gives no estimate for; without it such a cycle is
         # resource-blocked -- the measured floor alone is not a budget
         self.peak_gib = None if peak_gib is None else float(peak_gib)
@@ -356,7 +356,7 @@ def resolve_target_env(target: str, home: Path) -> str | None:
 
 
 def scan_foreign_processes(markers=FOREIGN_PROCESS_MARKERS, proc_root: Path = Path("/proc")) -> list[dict]:
-    """Other install/finetune processes on the host (Part 3.4 concurrency).
+    """Other install/finetune processes on the host (concurrency guard).
     Fails closed: an unreadable proc root cannot vouch that nobody else is
     installing (failed(concurrency:proc_unreadable)); a pid whose cmdline
     could not be read is re-checked -- gone means it exited during the scan
@@ -419,7 +419,7 @@ def acquire_lock(sweep_dir: Path, campaign_id: str, proc_root: Path = Path("/pro
 
 
 def mandatory_hash_targets(hub: Path, env: str) -> dict[str, str]:
-    """Part 3.4 mandatory evidence: the real hub's local state files and the
+    """Mandatory evidence: the real hub's local state files and the
     user env's conda-meta/history for the env under test, hashed (or
     'absent') -- compared before/after every cycle."""
     paths = [hub / "env_map.local.json", hub / "models.local.json", hub / "envs" / "_expected.json"]
@@ -439,7 +439,7 @@ def preflight_row(preflight: dict | None, env: str) -> dict | None:
 
 
 def peak_estimate_gib(estimate: dict | None) -> float | None:
-    """The G0 conservative peak in GiB: schema-2 `conservative_disk_peak_gib`,
+    """The preflight conservative peak in GiB: schema-2 `conservative_disk_peak_gib`,
     else a decimal-GB field converted once, else None (= UNKNOWN; an unknown
     estimate never becomes a bound, it only means the start gate cannot be
     computed and the measured floor alone applies)."""
@@ -457,7 +457,7 @@ def home_cold_cache(host_home: Path, names: list[str]) -> dict:
     writes (matris/tace/eqnorm-style symlinks into the hub's models/). The
     isolated campaign HOME starts cold, so a fresh root re-downloads them:
     their MEASURED size on the host is the provisional addend to the start
-    gate and to the measured floor (Part 3.5). Read-only measurement of the
+    gate and to the measured floor. Read-only measurement of the
     real HOME; nothing there is touched.
 
     Deterministic, known paths only: `<host_home>/.cache/<name>` for the
@@ -521,7 +521,7 @@ def home_cold_cache(host_home: Path, names: list[str]) -> dict:
 
 # First-run fine-tune downloads: artifacts a family's FIRST ft_run fetches
 # INTO the isolated root that the seeded inference weights do not cover
-# (reported by the FT owner from the builders' prestage steps, 2026-09-14).
+# (derived from the builders' prestage steps).
 # Each entry names a deterministic host path to MEASURE (read-only) as the
 # size estimate, or None when nothing on this host can stand in for it: an
 # unknown size never becomes a number -- the fine-tune phase is
@@ -529,7 +529,7 @@ def home_cold_cache(host_home: Path, names: list[str]) -> dict:
 # estimate (--ft-download-gib, recorded with provenance "operator_estimate").
 # Sizes are MEASURED at deterministic upstream/registry cache paths under the
 # host HOME (never a filesystem search); `copies` is how many copies the
-# first run persists in the root (the FT owner's 2026-09-14 audit: nequip
+# first run persists in the root (per the fetch audit: nequip
 # 0.17.1 keeps the package under NEQUIP_CACHE_DIR/model_cache AND the
 # prestage copies it to $OH_MY_MLIP_HOME/models/<env>/; TACE lands both as
 # ~/.cache/tace/<model>.pt and as an HF blob of the same size). A family the
@@ -547,13 +547,13 @@ FIRST_RUN_FT_DOWNLOADS: dict[str, list[dict]] = {
                    "host_probe": ".local/mattersim/pretrained_models", "copies": 1}],
     "TACE": [{"name": "TACE-OAM-L.pt (~/.cache/tace) x2: cache file + HF blob of the same size",
               "host_probe": ".cache/tace", "copies": 2}],
-    "PET": [{"name": "PET additional first-run fetches: audit NOT completed (FT owner 2026-09-14) -- unknown, not zero",
+    "PET": [{"name": "PET additional first-run fetches: audit NOT completed -- unknown, not zero",
              "host_probe": None}],
-    "MACE": [{"name": "MACE additional first-run fetches: audit NOT completed (FT owner 2026-09-14) -- unknown, not zero",
+    "MACE": [{"name": "MACE additional first-run fetches: audit NOT completed -- unknown, not zero",
               "host_probe": None}],
-    "DeePMD": [{"name": "DeePMD additional first-run fetches: audit NOT completed (FT owner 2026-09-14) -- unknown, not zero",
+    "DeePMD": [{"name": "DeePMD additional first-run fetches: audit NOT completed -- unknown, not zero",
                 "host_probe": None}],
-    "DPA4": [{"name": "DPA4 additional first-run fetches: audit NOT completed (FT owner 2026-09-14) -- unknown, not zero",
+    "DPA4": [{"name": "DPA4 additional first-run fetches: audit NOT completed -- unknown, not zero",
               "host_probe": None}],
 }
 
@@ -596,8 +596,8 @@ def first_run_ft_downloads(family: str, host_home: Path) -> dict:
 
 
 class DuSampler:
-    """Peak hardlink-aware usage of one root, sampled on a thread (Part 3.5
-    `budget_actual`)."""
+    """Peak hardlink-aware usage of one root, sampled on a thread
+    (`budget_actual`)."""
 
     def __init__(self, root: Path, interval: float):
         self.root, self.interval = root, interval
@@ -850,7 +850,7 @@ def fresh_cycle(env: str, hub: Path, runtime_parent: Path, campaign_dir: Path, l
         return hooks.disk_free(df_path) / GIB
 
     def floor_check(phase: str) -> None:
-        """Measured mid-cycle floor between phases (Part 3.5)."""
+        """Measured mid-cycle floor between phases."""
         free = free_gib()
         if free < hooks.min_free_gib:
             raise CycleAbort("resource-blocked",
@@ -871,7 +871,7 @@ def fresh_cycle(env: str, hub: Path, runtime_parent: Path, campaign_dir: Path, l
                       stderr_tail=f"no registry family lives in env {env!r}", **base)
         return False
 
-    # --- start gate (Part 3.5): MEASURED free space vs the G0 conservative
+    # --- start gate: MEASURED free space vs the preflight conservative
     # peak (GiB) + the cold isolated-HOME caches this family re-downloads
     # (measured on the host) + first-run FT downloads + this harness's start
     # reserve. A peak the preflight does not estimate is taken ONLY from the
@@ -1396,20 +1396,20 @@ def main() -> int:
     ap.add_argument("--ledger", default=None, help="ledger path (default: new for sweep, latest for report)")
     ap.add_argument("--install-cmd", default=None, help="TEST ONLY: replacement install command")
     ap.add_argument("--verify-cmd", default=None, help="TEST ONLY: replacement verify command")
-    fr = ap.add_argument_group("fresh-root cycle (plan G2)")
+    fr = ap.add_argument_group("fresh-root cycle")
     fr.add_argument("--fresh-root", action="store_true", help="one disposable runtime root per target env")
     fr.add_argument("--runtime-parent", default=None, help="default: <hub parent>/.omm_fresh")
     fr.add_argument("--campaign-id", default=None, help="default: UTC timestamp")
     fr.add_argument("--allowlist", default=None, help="default: .omc/state/omm-e2e-allowlist.json (see fresh_root.py)")
-    fr.add_argument("--preflight", default=None, help="G0 preflight JSON for per-env disk bands")
+    fr.add_argument("--preflight", default=None, help="preflight JSON for per-env disk bands")
     fr.add_argument("--ft-dataset", default=None, help="dataset for ft_sweep.py (absent => finetune rows cannot pass)")
-    fr.add_argument("--ft-audit", default=None, help="current-campaign FT support audit JSON")
+    fr.add_argument("--ft-audit", default=None, help="FT support audit JSON for this run")
     fr.add_argument("--seed-spec", default=None, help="JSON {dst_rel: src_abs} copied into the runtime (never symlinked)")
     fr.add_argument("--no-cleanup", action="store_true", help="keep the runtime root (cleanup row = retained)")
     fr.add_argument("--min-free-gib", type=float, default=10.0,
                     help="MEASURED free-space floor, GiB (2^30): checked before every phase and while children run")
     fr.add_argument("--start-reserve-gib", type=float, default=15.0,
-                    help="margin above the G0 conservative peak (GiB) the measured free space must clear to start")
+                    help="margin above the preflight conservative peak (GiB) the measured free space must clear to start")
     fr.add_argument("--cold-cache-gib", type=float, default=None,
                     help="operator's CONSERVATIVE estimate (GiB) of the cold HOME caches, used ONLY when their "
                          "host measurement is partial (symlinked/unreadable); without it such a cycle is resource-blocked")
@@ -1417,7 +1417,7 @@ def main() -> int:
                     help="operator's CONSERVATIVE estimate (GiB) for first-run fine-tune downloads of unknown size "
                          "(GRACE checkpoint, Allegro package); without it that fine-tune phase is resource-blocked")
     fr.add_argument("--peak-gib", type=float, default=None,
-                    help="operator's CONSERVATIVE install/fine-tune peak (GiB) for an env the G0 preflight gives no "
+                    help="operator's CONSERVATIVE install/fine-tune peak (GiB) for an env the preflight JSON gives no "
                          "estimate for; without one such a cycle is resource-blocked (the floor is not a budget)")
     fr.add_argument("--df-poll-seconds", type=float, default=15.0, help="free-space re-measure interval while a child runs")
     fr.add_argument("--grace-seconds", type=float, default=20.0, help="SIGTERM -> SIGKILL grace for a stopped child group")

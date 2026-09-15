@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ft_dataset.py — one converter, canonical extxyz in, per-framework layout out.
 
-This is the hub's core added value for fine-tuning (P3/C9): a SINGLE canonical
+This is the hub's core added value for fine-tuning: a SINGLE canonical
 extxyz writer feeds five frameworks at once. MACE defaults to `REF_energy`/
 `REF_forces` in `info`/`arrays` and does NOT read the `SinglePointCalculator`;
 SevenNet, NequIP, Allegro and GRACE (plus MatterSim/PET/TACE, which also read
@@ -228,9 +228,8 @@ def _write_deepmd_system_dpdata(frames: list[Atoms], type_map: list[str], sys_di
     writer) if dpdata is not importable in THIS interpreter, or the
     conversion raises. dpdata's 'ase/structure' format takes a live
     ``ase.Atoms`` object directly (not a file path) and one frame at a time;
-    frames are concatenated with dpdata's own System `+` (host-verified,
-    2026-08-23 -- an earlier version of this function passed a written
-    extxyz PATH under fmt='ase/structure', which dpdata does not accept)."""
+    frames are concatenated with dpdata's own System `+` (passing a written extxyz PATH under fmt='ase/structure'
+    does not work: dpdata does not accept it)."""
     try:
         import dpdata
     except ImportError:

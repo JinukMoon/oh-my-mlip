@@ -255,7 +255,7 @@ def test_run_distill_sh_is_shellcheck_clean(bootstrapped):
     assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"
 
 
-# ── >4 species refusal (pair_nnmtp v1 bound, F18) ────────────────────────────
+# ── >4 species refusal (pair_nnmtp v1 supports up to 4 elements) ─────────────────
 def test_more_than_4_species_is_refused_actionably(tmp_path, fake_d):
     # NaCH3OH-ish blend: 5 distinct elements (H, O, C, N, Na) forced into one cell
     atoms = molecule("CH3OH") + molecule("NH3")

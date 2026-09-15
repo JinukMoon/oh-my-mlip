@@ -1,26 +1,17 @@
 # build_status: clean
-# build_note: nequix: HOST tier-2 GPU PASS (RTX 4060 Ti sm89, 2026-06-30) via the JAX backend — NequixCalculator(...nequix-mp-1.nqx, backend='jax', use_kernel=False) energy=-16.378962 eV on jax CudaDevice. nequix is JAX-native; OpenEquivariance is OPTIONAL and is INTENTIONALLY OMITTED here (its 0.6.4 sdist won't build on this host; use_kernel=False uses e3nn-jax instead). The single conda env create installs cleanly now that oeq is removed.
+# build_note: Nequix is JAX-native. OpenEquivariance is optional and intentionally omitted here; the JAX backend uses e3nn-jax tensor products instead (use_kernel=False).
 # oh-my-mlip env recipe: Nequix (nequix, JAX-based)
 #
-# Pins mirror the validated internal setup (torch/jax), with python bumped
-# 3.10.20 -> 3.11.13 (host-reverified 2026-07-16, energy identical):
-#   python 3.11.13 / torch 2.10.0+cu126.
-# WHY 3.11: cp310 torch wheels on download.pytorch.org route to
-# download-r2.pytorch.org, which some site firewalls TLS-block (beta-test
-# finding, 2026-07); cp311+ wheels are served by the primary host.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# Pins: python 3.11.13 / torch 2.10.0+cu126 (torch kept for optional compatibility).
+# install.sh build-from-recipe is the PRIMARY install path.
 #
-#   - Nequix runs on JAX; torch is pinned to the CUDA 12.6 build (cu126) from the
-#     official PyTorch wheel index because parts of the stack still link torch.
-#     The host NVIDIA driver must satisfy the cu126 min-driver floor.
-#   - cuda-nvcc 12.6.* is included so the D3 dispersion kernel can compile on
-#     first run AND so openequivariance can build its CUDA extensions.
-#   - nequix is pinned to the validated version; jax==0.6.2 plus the
-#     jax-cuda12-plugin / jax-cuda12-pjrt CUDA plugins provide the JAX GPU backend.
-#     e3nn-jax and equinox are top-level deps it needs.
-#   - openequivariance (+ its extjax variant) ships sdist-only and compiles
-#     against nvcc + torch at install time; this is why the build is candidate.
+#   - Nequix runs on JAX; torch is pinned to CUDA 12.6 (cu126) because parts of
+#     the stack still link torch. The host NVIDIA driver must satisfy the cu126
+#     min-driver floor.
+#   - cuda-nvcc 12.6.* is included for D3 dispersion and (optionally) OpenEquivariance
+#     CUDA extension compilation.
+#   - nequix, jax==0.6.2, jax-cuda12-plugin, and jax-cuda12-pjrt provide the JAX backend.
+#   - e3nn-jax and equinox are top-level dependencies.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.4`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -36,10 +27,8 @@ dependencies:
   - pip
   # CUDA 12.6 toolchain (provides nvcc for D3 and for openequivariance's build)
   - cuda-nvcc=12.6.*
-  # ase pinned 2026-08-17 to the version present in the env whose GPU
-  # single-point verified; a bare `- ase` rode each new release into the
-  # build (the mattersim/eqnorm breakage class) and verify_determinism
-  # was pip-only, so nothing caught it.
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu126

@@ -139,7 +139,7 @@ def test_file_url_line_fails():
 
 def test_local_path_line_fails():
     f = make_fetcher()
-    lr = vs._verify_line("/home/jumoon/pretrained_models/tace", f)
+    lr = vs._verify_line("/home/user/pretrained_models/tace", f)
     assert lr.kind == "local" and lr.status == "fail"
 
 

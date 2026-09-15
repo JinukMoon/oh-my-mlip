@@ -10,9 +10,9 @@ package refuses to re-download. See docs/host_requirements.md and the MatRIS
 note in models.json.
 
 This helper pre-stages the exact file the loader expects, from the working
-``ndownloader.figshare.com`` subdomain. MatRIS is not in the /TGM reference set,
-so there is no owner-verified sha256 to check against; instead we require a
-plausibly-sized checkpoint (>1 MiB) and print the computed sha256 for the record.
+``ndownloader.figshare.com`` subdomain. We require a plausibly-sized checkpoint
+(>1 MiB), compare against the recorded sha256 below (warn-only), and print the
+computed sha256 for the record.
 Pure stdlib, idempotent, non-fatal by design.
 """
 from __future__ import annotations
@@ -33,9 +33,8 @@ WEIGHTS = {
     "matris_10m_mp": ("https://ndownloader.figshare.com/files/59143058", "MatRIS_10M_MP.pth.tar"),
 }
 
-# Known-good sha256 of the staged checkpoint (verified 2026-07-01 on the RTX 4060
-# Ti host). WARN-ONLY: a mismatch is logged but does NOT fail the pre-stage,
-# because the upstream figshare file may be legitimately re-published. Models
+# Known-good sha256 of the staged checkpoint. WARN-ONLY: a mismatch is logged
+# but does NOT fail the pre-stage, because the upstream figshare file may be legitimately re-published. Models
 # without a recorded fingerprint are skipped (no reference to compare).
 EXPECTED_SHA256 = {
     "matris_10m_oam": "c033abc53601a74f10d9b7fec0f658220c013c3b11d4d405f1d32136d4c2b067",

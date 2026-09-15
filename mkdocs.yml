@@ -7,15 +7,6 @@ edit_uri: edit/main/docs/
 
 docs_dir: docs
 
-# Internal working records stay in the repo but are not part of the site.
-exclude_docs: |
-  build_attempt*.md
-  equiv_*.md
-  source_research.md
-  ground_truth_reclassification.md
-  weights_source_review.md
-  distillation_onramp.md
-
 theme:
   name: material
   logo: assets/icon.png

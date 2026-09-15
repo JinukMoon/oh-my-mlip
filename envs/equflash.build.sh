@@ -3,17 +3,15 @@
 #
 # WHY THIS EXISTS: a single `conda env create --file equflash.yml` is a pip
 # ResolutionImpossible (fairchem-core 1.10.0 vs torch 2.9.1+cu126). The
-# documented working install (see envs/equflash.yml header) is a 2-pass pip:
-# pass 1 = torch + PyG + cueq + GGNN; pass 2 = fairchem --no-deps + GGNN runtime
-# deps. install.sh auto-runs this sidecar when present (PREFIX passed as $1) and
-# still owns the catbench + D3 warm-up + sentinel steps afterwards.
-#
-# Verified on host RTX 4060 Ti sm89 (2026-06-30): EquFlashV2 tier-2 GPU PASS,
-# energy=-16.391567 eV, torch.cuda.memory_allocated=200097792 B (cueq, 44.9M params).
+# documented working install (see envs/equflash.yml) is a 2-pass pip:
+# pass 1 = torch + PyG + cueq + GGNN; pass 2 = fairchem --no-deps + GGNN runtime deps.
+# install.sh auto-runs this sidecar when present (PREFIX passed as $1) and handles
+# catbench, D3, and sentinel steps afterwards.
 set -euo pipefail
 
 PREFIX="${1:?usage: equflash.build.sh <env-prefix>}"
-CONDA_BIN="$(command -v conda || echo /home/jumoon/miniconda3/condabin/conda)"
+CONDA_BIN="$(command -v conda || true)"
+[ -n "$CONDA_BIN" ] || { echo "conda not found on PATH"; exit 1; }
 PIP="$PREFIX/bin/pip"
 
 echo "== equflash sidecar [0] base env (python 3.12.13 + cuda-nvcc 12.6 + ase) =="
