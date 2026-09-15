@@ -1,6 +1,6 @@
 ---
 name: finetune
-description: Fine-tune an oh-my-mlip model on your own dataset from a foundation checkpoint. Triggers on requests to fine-tune, continue training, or adapt a model to custom data — "MACE를 내 데이터로 fine-tune", "파인튜닝 부탁", "SevenNet 이어서 학습", "train DeePMD with my extxyz frames" — even when "oh-my-mlip" or "finetune" is not named.
+description: Fine-tune an oh-my-mlip model on your own dataset from a foundation checkpoint. Triggers on requests to fine-tune, continue training, or adapt a model to custom data — "fine-tune MACE on my data", "continue training SevenNet", "train DeePMD with my extxyz frames" — even when "oh-my-mlip" or "finetune" is not named.
 argument-hint: "<model> --dataset PATH [--out DIR] [--epochs N] [--emit-only] [--slurm]"
 ---
 

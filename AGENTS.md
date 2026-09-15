@@ -229,7 +229,7 @@ the internal roster runner:
 
 ### (C) Fine-tune a model on your own dataset — `ft_run.py`
 
-Examples: "fine-tune MACE on my dataset", "파인튜닝 해줘", "continue training SevenNet
+Examples: "fine-tune MACE on my dataset", "adapt ORB to my data", "continue training SevenNet
 from the foundation checkpoint with my extxyz". Ask for **which model** and **where
 the dataset is** if either is missing, then follow this flow — never hand-write a
 training command or config from memory.

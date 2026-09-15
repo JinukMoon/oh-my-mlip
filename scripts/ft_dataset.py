@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ft_dataset.py — one converter, canonical extxyz in, per-framework layout out.
 
-This is the hub's "핵심 부가가치" for fine-tuning (P3/C9): a SINGLE canonical
+This is the hub's core added value for fine-tuning (P3/C9): a SINGLE canonical
 extxyz writer feeds five frameworks at once. MACE defaults to `REF_energy`/
 `REF_forces` in `info`/`arrays` and does NOT read the `SinglePointCalculator`;
 SevenNet, NequIP, Allegro and GRACE (plus MatterSim/PET/TACE, which also read
