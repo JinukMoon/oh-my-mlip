@@ -39,7 +39,12 @@ Witness contract (consumed by scripts/ft_sweep.py): the verdict JSON carries
                     GRACE (TF)      tf.debugging.set_log_device_placement is
                                     switched on for the forward only and the
                                     placer/executor log lines are parsed for
-                                    compute ops placed on device:GPU:N.
+                                    compute ops placed on device:GPU:N; the TF
+                                    profiler also traces the forward and the
+                                    events on its /device:GPU:N planes (CUPTI
+                                    kernel activity) count as GPU compute, which
+                                    covers a saved_model forward run as one XLA
+                                    cluster that logs no per-op placement.
   witness         the raw counts behind gpu_used (backend, op totals, names)
 A `--device cpu` run pins CUDA_VISIBLE_DEVICES="" (and deepmd's DEVICE=cpu)
 in the child so families whose calculators auto-select a GPU really stay on
@@ -57,6 +62,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import math
 import os
@@ -141,7 +147,14 @@ print(json.dumps({
 # ..."). The C++ log goes to fd 2, so fd 2 is redirected to a temp file for
 # the forward only; non-placement lines are re-emitted to stderr afterwards.
 # Checked in the grace env (TF 2.16.2): eager and jit_compile'd
-# tf.function ops both log placement lines in this exact format. On a host
+# tf.function ops both log placement lines in this exact format -- but a
+# restored gracemaker saved_model runs its forward as one XLA cluster and logs
+# no per-op placement. The TF profiler traces the same forward: checked on an
+# RTX 4060 Ti, that forward put 10444 events on the /device:GPU:0 plane, and
+# with CUDA_VISIBLE_DEVICES="" the trace has no GPU plane at all. Those GPU
+# plane events are CUPTI kernel activity, the backend's execution record, and
+# are added to the GPU compute count; a profiler that cannot start records zero
+# and the GPU branch fails closed. On a host
 # where the grace env registers no GPU device at all ("Cannot dlopen some GPU
 # libraries"), the GPU branch of this witness cannot pass -- it fails closed,
 # which is the correct verdict.
@@ -158,6 +171,12 @@ _EXEC = re.compile(r"Executing op ([A-Za-z0-9_]+) in device /job:\\S*/device:(GP
 _SKIP = {"_Arg", "_Retval", "_EagerConst", "_DeviceArg", "_DeviceRetval", "Const", "Identity",
          "IdentityN", "NoOp", "Placeholder", "VarHandleOp", "ReadVariableOp"}
 _log = tempfile.TemporaryFile("w+")
+_prof_dir = tempfile.mkdtemp(prefix="ft_verify_tfprof_")
+_prof_error = None
+try:
+    tf.profiler.experimental.start(_prof_dir)
+except Exception as _exc:  # no CUPTI / profiler already running: no GPU plane evidence
+    _prof_error = repr(_exc)
 tf.debugging.set_log_device_placement(True)
 _saved = os.dup(2)
 os.dup2(_log.fileno(), 2)
@@ -187,14 +206,39 @@ for line in _log:
     else:
         cpu_ops += 1
 sys.stderr.write("".join(other))
-gpu_used = bool(_gpus) and bool(gpu_ops)
+gpu_plane_events = 0
+if _prof_error is None:
+    try:
+        tf.profiler.experimental.stop()
+        import glob
+        try:
+            from tsl.profiler.protobuf import xplane_pb2
+        except ImportError:
+            from tensorflow.tsl.profiler.protobuf import xplane_pb2
+        for _p in glob.glob(os.path.join(_prof_dir, "**", "*.xplane.pb"), recursive=True):
+            _space = xplane_pb2.XSpace()
+            with open(_p, "rb") as _fh:
+                _space.ParseFromString(_fh.read())
+            for _plane in _space.planes:
+                if _plane.name.startswith("/device:GPU:"):
+                    gpu_plane_events += sum(len(_line.events) for _line in _plane.lines)
+    except Exception as _exc:
+        _prof_error = repr(_exc)
+        gpu_plane_events = 0
+import shutil
+shutil.rmtree(_prof_dir, ignore_errors=True)
+gpu_count = sum(gpu_ops.values()) + gpu_plane_events
+gpu_used = bool(_gpus) and gpu_count > 0
 import numpy as _np
 print(json.dumps({
     "energy_ev": e, "forces_shape": list(f.shape), "forces_finite": bool(_np.isfinite(_np.asarray(f, dtype=float)).all()),
     "gpu_used": gpu_used, "device": DEVICE,
-    "witness": {"backend": "tensorflow", "method": "log_device_placement compute ops on device:GPU during E/F forward",
-                "tf_gpu_devices": _gpus, "gpu_compute_ops": sum(gpu_ops.values()), "cpu_compute_ops": cpu_ops,
-                "gpu_op_names": sorted(gpu_ops)[:16]},
+    "witness": {"backend": "tensorflow",
+                "method": "log_device_placement compute ops on device:GPU plus TF profiler /device:GPU plane events, "
+                          "during E/F forward",
+                "tf_gpu_devices": _gpus, "gpu_compute_ops": gpu_count, "cpu_compute_ops": cpu_ops,
+                "gpu_op_names": sorted(gpu_ops)[:16], "gpu_plane_events": gpu_plane_events,
+                "profiler_error": _prof_error},
 }))
 '''
 
@@ -367,8 +411,10 @@ def _child_env(resolved: dict, device: str) -> dict:
     python = os.path.expandvars(resolved.get("python") or "")
     env_lib = os.path.join(os.path.dirname(os.path.dirname(python)), "lib") if python else ""
     if env_lib and os.path.isdir(env_lib):
+        # the env's pip CUPTI wheel too, so the TF profiler witness can trace GPU kernels
+        cupti = sorted(glob.glob(os.path.join(env_lib, "python3*", "site-packages", "nvidia", "cuda_cupti", "lib")))
         existing = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + existing if existing else "")
+        env["LD_LIBRARY_PATH"] = os.pathsep.join([env_lib, *cupti]) + (os.pathsep + existing if existing else "")
     env.update(resolved.get("env_run") or {})
     if device == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""

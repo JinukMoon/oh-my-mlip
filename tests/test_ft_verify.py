@@ -79,7 +79,12 @@ def test_every_template_defers_the_forward_to_a_backend_witness(family):
     assert "memory_allocated" not in script and "get_memory_info" not in script
     if family == "GRACE":
         assert "set_log_device_placement(True)" in tail
-        assert "gpu_used = bool(_gpus) and bool(gpu_ops)" in tail
+        # a saved_model forward runs as one XLA cluster with no per-op placement lines;
+        # the profiler's /device:GPU plane events are the execution record for that path
+        assert "tf.profiler.experimental.start(_prof_dir)" in tail
+        assert 'startswith("/device:GPU:")' in tail
+        assert "gpu_count = sum(gpu_ops.values()) + gpu_plane_events" in tail
+        assert "gpu_used = bool(_gpus) and gpu_count > 0" in tail
         assert '"backend": "tensorflow"' in tail
     else:
         assert "TorchDispatchMode" in tail
