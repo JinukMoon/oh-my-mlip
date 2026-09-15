@@ -733,7 +733,9 @@ def build_grace(ctx: Context) -> CommandSpec:
             },
             "batch_size": int(batch_size),
             "test_batch_size": int(test_batch_size),
-            "jit_compile": True,
+            # XLA compile of the train step (gracemaker.py reads fit.jit_compile, default True);
+            # --set jit_compile=false turns it off where XLA-compiled training crashes the driver
+            "jit_compile": ctx.settings.get("jit_compile", True),
             "eval_init_stats": True,
             "checkpoint_freq": 1,
             "progressbar": False,
