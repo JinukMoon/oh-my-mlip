@@ -177,7 +177,8 @@ def render(models: dict) -> str:
     w("One section per framework: how to install it, how to get its weights, and the")
     w("calculator line that runs it. Blocks **A** and **B** are what each framework's own")
     w("documentation says, with the source URL linked. Block **C** comes verbatim from")
-    w("`models.json` — keep those lines exactly as written.")
+    w("`models.json` — keep those lines as written, with `$OMM` replaced by the absolute")
+    w("path of your clone (`oh_my_mlip.resolve()` returns them already filled in).")
     w("")
     w("Upstream install gives the supported way; the pin gives one combination of versions")
     w("known to work together.")
@@ -280,7 +281,8 @@ def render(models: dict) -> str:
         run = f'{s["env_run_raw"]} ' if s.get("env_run_raw") else ""
         w(f"Run: `{run}<prefix>/bin/python script.py` — never `conda activate`.")
         w("")
-        w(f"Check it works: `python3 $OMM/scripts/setup_verify.py {versions[0]} --json` "
+        check = entry.get("default_version") or versions[0]
+        w(f"Check it works: `python3 $OMM/scripts/setup_verify.py {check} --json` "
       f"(prints energy + forces; exit 0 on success).")
         w("")
         if u.get("note"):

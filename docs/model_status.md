@@ -45,7 +45,7 @@ How to read the columns:
 | UMA-s-1p2-OMAT | UMA | on-demand-hf | yes | [GitHub](https://github.com/facebookresearch/fairchem){ .md-button .omm-repo } |
 | PET-OAM-XL | PET | on-demand-hf | no | [GitHub](https://github.com/metatensor/metatrain){ .md-button .omm-repo } |
 | EquFlashV2 | EquFlash | on-demand-hf | no | [GitHub](https://github.com/SamsungDS/GGNN){ .md-button .omm-repo } |
-| EquFlash | EquFlash | on-demand-hf | no | [GitHub](https://github.com/SamsungDS/GGNN){ .md-button .omm-repo } |
+| EquFlash-v1 | EquFlash | on-demand-hf | no | [GitHub](https://github.com/SamsungDS/GGNN){ .md-button .omm-repo } |
 | MatRIS-10M-OAM | MatRIS | auto-download | no | [GitHub](https://github.com/HPC-AI-Team/MatRIS){ .md-button .omm-repo } |
 | DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | no | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
 | TACE-OAM-L | TACE | auto-download | no | [GitHub](https://github.com/xvzemin/tace){ .md-button .omm-repo } |

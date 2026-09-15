@@ -1,63 +1,57 @@
 # Gated models
 
-Most of the roster is open-weight and needs no token. A few models are **gated**:
-their weights sit behind an upstream license that you must accept with your own
-Hugging Face account. **oh-my-mlip never redistributes gated weights** — they are
-always fetched on first run with *your* token, after *you* accept the license.
+Most models are open-weight and need no token. A few are **gated**: their
+weights sit behind an upstream license that you accept with your own Hugging
+Face account. **oh-my-mlip never redistributes gated weights** — they are
+downloaded on your machine with *your* token, after *you* accept the license.
 
-## How to tell if a model is gated
+## Which models are gated
 
-Read the model's entry in `models.json`:
+| Models | License page |
+|---|---|
+| all **UMA** variants | <https://huggingface.co/facebook/UMA> |
+| **eSEN-30M-OAM** | <https://huggingface.co/facebook/OMAT24> |
 
-| Field | Open model | Gated model |
-|---|---|---|
-| `gated` | `false` | `true` |
-| `license_url` | `null` | the upstream license page, e.g. `https://huggingface.co/facebook/UMA` |
-| `weights` | `bundled` / `auto-download` / `on-demand-hf` | `on-demand-hf` |
+Everything else is open. The registry marks each model: `gated` is `true` and
+`license_url` points at the page to accept (see
+[Supported models](model_status.md)).
 
-In the v1 roster, all **UMA** variants are gated. Everything else is open.
+## Ask your LLM
 
-## The flow (one-time per model + per machine)
-
-1. **Accept the license.** Open the model's `license_url` while logged into
-   Hugging Face with the account whose token you will use, and accept the terms.
-   For UMA that is `https://huggingface.co/facebook/UMA`.
-2. **Make your token available.** Create a read token at
-   `https://huggingface.co/settings/tokens`, then make it available to
-   oh-my-mlip. See [`hf_token.md`](hf_token.md) for the canonical, leak-safe
-   setup (the preferred path is `huggingface-cli login`; avoid pasting the token
-   literal into your shell). `source env.sh` does **not** set `HF_TOKEN` for you
-   — that is intentional, so no token is ever baked into the repo or a shared
-   cache.
-3. **Run normally.** The first call downloads the weights into the shared cache
-   (`HF_HOME` / `FAIRCHEM_CACHE_DIR`, set by `env.sh`). Subsequent runs reuse the
-   cache.
-
-```bash
-source env.sh
-huggingface-cli login          # or: export HF_TOKEN="$(< /path/outside/repo/token)"
-python run_examples/single_point.py UMA --version UMA-s-1p2-OMAT
+```text
+Install UMA and check it runs on my GPU.
 ```
 
-See [`hf_token.md`](hf_token.md) for the full, leak-safe token setup.
+Your agent notices the model is gated, shows you the license page to accept, and
+asks you to log in to Hugging Face in your own terminal. It never asks you to
+paste a token into the chat.
 
-## What happens without a token / without accepting the license
+## The flow (once per model and machine)
 
-The fetch **fails by design** — the resolver does not retry or fall back to a
-mirror. The correct response is to surface the model's `license_url` to the user
-and stop, not to work around the gate. An agent following `AGENTS.md` should:
+1. **Accept the license** on the model's license page, logged in with the account
+   whose token you will use.
+2. **Log in** so the token is available: `hf auth login` (details and
+   alternatives: [Hugging Face token](hf_token.md)). `source env.sh` does **not**
+   set a token for you, so no token ends up in the repo.
+3. **Run normally.** The first call downloads the weights into the framework's
+   own cache; later runs reuse it.
 
-- check `gated` in `models.json` before attempting a gated model,
-- verify `HF_TOKEN` is set,
-- on failure, print the `license_url` and the two steps above — never attempt to
-  obtain the weights by any other route.
+??? note "Run it yourself"
+
+    ```bash
+    source env.sh
+    hf auth login
+    python run_examples/single_point.py UMA --version UMA-s-1p2-OMAT
+    ```
+
+## Without a token or an accepted license
+
+The download fails on purpose: nothing retries or falls back to a mirror. An
+HTTP 401 or 403 response means the license is not accepted yet, or the token
+belongs to a different account. Accept the license, log in, and run again.
 
 ## Policy
 
-- Gated weights are **never** committed to this repo, baked into a conda-pack
-  tarball, or uploaded to any oh-my-mlip Hugging Face repo.
-- The conda-pack tarballs published by this project contain the **environment
-  only** (Python + libraries). Gated weights are downloaded on the user's machine
-  with the user's own credentials.
-- Open-weight models may be bundled or auto-downloaded; gated models are always
-  `on-demand-hf` and user-token-gated.
+- Gated weights are never committed to this repository, packed into a prebuilt
+  environment, or uploaded anywhere by oh-my-mlip.
+- They are always downloaded on demand with the user's own credentials.

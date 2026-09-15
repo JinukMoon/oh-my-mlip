@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "oh-my-mlip",
-      "description": "Claude Code plugin for oh-my-mlip, four capabilities behind one registry: /oh-my-mlip:setup installs+verifies a model env on your GPU; /oh-my-mlip:catbench runs adsorption benchmarks and builds the comparison report; /oh-my-mlip:finetune converts your dataset and drives the framework's own fine-tuning; /oh-my-mlip:distill orchestrates teacher-to-NN-MTP distillation down to a CPU LAMMPS student. Deterministic by design — every executed command exists on disk first.",
+      "description": "Claude Code plugin for oh-my-mlip, five skills behind one registry: /oh-my-mlip:setup installs+verifies a model env on your GPU; /oh-my-mlip:run executes single-point predictions; /oh-my-mlip:catbench runs adsorption benchmarks and builds the comparison report; /oh-my-mlip:finetune converts your dataset and drives the framework's own fine-tuning; /oh-my-mlip:distill orchestrates teacher-to-NN-MTP distillation down to a CPU LAMMPS student. Deterministic by design — every executed command exists on disk first.",
       "author": {
         "name": "Jinuk Moon",
         "email": "jumoon@snu.ac.kr"

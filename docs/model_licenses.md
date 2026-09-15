@@ -20,11 +20,11 @@ Two licenses matter separately:
 
 | Restriction | Frameworks (our variants) | What it means |
 |---|---|---|
-| 🚫 **Non-commercial only** | **GRACE** (`GRACE-2L-OAM`), **EquFlash** (`EquFlash`, `EquFlashV2`), **MACE-MH** weights (`MACE-MH-1-OMAT`, `MACE-MH-1-OC20`) | Academic / research use only. Commercial use needs a separate license from the owner. |
+| 🚫 **Non-commercial only** | **GRACE** (`GRACE-2L-OAM`), **EquFlash** (`EquFlashV2`, `EquFlash-v1`), **MACE-MH** weights (`MACE-MH-1-OMAT`, `MACE-MH-1-OC20`) | Academic / research use only. Commercial use needs a separate license from the owner. |
 | 🔁 **Strong copyleft (GPL-3.0)** | **AlphaNet** (`AlphaNet-v1-OMA`) | Derivative works must also be GPL-3.0. |
 | 🔗 **Weak copyleft (LGPL-3.0)** | **DeePMD** (`DPA-3.1-3M-FT`), **DPA4** (`DPA-4.0.1-pro-MPtrj`) | Using the library is fine; modifications *to the library* must stay LGPL. |
-| 🔒 **Gated weights** | **UMA** (all `UMA-*` variants) | Code is MIT, but weights are under the **FAIR Chemistry License**: accept the license on Hugging Face, get access approved, authenticate with an `HF_TOKEN`. Commercial use is permitted but subject to an Acceptable Use Policy and geographic exclusions (no China / Russia / Belarus / sanctioned regions). |
-| 📎 **Attribution (CC-BY-4.0) weights** | **NequIP** (`NequIP-OAM-*`), **Allegro** (`Allegro-OAM-L`), **DPA** weights; OMat24-trained variants of **SevenNet** | Free incl. commercial, but you must credit the source / dataset. |
+| 🔒 **Gated weights** | **UMA** (all `UMA-*` variants), **eSEN** (`eSEN-30M-OAM`) | Code is MIT, but the weights are under Meta licenses on Hugging Face (FAIR Chemistry License for UMA, OMat24 License for eSEN): accept the license, get access approved, log in with your token. Commercial use is permitted, subject to Meta's Acceptable Use Policy (UMA also has geographic exclusions). |
+| 📎 **Attribution (CC-BY-4.0) weights** | **NequIP** (`NequIP-OAM-*`), **Allegro** (`Allegro-OAM-L`), **TACE** (`TACE-OAM-L`), **DPA** weights (`DPA-3.1-3M-FT`, `DPA-4.0.1-pro-MPtrj`); OMat24-trained variants of **SevenNet** | Free incl. commercial, but you must credit the source / dataset. |
 
 Everything else below is permissive (MIT / Apache-2.0 / BSD-3-Clause), commercial
 use allowed.
@@ -45,18 +45,17 @@ use allowed.
 | **CHGNet** | CHGNet-v0.3.0 | [CederGroupHub/chgnet](https://github.com/CederGroupHub/chgnet) | BSD-3-Clause | BSD-3-Clause | no |
 | **AlphaNet** | AlphaNet-v1-OMA | [zmyybc/AlphaNet](https://github.com/zmyybc/AlphaNet) | **GPL-3.0** | GPL-3.0 | no |
 | **Eqnorm** | Eqnorm-MPtrj | [yzchen08/eqnorm](https://github.com/yzchen08/eqnorm) | MIT | MIT | no |
-| **fairchem (eSEN)** | eSEN-30M-OAM | [facebookresearch/fairchem](https://github.com/facebookresearch/fairchem) | MIT | per model card (e.g. `facebook/OMC25` on HF) | no² |
+| **fairchem (eSEN)** | eSEN-30M-OAM | [facebookresearch/fairchem](https://github.com/facebookresearch/fairchem) | MIT (code) | **OMat24 License** (Meta; [facebook/OMAT24](https://huggingface.co/facebook/OMAT24)) | **yes** |
 | **EquiformerV3** | EqV3-OMatMPtrjSalex | [atomicarchitects/equiformer_v3](https://github.com/atomicarchitects/equiformer_v3) | MIT | MIT (`mirror-physics/equiformer_v3` on HF) | no |
 | **UMA** | UMA-s-1p2-* / UMA-s-1p1-* / UMA-m-1p1-* (8) | [facebookresearch/fairchem](https://github.com/facebookresearch/fairchem) | MIT (code) | **FAIR Chemistry License** ([facebook/UMA](https://huggingface.co/facebook/UMA)) | **yes** |
-| **PET** | PET-OAM-XL | [spozdn/pet](https://github.com/spozdn/pet) | MIT | unconfirmed³ | no |
-| **EquFlash** | EquFlash, EquFlashV2 | [SamsungDS/GGNN](https://github.com/SamsungDS/GGNN) | **CC BY-NC-SA 4.0 — non-commercial** | inherits (non-commercial) | no |
-| **MatRIS** | MatRIS-10M-OAM | [HPC-AI-Team/MatRIS](https://github.com/HPC-AI-Team/MatRIS) | BSD-3-Clause | BSD-3-Clause (presumed; in-repo) | unknown |
-| **DPA4** | DPA-4.0.1-pro-MPtrj | [deepmodeling/deepmd-kit](https://github.com/deepmodeling/deepmd-kit) | **LGPL-3.0** | CC-BY-4.0 (DPA HF) — DPA-4 card unconfirmed³ | no |
-| **TACE** | TACE-OAM-L | [xvzemin/tace](https://github.com/xvzemin/tace) | MIT | unconfirmed³ | unknown |
+| **PET** | PET-OAM-XL | [metatensor/metatrain](https://github.com/metatensor/metatrain) | BSD-3-Clause | BSD-3-Clause ([lab-cosmo/upet](https://huggingface.co/lab-cosmo/upet)) | no |
+| **EquFlash** | EquFlashV2, EquFlash-v1 | [SamsungDS/GGNN](https://github.com/SamsungDS/GGNN) | **CC BY-NC-SA 4.0 — non-commercial** | inherits (non-commercial) | no |
+| **MatRIS** | MatRIS-10M-OAM | [HPC-AI-Team/MatRIS](https://github.com/HPC-AI-Team/MatRIS) | BSD-3-Clause | BSD-3-Clause (declared on [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/matris-10m-oam)) | no |
+| **DPA4** | DPA-4.0.1-pro-MPtrj | [deepmodeling/deepmd-kit](https://github.com/deepmodeling/deepmd-kit) | **LGPL-3.0** | CC-BY-4.0 (declared on [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj)) | no |
+| **TACE** | TACE-OAM-L | [xvzemin/tace](https://github.com/xvzemin/tace) | MIT | CC-BY-4.0 ([xvzemin/tace-foundations](https://huggingface.co/xvzemin/tace-foundations)) | no |
 
 ¹ MatterSim: only the two open checkpoints (1M / 5M) are MIT; more advanced versions are gated behind Azure Quantum Elements (commercial Microsoft platform).
-² fairchem: the *code* is MIT and ungated; individual model weights carry their own per-card terms (UMA weights are the gated exception — listed separately above).
-³ Unconfirmed = the code license is verified from the repo, but the exact weights-license file/host could not be confirmed; it is *presumed* to inherit the repo license. Verify the model card before commercial use.
+Weights licenses are taken from the Hugging Face license tag of the repository that hosts the checkpoint, or, for checkpoints hosted on figshare (DPA-4, MatRIS), the license declared on the model's Matbench Discovery page.
 
 ## Notes & caveats
 
@@ -71,17 +70,17 @@ use allowed.
   datasets with their own terms of use; that constrains re-training/redistributing
   the *data*, not normal use of the released model.
 - **`oh-my-mlip` never redistributes weights or framework code** — gated weights
-  (UMA) are fetched on first run with *your* `HF_TOKEN` after *you* accept the
+  (UMA, eSEN) are fetched on first run with *your* token after *you* accept the
   upstream license. See [gated_models.md](gated_models.md).
 
 ## Quick reference: commercial use
 
 | Safe for commercial use (permissive) | Restricted — check before commercial use |
 |---|---|
-| SevenNet, MACE-MPA-0, NequIP, Allegro, Nequix, ORB, MatterSim (open), CHGNet, Eqnorm, fairchem/eSEN, EquiformerV3, MatRIS, TACE, PET, UMA¹, DeePMD/DPA²,⁴ | **GRACE** (non-commercial), **EquFlash** (non-commercial), **MACE-MH-1** (non-commercial), **AlphaNet** (GPL-3.0) |
+| SevenNet, MACE-MPA-0, NequIP⁴, Allegro⁴, Nequix, ORB, MatterSim (open), CHGNet, Eqnorm, EquiformerV3, PET, MatRIS, TACE⁴, UMA¹, eSEN¹, DeePMD/DPA²,⁴ | **GRACE** (non-commercial), **EquFlash** (non-commercial), **MACE-MH-1** (non-commercial), **AlphaNet** (GPL-3.0) |
 
-¹ UMA: commercial use allowed under the FAIR Chemistry License, but gated + Acceptable Use Policy + geographic exclusions apply.
+¹ UMA and eSEN: commercial use allowed under Meta's FAIR Chemistry License (UMA) and OMat24 License (eSEN), but the weights are gated and Meta's Acceptable Use Policy applies; UMA also has geographic exclusions.
 ² DeePMD / DPA4: LGPL-3.0 — commercial use of the library is allowed; copyleft applies only if you modify the library itself.
-⁴ CC-BY-4.0-weighted models (NequIP, Allegro, DPA, OMat24 variants) require attribution.
+⁴ CC-BY-4.0 weights (NequIP, Allegro, TACE, DPA, OMat24 variants) require attribution.
 
-*Compiled 2026-06 by reading each upstream LICENSE file. Verify upstream before relying on any entry.*
+*Code licenses read from each upstream LICENSE file (2026-06); weights licenses checked against each checkpoint's host (2026-09). Verify upstream before relying on any entry.*

@@ -64,7 +64,7 @@ python3 scripts/adopt_env.py --list
 ## Gated models
 
 UMA and eSEN weights are gated. Accept the license on the model page with your
-Hugging Face account, then run `huggingface-cli login` before installing.
+Hugging Face account, then run `hf auth login` before installing.
 See [Gated models](../gated_models.md) and [Hugging Face token](../hf_token.md).
 
 ## Prove a clean install

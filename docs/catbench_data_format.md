@@ -44,7 +44,8 @@ string) mapping to one reaction entry:
 `_process_reaction_basic` classifies each structure by its key string:
 
 - **`star`** — the clean slab. Its single-point energy is cached/reused.
-- any **non-`star`, non-`gas`** key — the adsorbate-covered slab (adslab).
+- any key containing **`star`** but not exactly `star` (e.g. `CO-star`, `N-star`) — the 
+  adsorbate-covered slab (adslab). The key MUST contain the substring `star`.
 - any key containing **`gas`** (e.g. `gas-CO`) — a gas-phase reference molecule;
   detected via `"gas" in str(structure)`.
 
@@ -72,10 +73,11 @@ shipped example uses the simple inline form.
 Use catbench's own preprocessing inside any env that ships catbench
 (every oh-my-mlip model env does):
 
-- `catbench.adsorption.data.cathub.cathub_preprocessing(benchmark, ...)` pulls a
-  CatHub dataset and writes `<benchmark>_adsorption.json`, auto-detecting
-  `adsorbate_indices`.
-- `catbench.adsorption.data` also exposes `download` / zenodo helpers.
+- `catbench.adsorption.cathub_preprocessing(benchmark, ...)` pulls a CatHub dataset and 
+  writes `<benchmark>_adsorption.json`, auto-detecting `adsorbate_indices`.
+- `catbench.adsorption.zenodo_download(dataset_id, ...)` downloads data from Zenodo.
+- `catbench.adsorption.list_zenodo_benchmarks(...)` lists available Zenodo datasets.
+- `catbench.adsorption.get_benchmark(benchmark_name, ...)` fetches a named benchmark.
 
 This repo never ships or redistributes a dataset.
 

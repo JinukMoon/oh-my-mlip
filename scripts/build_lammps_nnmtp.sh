@@ -11,8 +11,10 @@
 # working tree clean of it.
 #
 # Usage:
-#   scripts/build_lammps_nnmtp.sh [--repo <onthefly-distill dir>] [--prefix <build root>]
+#   scripts/build_lammps_nnmtp.sh --repo <onthefly-distill dir> [--prefix <build root>]
 #                                 [--ref <git-ref>] [-j N]
+# --repo (or ONTHEFLY_REPO env var) is required. Provides the path to the
+# onthefly-distill checkout containing pair_nnmtp sources.
 # --ref pins the LAMMPS clone to a specific tag/branch/commit; default is
 # 'stable', which is upstream LAMMPS's own recommendation (BUILD.md), not an
 # oh-my-mlip choice -- pass --ref only to deviate from that.
@@ -22,7 +24,7 @@
 #   "$LMP_BIN" -h | grep -c nnmtp   -> non-zero
 set -euo pipefail
 
-REPO="${ONTHEFLY_REPO:-$HOME/01_2026/onthefly-distill}"
+REPO="${ONTHEFLY_REPO:-}"
 PREFIX="${OMM_BUILD_ROOT:-$HOME/.cache/oh-my-mlip}"
 REF="stable"
 JOBS="$(nproc)"
@@ -36,6 +38,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+[ -n "$REPO" ] || {
+  echo "usage: scripts/build_lammps_nnmtp.sh --repo <onthefly-distill dir> [--prefix <build root>] [--ref <git-ref>] [-j N]" >&2
+  echo "error: --repo or ONTHEFLY_REPO env var is required" >&2
+  exit 2
+}
 [ -f "$REPO/lammps/src/pair_nnmtp.cpp" ] || { echo "pair_nnmtp sources not found under $REPO/lammps/src" >&2; exit 1; }
 
 # cmake: prefer PATH, else fall back to any conda-env cmake (host has no system cmake)

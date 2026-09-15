@@ -137,8 +137,7 @@ def render_command_block(fam: str, version: str, ft: dict) -> list[str]:
     if licence:
         url = _LICENCE_URLS.get(licence, "")
         lines.append(f"# LICENCE: {licence}" + (f" -- {url}" if url else ""))
-        lines.append("#   (Part 8 decision (a)/option B: disclosed, not refused --")
-        lines.append("#    oh-my-mlip is MIT and redistributes no weights either way)")
+        lines.append("#   Disclosed to users — oh-my-mlip is MIT and redistributes no")
 
     if ft.get("runnable_as_installed"):
         lines.append(invocation)
@@ -182,8 +181,8 @@ def render(models: dict) -> str:
     w("actually reads; **C** is the single command this hub generates per variant —")
     w("`scripts/ft_run.py` resolves the variant's `finetune` block in `models.json`,")
     w("converts the dataset, writes the patched config/command, and (when runnable)")
-    w("executes it; **D** is the per-variant support matrix. `status` is a")
-    w("doc-honesty state, not an execution claim — see `demonstrated` for that.")
+    w("executes it; **D** is the per-variant support matrix. `status` reflects")
+    w("documented fine-tuning support, not an execution guarantee — see `demonstrated` for that.")
     w("")
     w("```bash")
     w("export OMM=$(pwd)          # this clone")

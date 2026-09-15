@@ -1,106 +1,111 @@
-# GPU compile / acceleration recipes (NequIP, Allegro, SevenNet, EquFlash)
+# Accelerators
 
-> **Provenance: upstream-doc — GPU-UNVERIFIED.**
-> Every command on this page is curated from the model's upstream (or owner)
-> documentation. It has **not** been run end-to-end on a GPU in this repo. The
-> machine-readable source of truth is the `accel` blocks in `models.json`, where
-> each block carries `verified: false`, `provenance`, and `last_gpu_verified:
-> null`. `scripts/verify_compile.py` asserts that contract on every block and
-> prints `shape-only; gpu_unverified`. Treat these as the starting recipe to run
-> on **your** GPU host, not as a passed result.
+Several equivariant models run through GPU acceleration libraries. oh-my-mlip
+pins those libraries in each env and does the compile step during install, so
+normally there is nothing to do by hand.
 
-Some equivariant MLIPs need a GPU-side acceleration step to reach their fast
-path: an AOT compile (`.pt2`) for NequIP/Allegro, or an acceleration extra for
-SevenNet. This is **opt-in** and separate from the normal `install.sh` env build.
-`install.sh --with-accel` prints these same commands per env (it never runs a GPU
-compile).
+| Framework | Accelerator | What happens at install |
+|---|---|---|
+| NequIP | OpenEquivariance | the checkpoint is compiled into a `.pt2` for your GPU |
+| Allegro | cuEquivariance | the checkpoint is compiled into a `.pt2` for your GPU |
+| SevenNet | OpenEquivariance | the library's extension is built; the calculator enables it (`enable_oeq=True`) |
+| EquFlash | cuEquivariance (EquFlashV2); flashTP (`EquFlash-v1`, optional) | nothing extra for EquFlashV2 |
 
-## Why this is opt-in and unverified
+## Ask your LLM
 
-The accel backends (OpenEquivariance, cuEquivariance, flashTP, LAMMPS MLIAP)
-require an NVIDIA GPU plus a toolchain (`torch>=2.7`, GCC9+ for OpenEquivariance).
-The compiled artifact is **arch-specific** and is produced on the user's GPU — it
-is never baked into a distributed tarball (see `docs/arch_first_run_compile.md`).
-Because this repo's CI is GPU-free, we surface the recipe and verify its *shape*,
-but we do not claim a passed GPU run.
-
-## NequIP / Allegro — OpenEquivariance AOT compile
-
-Both load through nequip's compiled-model ASE path
-(`NequIPCalculator.from_compiled_model`), so a per-arch `.pt2` must be produced
-with `nequip-compile`.
-
-```bash
-# 1. install the accel backend (NVIDIA GPU, torch>=2.7, GCC9+)
-pip install openequivariance
-
-# 2. compile the checkpoint to an AOT .pt2 (wrapper: scripts/compile_nequip.sh)
-nequip-compile <ckpt> <out>.nequip.pt2 \
-    --mode aotinductor --device cuda --target ase \
-    --modifiers enable_OpenEquivariance
-
-# 3. load in Python
-python - <<'PY'
-import openequivariance
-from nequip.ase import NequIPCalculator
-calc = NequIPCalculator.from_compiled_model("<out>.nequip.pt2", device="cuda")
-PY
+```text
+Install NequIP and check it runs on my GPU.
 ```
 
-* For `torch < 2.10`, compile to a TorchScript `.nequip.pth` instead of the
-  AOTInductor `.pt2`.
-* LAMMPS deploy (Allegro): `nequip-prepare-lmp-mliap <ckpt> <out>` and build
-  LAMMPS with the MLIAP/KOKKOS C++ path (see the `Allegro.accel_lammps` block).
+```text
+I moved to a different GPU. Recompile NequIP and Allegro for it.
+```
 
-Wrapper: `scripts/compile_nequip.sh --dry-run <ckpt> [<out>.nequip.pt2]` prints
-the exact command; drop `--dry-run` to run it on a GPU host.
+## NequIP and Allegro
 
-## SevenNet — OpenEquivariance / cuEquivariance extra
+Both load an AOT-compiled model through
+`NequIPCalculator.from_compiled_model(...)`, so each checkpoint must be compiled
+with `nequip-compile` for the GPU it will run on. During install,
+`scripts/prepare_nequip_weights.py` (NequIP) and
+`scripts/prepare_allegro_weights.py` (Allegro) download the checkpoint, check its
+MD5, and compile it for the current GPU into:
 
-SevenNet has no separate AOT compile step. Acceleration is an install-time extra,
-selected at calculator construction.
+```
+models/compiled/<arch>/<Version>_<arch>.nequip.pt2     # e.g. sm89/NequIP-OAM-L_sm89.nequip.pt2
+```
+
+The compile options follow each project's own documentation:
+
+| Model | `nequip-compile` modifier | Import before loading |
+|---|---|---|
+| NequIP-OAM-XL, NequIP-OAM-L | `--modifiers enable_OpenEquivariance` | `import openequivariance` |
+| Allegro-OAM-L | `--modifiers enable_CuEquivarianceContracter` | `import cuequivariance_torch` |
+
+`resolve()` returns calculator lines that already point at the right file and
+include the import, so your scripts need no change.
+
+??? note "Run it yourself"
+
+    Compile again for the GPU in the current machine (the arch is detected from
+    that GPU):
+
+    ```bash
+    NEQUIP_PY=$(python -c 'from oh_my_mlip import resolve; print(resolve("NequIP")["python"])')
+    ALLEGRO_PY=$(python -c 'from oh_my_mlip import resolve; print(resolve("Allegro")["python"])')
+    "$NEQUIP_PY"  scripts/prepare_nequip_weights.py  --target-root models/nequip
+    "$ALLEGRO_PY" scripts/prepare_allegro_weights.py --target-root models/allegro
+    ```
+
+    Run from the repository root; add `--dry-run` to print the commands only.
+    The underlying command is:
+
+    ```bash
+    nequip-compile <ckpt> <out>.nequip.pt2 --mode aotinductor --device cuda --target ase \
+        --modifiers enable_OpenEquivariance            # Allegro: enable_CuEquivarianceContracter
+    ```
+
+The first load of a NequIP model builds OpenEquivariance's kernels once and
+caches them; later loads are fast.
+
+## SevenNet
+
+There is no separate compile step. OpenEquivariance is pinned in the SevenNet env
+and built when the env is installed, and the registry's calculator line turns it
+on:
+
+```python
+calc = SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=True)
+```
+
+To check the backend is available inside the SevenNet env:
 
 ```bash
-# install one extra (oeq = OpenEquivariance; cueq12/cueq13 = cuEquivariance by CUDA major)
-pip install sevenn[oeq]
-# or: pip install sevenn[cueq12]    # CUDA 12
-# or: pip install sevenn[cueq13]    # CUDA 13
-
-# enable at construction
-python - <<'PY'
-from sevenn.calculator import SevenNetCalculator
-calc = SevenNetCalculator("7net-mf-ompa", modal="mpa", enable_oeq=True)
-PY
-# (or pass --enable_oeq / --enable_cueq on the sevenn CLI)
-
-# verify the backend is importable on the GPU host
 python -c 'from sevenn.nn.oeq_helper import is_oeq_available; print(is_oeq_available())'
 ```
 
-Wrapper: `scripts/compile_sevennet.sh --dry-run [oeq|cueq12|cueq13]`.
+## EquFlash
 
-## EquFlash v1 — flashTP backend (owner-doc)
-
-The `flashtp` backend applies to **EquFlash v1 only**. EquFlashV2 is cueq-only and
-rejects `conv_type='flashtp'` (TypeError). Recorded under
-`EquFlash.versions.EquFlash.accel`.
+The default `EquFlashV2` uses cuEquivariance and needs nothing extra. The older
+`EquFlash-v1` can use the flashTP backend, which you build yourself on a GPU
+machine:
 
 ```bash
 git clone https://github.com/SNU-ARC/flashTP.git
 cd flashTP && pip install -r requirements.txt
 CUDA_ARCH_LIST="80;90" pip install . --no-build-isolation
-python -c 'import flashTP_e3nn'   # verify
+python -c 'import flashTP_e3nn'   # check
 ```
 
-## Verifying the contract (GPU-free)
+`EquFlashV2` does not accept `conv_type='flashtp'`.
+
+## LAMMPS (Allegro)
+
+For MD in LAMMPS instead of ASE, prepare the model for the ML-IAP interface:
 
 ```bash
-python scripts/verify_compile.py
+nequip-prepare-lmp-mliap <ckpt> <out>
 ```
 
-This asserts every `accel` block carries the required keys, is marked
-`verified: false` with `last_gpu_verified: null`, and declares a recognized
-`provenance`, then prints `shape-only; gpu_unverified`. When a recipe is actually
-run and validated on a GPU, the owner flips `verified` to `true` and sets
-`last_gpu_verified` to the date — at which point this banner no longer applies to
-that block.
+and build LAMMPS with ML-IAP (and KOKKOS for GPU).
+
+See also [GPU-architecture compilation](arch_first_run_compile.md).

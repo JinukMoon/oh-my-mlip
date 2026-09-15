@@ -401,7 +401,7 @@ def _resolve_token(env: dict | None = None) -> dict:
     Precedence (most-explicit wins):
       1. ``HF_TOKEN``          — token already in the environment (standard HF).
       2. ``HF_TOKEN_PATH`` / HF cache — standard ``huggingface_hub`` resolution
-         (a token file path, or ``huggingface-cli login`` having written one).
+         (a token file path, or ``hf auth login`` having written one).
       3. ``OMM_HF_TOKEN_FILE`` — oh-my-mlip convenience: a path to a file holding
          the token. We DO NOT read it; instead we export it as ``HF_TOKEN_PATH``
          so third-party loaders (``huggingface_hub``) resolve it the standard
@@ -432,7 +432,7 @@ def _resolve_token(env: dict | None = None) -> dict:
         out["env"] = {"HF_TOKEN_PATH": omm}
         return out
 
-    # LAST resort — the passive `huggingface-cli login` cache: huggingface_hub
+    # LAST resort — the passive `hf auth login` cache: huggingface_hub
     # resolves it automatically when token=None, so its presence IS
     # authentication. It ranks below every EXPLICIT mechanism above (an
     # explicitly pointed token file must never be shadowed by a stale cached
@@ -498,7 +498,7 @@ def _check_gated(model: str, version: str | None) -> dict:
             raise GatedError(
                 f"{model} is gated: authenticate with Hugging Face (after "
                 f"accepting {license_url}) and retry. Run "
-                f"`huggingface-cli login`, or set HF_TOKEN_PATH / "
+                f"`hf auth login`, or set HF_TOKEN_PATH / "
                 f"OMM_HF_TOKEN_FILE to a token file outside the repo. "
                 f"See docs/hf_token.md."
             )

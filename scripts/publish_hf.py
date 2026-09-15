@@ -13,12 +13,12 @@ artifact rather than a moving ``main``.
 
 Requires:
   * a WRITE-capable Hugging Face credential, resolved in the standard order
-    (``HF_TOKEN`` env -> ``HF_TOKEN_PATH`` -> ``huggingface-cli login``
+    (``HF_TOKEN`` env -> ``HF_TOKEN_PATH`` -> ``hf auth login``
     cache; same unified order as fetch.py). Gated-model weights are NEVER
     bundled here — only the relocatable env tarball.
   * ``huggingface_hub`` installed (guarded import below).
 
-Usage (after `huggingface-cli login` with a write token, or with HF_TOKEN set):
+Usage (after `hf auth login` with a write token, or with HF_TOKEN set):
   python scripts/publish_hf.py \\
       --env mace \\
       --tarball dist/mace.tar.gz \\
@@ -74,7 +74,7 @@ def main() -> int:
         return 1
 
     # Auth: defer to huggingface_hub's STANDARD resolution (HF_TOKEN env ->
-    # HF_TOKEN_PATH -> `huggingface-cli login` cache) — the same unified order
+    # HF_TOKEN_PATH -> `hf auth login` cache) — the same unified order
     # as fetch.py. We never read a token value ourselves; the library resolves
     # it, and we only probe that SOME write-capable credential exists.
     api = HfApi()
@@ -83,7 +83,7 @@ def main() -> int:
     except Exception as exc:
         print(
             "publish_hf: no usable Hugging Face credential (need WRITE "
-            "access): run `huggingface-cli login` with a write token, or set "
+            "access): run `hf auth login` with a write token, or set "
             f"HF_TOKEN / HF_TOKEN_PATH. ({type(exc).__name__})",
             file=sys.stderr,
         )
@@ -93,7 +93,7 @@ def main() -> int:
         print(
             "publish_hf: the resolved credential is READ-only; uploading "
             "needs a WRITE token (create one at huggingface.co/settings/tokens "
-            "and re-run `huggingface-cli login`).",
+            "and re-run `hf auth login`).",
             file=sys.stderr,
         )
         return 1

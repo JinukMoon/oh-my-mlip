@@ -18,7 +18,7 @@ fi
 # Default: env.sh does NOT redirect any download cache. Every framework uses
 # its own upstream location (~/.cache/huggingface, ~/.cache/fairchem,
 # ~/.cache/torch, ~/.cache/mace, ...), which ADOPTS whatever the user already
-# downloaded and leaves `huggingface-cli login` token discovery untouched.
+# downloaded and leaves `hf auth login` token discovery untouched.
 # Why (both host-proven 2026-07-20): the old always-on redirect (a) forked the
 # user's existing caches — a 13 GB UMA re-download of byte-identical weights —
 # and (b) moved huggingface_hub's login-token lookup to $HF_HOME/token, so

@@ -400,7 +400,7 @@ fetching weights:
   (1) accepting the upstream license at the model's `license_url`
   (`https://huggingface.co/facebook/UMA` for UMA) with the same Hugging Face
   account, and (2) making the user's own read token available (preferred:
-  `huggingface-cli login`; or `HF_TOKEN_PATH` / `OMM_HF_TOKEN_FILE` / `HF_TOKEN`).
+  `hf auth login`; or `HF_TOKEN_PATH` / `OMM_HF_TOKEN_FILE` / `HF_TOKEN`).
   **This repo never redistributes gated weights** — they are always fetched on
   first run with the user's own token after the user accepts the license. If no
   token is resolvable or the license has not been accepted, the fetch fails by
@@ -577,7 +577,7 @@ deliberate human checkpoint in this flow:
 5. Gated targets with no token found: the plan must include a token request
    spelling out the literal commands/URLs from `docs/hf_token.md` — each
    gated model's `license_url`, the token-creation page, and
-   `huggingface-cli login` to run in the user's OWN terminal (never paste the
+   `hf auth login` to run in the user's OWN terminal (never paste the
    token into the conversation — §5's leak-safe rule). The user can say
    "token is set" afterward and the sweep re-checks before proceeding.
 6. An approved subset ("skip the last three") is an exclusion list — restate

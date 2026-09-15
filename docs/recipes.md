@@ -6,7 +6,8 @@
 One section per framework: how to install it, how to get its weights, and the
 calculator line that runs it. Blocks **A** and **B** are what each framework's own
 documentation says, with the source URL linked. Block **C** comes verbatim from
-`models.json` — keep those lines exactly as written.
+`models.json` — keep those lines as written, with `$OMM` replaced by the absolute
+path of your clone (`oh_my_mlip.resolve()` returns them already filled in).
 
 Upstream install gives the supported way; the pin gives one combination of versions
 known to work together.
@@ -174,7 +175,7 @@ Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
 Check it works: `python3 $OMM/scripts/setup_verify.py MACE-MPA-0 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** MH-1 is multi-head: pass head='omat_pbe' or head='oc20_usemppbe' (there is no plain 'oc20' head). Both heads load the same weight file. default_dtype selects float32 or float64 — the calculator lines below use float64.
+> **Note:** MH-1 is multi-head: pass head='omat_pbe' or head='oc20_usemppbe' (there is no plain 'oc20' head). Both heads load the same weight file. default_dtype selects float32 or float64 — the calculator lines above use float64.
 
 ---
 
@@ -356,7 +357,7 @@ Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
 Check it works: `python3 $OMM/scripts/setup_verify.py Nequix-MP-1 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** use_kernel toggles the fused kernel; the calculator line below leaves it off.
+> **Note:** use_kernel toggles the fused kernel; the calculator line above leaves it off.
 
 ---
 
@@ -469,7 +470,7 @@ Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
 Check it works: `python3 $OMM/scripts/setup_verify.py ORB-v3 --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Upstream's README unpacks a (orbff, atoms_adapter) tuple; the pinned version returns a single object, so use the calculator line below. precision='float32-high' selects TF32 matmul, which makes repeated runs numerically close rather than bit-identical.
+> **Note:** Upstream's README unpacks a (orbff, atoms_adapter) tuple; the pinned version returns a single object, so use the calculator line above. precision='float32-high' selects TF32 matmul, which makes repeated runs numerically close rather than bit-identical.
 
 ---
 
@@ -773,7 +774,7 @@ Upstream acquisition ([source](https://huggingface.co/facebook/OMAT24)):
 
 ```bash
 # GATED: accept the facebook/OMAT24 license with your own HF account first
-huggingface-cli login
+hf auth login
 <prefix>/bin/python -c "from huggingface_hub import hf_hub_download; \
     print(hf_hub_download('facebook/OMAT24','esen_30m_oam.pt', local_dir='$OMM/models/fairchem'))"
 echo "adf7d38e5bccb8e0334434c0bd65ac75661fb646891df17ecc89c19d111efde1  $OMM/models/fairchem/esen_30m_oam.pt" | sha256sum -c -
@@ -879,10 +880,10 @@ Upstream acquisition ([source](https://huggingface.co/facebook/UMA)):
 
 ```bash
 # GATED: your HF account must be approved for facebook/UMA (upstream documents this)
-huggingface-cli login
+hf auth login
 <prefix>/bin/python -c "from fairchem.core import pretrained_mlip; \
     pretrained_mlip.get_predict_unit('uma-s-1p2', device='cpu')"
-#   same pattern for uma-s-1p1 / uma-m-1p1 — three checkpoints cover seven variants
+#   same pattern for uma-s-1p1 / uma-m-1p1 — three checkpoints cover the eight variants
 ```
 
 ### C. ASE calculator
@@ -961,9 +962,9 @@ atoms.calc = calc
 
 Run: `<prefix>/bin/python script.py` — never `conda activate`.
 
-Check it works: `python3 $OMM/scripts/setup_verify.py UMA-m-1p1-OC20 --json` (prints energy + forces; exit 0 on success).
+Check it works: `python3 $OMM/scripts/setup_verify.py UMA-s-1p2-OMAT --json` (prints energy + forces; exit 0 on success).
 
-> **Note:** Gated weights: the download fails without an accepted license and a token. task_name is what distinguishes the variants — oc20 (catalysis), oc22 (oxides), omat (inorganic materials), plus oc25 / omol / odac / omc. Three checkpoints cover all seven variants; the -m- checkpoint is 11.2 GB and is materialized in host RAM before it reaches the GPU, so it needs substantially more system memory than the -s- ones.
+> **Note:** Gated weights: the download fails without an accepted license and a token. The checkpoint is uma-s-1p2, uma-s-1p1 or uma-m-1p1; task_name selects the variant — oc20 (catalysis), oc22 (oxides), oc25 (catalyst-electrolyte interfaces), omat (inorganic materials). The -m- checkpoint is 11.2 GB and is loaded into host RAM before it reaches the GPU, so it needs 32 GB or more of system memory; the -s- checkpoints do not.
 
 ---
 
@@ -991,7 +992,7 @@ conda env create -f $OMM/envs/pet.yml -p <prefix>
 
 ### B. weights
 
-Upstream acquisition ([source](http://docs.metatensor.org/metatrain/latest/dev-docs/cli/export.html)):
+Upstream acquisition ([source](https://docs.metatensor.org/metatrain/latest/dev-docs/cli/export.html)):
 
 ```bash
 # Only a .ckpt is published; inference needs an exported metatomic .pt

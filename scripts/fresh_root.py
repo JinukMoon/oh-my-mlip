@@ -547,7 +547,7 @@ def route_exports(runtime: Path) -> dict[str, str]:
 def read_only_inputs(base_env: dict[str, str]) -> dict[str, str]:
     """The approved read-only user inputs the isolated HOME hides, as PATH
     exports to the user's own files: an already-set HF_TOKEN_PATH / CONDARC
-    is respected; otherwise the standard `huggingface-cli login` token file
+    is respected; otherwise the standard `hf auth login` token file
     and ~/.condarc of the REAL home (from `base_env`) are pointed at when they
     exist. Nothing is read or copied."""
     out: dict[str, str] = {}

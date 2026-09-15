@@ -79,7 +79,7 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | EquiformerV3 | EqV3-OMatMPtrjSalex |
 | UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT |
 | PET | PET-OAM-XL |
-| EquFlash | EquFlashV2, EquFlash |
+| EquFlash | EquFlashV2, EquFlash-v1 |
 | MatRIS | MatRIS-10M-OAM |
 | DPA4 | DPA-4.0.1-pro-MPtrj |
 | TACE | TACE-OAM-L |

@@ -78,7 +78,7 @@ def test_check_gated_exports_path_for_child(monkeypatch):
     monkeypatch.setenv("HF_TOKEN_PATH", "")
     monkeypatch.delenv("HF_TOKEN_PATH")
     monkeypatch.setenv("OMM_HF_TOKEN_FILE", "/path/outside/repo/token")
-    # Hide any real `huggingface-cli login` cache on the test host (the
+    # Hide any real `hf auth login` cache on the test host (the
     # hf_cache precedence step would otherwise win over OMM_HF_TOKEN_FILE).
     monkeypatch.setenv("HOME", "/nonexistent-test-home")
 

@@ -48,7 +48,7 @@ current list from `gated` / `license_url` in `models.json`):
    ones meanwhile) and ask the user to:
    a. open the model's `license_url` while logged in to Hugging Face and accept
       / request access with that same account;
-   b. make a READ token available themselves — run `! huggingface-cli login` in
+   b. make a READ token available themselves — run `! hf auth login` in
       the prompt, or export `HF_TOKEN_PATH` / `OMM_HF_TOKEN_FILE` pointing at a
       token file outside the repo (`docs/hf_token.md`).
    Tell them never to paste the token into the chat or onto a command line.

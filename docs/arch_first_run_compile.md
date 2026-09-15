@@ -1,68 +1,65 @@
-# First-run compilation on your GPU (D3 `.so`, NequIP/Allegro `.pt2`)
+# GPU-architecture compilation
 
-Some artifacts are **architecture-specific** — they are tied to your GPU's CUDA
-compute capability. oh-my-mlip **never bakes these into the distributed tarballs**
-(see `scripts/build_conda_pack.sh`, which strips them). Instead they are compiled
-or reselected on **your** GPU the first time you run. This page explains what
-compiles, why, and what to do if your machine lacks `nvcc`.
+Two kinds of artifact are tied to the GPU they were built on, so oh-my-mlip builds
+them on your machine instead of downloading them:
 
-## Compute capability: sm86 vs sm89
+- the compiled NequIP and Allegro models (`.pt2`), built during install;
+- the CUDA kernel for CatBench's D3 dispersion correction, built on first use.
 
-| Compute capability | Example GPUs |
+## Ask your LLM
+
+```text
+I'm moving my NequIP jobs to a machine with a different GPU. Prepare the model for it.
+```
+
+## GPU architecture names
+
+The architecture is the GPU's CUDA compute capability, written `sm<major><minor>`:
+
+| Arch | Example GPUs |
 |---|---|
-| `sm86` | NVIDIA A5000, A6000 (Ampere) |
-| `sm89` | NVIDIA L40S (Ada Lovelace) |
+| `sm80` | A100 |
+| `sm86` | RTX A5000, RTX A6000, RTX 30xx |
+| `sm89` | L40S, RTX 40xx |
 
-An artifact compiled for one is not guaranteed to run on the other, which is
-exactly why we never ship a prebuilt one — the author's GPU may differ from yours.
+`nvidia-smi --query-gpu=compute_cap --format=csv,noheader` prints yours (e.g.
+`8.9` = `sm89`). A model compiled for one architecture is not guaranteed to run on
+another.
 
-## What compiles / reselects on first run
+## NequIP and Allegro models
 
-### 1. D3 dispersion kernel — `pair_d3.so`
+During install, `scripts/prepare_nequip_weights.py` and
+`scripts/prepare_allegro_weights.py` compile each checkpoint for the GPU in the
+machine into `models/compiled/<arch>/`. See [Accelerators](compile.md) for the
+compile options.
 
-catbench's D3 correction uses a CUDA kernel (`catbench/dispersion/cuda/pair_d3.so`).
-On first D3 use it is JIT-compiled for your GPU and then cached (under your torch
-extensions cache) and reused. `env.sh` sets `PYTHONUTF8=1` (prevents an
-ascii-decode crash during the build) and autodetects `CUDA_HOME`.
+At run time `resolve()` fills in the architecture: it detects the current GPU
+with `nvidia-smi` and puts that arch into the calculator line's
+`models/compiled/<arch>/...` path. To write jobs for another machine, pass it
+explicitly:
 
-### 2. NequIP / Allegro AOT models — `.pt2`
+```python
+spec = resolve("NequIP", arch="sm86")
+```
 
-Models marked `arch_pinned: true` in `models.json` (NequIP, Allegro) load an
-AOT-compiled `.pt2` via `NequIPCalculator.from_compiled_model(...)`. The registry
-exposes `inference_sm86` / `inference_sm89`; the variant matching your GPU is
-selected and the `.pt2` is recompiled/reselected into
-`models/compiled/{sm86,sm89}/` on first run. Selecting the wrong arch is a runtime
-error — let the tooling pick by host GPU rather than hard-coding a path.
+The `.pt2` for that arch must exist. Compile it on a machine with that GPU by
+running the prepare script there (it detects the arch from the GPU); see
+"Run it yourself" on [Accelerators](compile.md).
 
-> Note: NequIP/Allegro use the AOT `.pt2` path, not the runtime JIT-kernel seed in
-> `env.sh` section 5 — that seed is for OpenEquivariance-style kernels only.
+## D3 dispersion kernel
 
-## `nvcc` requirement
+CatBench's D3 correction (`catbench.dispersion`) uses a CUDA kernel that is
+compiled for your GPU and cached. `install.sh` triggers that build once when
+`nvcc` is available, so a later calculation does not stop to compile.
 
-First-run compilation of the D3 kernel needs the CUDA toolkit's `nvcc` on `PATH`.
-`env.sh` autodetects `CUDA_HOME` in this order: an existing `CUDA_HOME` →
-`nvcc` on `PATH` → `/usr/local/cuda`. Check with:
+The build needs the CUDA toolkit's `nvcc`. `env.sh` finds the toolkit
+(`CUDA_HOME`) automatically. Check with:
 
 ```bash
 source env.sh
 command -v nvcc && nvcc --version
 ```
 
-## If `nvcc` is absent — fallbacks
-
-`install.sh` detects a missing `nvcc` and tells you which path it is taking. Your
-options:
-
-1. **Install a CUDA toolkit** that provides `nvcc`, point `CUDA_HOME` at it, and
-   re-run. D3 then compiles on first use. This is the recommended path.
-2. **Fetch a prebuilt-per-arch `pair_d3.so`** matching your GPU's compute
-   capability (sm86 or sm89) and drop it into the env's
-   `catbench/dispersion/cuda/` directory. Use this only when you cannot install a
-   toolkit and you are certain of your GPU's arch.
-3. **Degrade D3 off.** The MLIP itself does not need `nvcc` and runs normally; only
-   the dispersion correction is unavailable. `install.sh` prints a clear message
-   and never silently produces wrong numbers.
-
-The MLIP forward pass (energy/forces) does **not** require `nvcc` — only the D3
-add-on and the arch-pinned `.pt2` selection do. So a no-`nvcc` host can still run
-every non-arch-pinned model without dispersion.
+If `nvcc` is missing, install a CUDA toolkit and run `install.sh` again. The
+models themselves (energy and forces) do not need `nvcc`; without it, only D3 is
+unavailable, and `install.sh` says so.

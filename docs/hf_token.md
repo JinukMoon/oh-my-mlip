@@ -1,7 +1,8 @@
 # Hugging Face token setup (canonical)
 
 This is the canonical, leak-safe guide for making your Hugging Face token
-available to oh-my-mlip so it can fetch **gated** model weights (e.g. UMA).
+available to oh-my-mlip so it can fetch **gated** model weights (UMA and
+eSEN-30M-OAM).
 
 **The token is yours.** oh-my-mlip *reads* it to download weights on your
 machine; it never **writes**, **echoes**, **commits**, or **redistributes** it.
@@ -18,9 +19,10 @@ Sign up (free) at <https://huggingface.co/join>.
 ## 2. Accept the model license
 
 Open the gated model's page while logged in with the **same** account whose
-token you will use, and accept the terms. For UMA:
+token you will use, and accept the terms:
 
-  <https://huggingface.co/facebook/UMA>
+- UMA: <https://huggingface.co/facebook/UMA>
+- eSEN-30M-OAM: <https://huggingface.co/facebook/OMAT24>
 
 Without an accepted license the download fails by design — no retry, no mirror.
 
@@ -34,14 +36,17 @@ token for fetching.
 
 Pick **one**. They are listed best-first.
 
-### a) `huggingface-cli login` (preferred)
+### a) `hf auth login` (preferred)
 
 ```bash
-huggingface-cli login
+hf auth login
 ```
 
-Paste the token at the interactive prompt. It is stored in your HF cache
-(`~/.cache/huggingface/token`) and resolved automatically by `huggingface_hub`.
+`hf` comes with `huggingface_hub` (it is in the UMA and fairchemv1 envs, or
+`pip install -U huggingface_hub`); the older `huggingface-cli login` no longer
+works in current releases. Paste the token at the interactive prompt. It is
+stored in your HF cache (`~/.cache/huggingface/token`) and resolved
+automatically by `huggingface_hub`.
 Nothing lands in your shell history, the repo, or a shared cache.
 
 ### b) Point at a token file with `HF_TOKEN_PATH`
@@ -86,6 +91,6 @@ source env.sh
 python run_examples/single_point.py UMA --version UMA-s-1p2-OMAT
 ```
 
-The first call downloads the weights into the shared cache; later runs reuse it.
+The first call downloads the weights into the framework's cache; later runs reuse it.
 If the token or license is missing, the fetch fails with an actionable message
 pointing back here — not a raw traceback.

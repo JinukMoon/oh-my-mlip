@@ -37,7 +37,7 @@ UPSTREAM: dict[str, dict] = {
                "<prefix>/bin/python -c \"from mace.calculators import mace_mp; mace_mp(model='mh-1', device='cpu')\""],
         note="MH-1 is multi-head: pass head='omat_pbe' or head='oc20_usemppbe' (there is no "
              "plain 'oc20' head). Both heads load the same weight file. default_dtype "
-             "selects float32 or float64 — the calculator lines below use float64.",
+             "selects float32 or float64 — the calculator lines above use float64.",
     ),
     "NequIP": dict(
         src="https://nequip.readthedocs.io/en/latest/guide/getting-started/install.html",
@@ -90,7 +90,7 @@ UPSTREAM: dict[str, dict] = {
                "curl -L \"{url}\" -o $OMM/models/nequix/nequix-mp-1.nqx",
                "echo \"{sha}  $OMM/models/nequix/nequix-mp-1.nqx\" | sha256sum -c -",
                "# Keep the .nqx extension — renaming to .pt makes the loader treat it as torch."],
-        note="use_kernel toggles the fused kernel; the calculator line below leaves it off.",
+        note="use_kernel toggles the fused kernel; the calculator line above leaves it off.",
     ),
     "DeePMD": dict(
         src="https://docs.deepmodeling.com/projects/deepmd/",
@@ -119,7 +119,7 @@ UPSTREAM: dict[str, dict] = {
                "<prefix>/bin/python -c \"from orb_models.forcefield import pretrained; \\",
                "    pretrained.orb_v3_conservative_inf_omat(device='cpu', precision='float32-high')\""],
         note="Upstream's README unpacks a (orbff, atoms_adapter) tuple; the pinned version "
-             "returns a single object, so use the calculator line below. "
+             "returns a single object, so use the calculator line above. "
              "precision='float32-high' selects TF32 matmul, which makes repeated runs "
              "numerically close rather than bit-identical.",
     ),
@@ -200,7 +200,7 @@ UPSTREAM: dict[str, dict] = {
         req=None,
         fetch_src="https://huggingface.co/facebook/OMAT24",
         fetch=["# GATED: accept the facebook/OMAT24 license with your own HF account first",
-               "huggingface-cli login",
+               "hf auth login",
                "<prefix>/bin/python -c \"from huggingface_hub import hf_hub_download; \\",
                "    print(hf_hub_download('facebook/OMAT24','esen_30m_oam.pt', local_dir='$OMM/models/fairchem'))\"",
                "echo \"{sha}  $OMM/models/fairchem/esen_30m_oam.pt\" | sha256sum -c -"],
@@ -229,22 +229,22 @@ UPSTREAM: dict[str, dict] = {
         req=None,
         fetch_src="https://huggingface.co/facebook/UMA",
         fetch=["# GATED: your HF account must be approved for facebook/UMA (upstream documents this)",
-               "huggingface-cli login",
+               "hf auth login",
                "<prefix>/bin/python -c \"from fairchem.core import pretrained_mlip; \\",
                "    pretrained_mlip.get_predict_unit('uma-s-1p2', device='cpu')\"",
-               "#   same pattern for uma-s-1p1 / uma-m-1p1 — three checkpoints cover seven variants"],
+               "#   same pattern for uma-s-1p1 / uma-m-1p1 — three checkpoints cover the eight variants"],
         note="Gated weights: the download fails without an accepted license and a token. "
-             "task_name is what distinguishes the variants — oc20 (catalysis), oc22 "
-             "(oxides), omat (inorganic materials), plus oc25 / omol / odac / omc. Three "
-             "checkpoints cover all seven variants; the -m- checkpoint is 11.2 GB and is "
-             "materialized in host RAM before it reaches the GPU, so it needs substantially "
-             "more system memory than the -s- ones.",
+             "The checkpoint is uma-s-1p2, uma-s-1p1 or uma-m-1p1; task_name selects the "
+             "variant — oc20 (catalysis), oc22 (oxides), oc25 (catalyst-electrolyte "
+             "interfaces), omat (inorganic materials). The -m- checkpoint is 11.2 GB and is "
+             "loaded into host RAM before it reaches the GPU, so it needs 32 GB or more of "
+             "system memory; the -s- checkpoints do not.",
     ),
     "PET": dict(
         src="https://github.com/metatensor/metatrain",
         pip=["pip install metatrain"],
         req=None,
-        fetch_src="http://docs.metatensor.org/metatrain/latest/dev-docs/cli/export.html",
+        fetch_src="https://docs.metatensor.org/metatrain/latest/dev-docs/cli/export.html",
         fetch=["# Only a .ckpt is published; inference needs an exported metatomic .pt",
                "mkdir -p $OMM/models/pet",
                "curl -L \"https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt\" \\",

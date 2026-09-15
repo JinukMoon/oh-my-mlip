@@ -55,7 +55,9 @@ DETAILED_END_MARKER = "<!-- STATUS_TABLE_DETAILED_END -->"
 
 def _detailed_rows(models: dict) -> list[tuple[str, str, str, str]]:
     """Build (Model, Framework, Weights, Gated) rows in a stable order: registry
-    framework order, then version order within each framework."""
+    framework order, then version order within each framework. Always uses the
+    version key (resolvable via resolve()) rather than mlip_name, so users can
+    copy it directly into their code."""
     rows: list[tuple[str, str, str, str]] = []
     for framework, info in models.items():
         if framework.startswith("_"):
@@ -63,7 +65,7 @@ def _detailed_rows(models: dict) -> list[tuple[str, str, str, str]]:
         for version, vinfo in info.get("versions", {}).items():
             rows.append(
                 (
-                    vinfo.get("mlip_name", version),
+                    version,
                     framework,
                     vinfo.get("weights", "bundled"),
                     "yes" if vinfo.get("gated", False) else "no",
@@ -74,14 +76,14 @@ def _detailed_rows(models: dict) -> list[tuple[str, str, str, str]]:
 
 def _framework_rows(models: dict) -> list[tuple[str, str]]:
     """Build (Framework, comma-joined model variant names) rows in registry
-    order — one row per framework. This is the LIGHT view for the README."""
+    order — one row per framework. This is the LIGHT view for the README.
+    Uses version key when it differs from mlip_name, so users can copy and run."""
     rows: list[tuple[str, str]] = []
     for framework, info in models.items():
         if framework.startswith("_"):
             continue
         names = [
-            vinfo.get("mlip_name", version)
-            for version, vinfo in info.get("versions", {}).items()
+            version for version in info.get("versions", {})
         ]
         rows.append((framework, ", ".join(names)))
     return rows
