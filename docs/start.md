@@ -1,19 +1,10 @@
 # Get started
 
-Getting oh-my-mlip running takes three steps: check your machine, connect your
-coding agent (or clone the repository yourself), and install a first model.
+**Before you start:** Linux with an NVIDIA GPU, and conda (or mamba). Gated
+models (UMA, eSEN) also need a Hugging Face account; your agent asks when it
+gets there. Details: [Host requirements](host_requirements.md).
 
-## 1. Check your machine
-
-| You need | Why |
-|---|---|
-| Linux with an NVIDIA GPU and a recent driver | every model is verified by computing energy and forces on the GPU; each env pins a CUDA build that needs a matching driver ([Host requirements](host_requirements.md)) |
-| conda or mamba on `PATH` | every framework gets its own conda env |
-| git | the hub is a git repository |
-| disk space | each framework env takes several GB |
-| a Hugging Face account | only for gated models (UMA, eSEN) — [Gated models](gated_models.md) |
-
-## 2. Connect your agent
+## 1. Connect your agent
 
 === "Claude Code"
 
@@ -47,7 +38,7 @@ coding agent (or clone the repository yourself), and install a first model.
     source env.sh
     ```
 
-## 3. Install your first model
+## 2. Install your first model
 
 Ask your agent:
 
@@ -65,7 +56,7 @@ python scripts/setup_verify.py MACE-MPA-0 --json
 The model counts as installed only when it has computed energy and forces on
 your GPU.
 
-## 4. Do something with it
+## 3. Do something with it
 
 ```text
 Relax POSCAR with MACE-MPA-0 and give me the relaxed structure.
