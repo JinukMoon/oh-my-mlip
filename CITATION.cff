@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use oh-my-mlip, please cite it as below, and cite the MLIP frameworks and models you used."
+title: "oh-my-mlip"
+abstract: "Every major machine-learning interatomic potential in one place: install, use, benchmark, fine-tune and distill them the same way, driven by a coding agent."
+type: software
+authors:
+  - family-names: Moon
+    given-names: Jinuk
+    email: jumoon@snu.ac.kr
+    affiliation: Seoul National University
+repository-code: "https://github.com/JinukMoon/oh-my-mlip"
+url: "https://jinukmoon.github.io/oh-my-mlip/"
+license: MIT
+keywords:
+  - machine-learning interatomic potentials
+  - MLIP
+  - computational chemistry
+  - catalysis
+  - LLM agents

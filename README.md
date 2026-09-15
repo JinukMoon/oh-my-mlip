@@ -16,6 +16,7 @@ way. Ask Claude Code or Codex, and it does the whole job for you. It drives the
 real upstream frameworks and never reimplements a model.
 
 **Documentation: https://jinukmoon.github.io/oh-my-mlip/**
+· [Troubleshooting and help](https://jinukmoon.github.io/oh-my-mlip/help/) · [Issues](https://github.com/JinukMoon/oh-my-mlip/issues)
 
 ## Quick start
 

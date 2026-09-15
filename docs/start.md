@@ -56,6 +56,15 @@ python scripts/setup_verify.py MACE-MPA-0 --json
 The model counts as installed only when it has computed energy and forces on
 your GPU.
 
+Two kinds of model need one more thing, and your agent handles both:
+
+- **UMA and eSEN are gated.** Accept the license on the model's Hugging Face
+  page, then run `hf auth login` in your own terminal
+  ([Gated models](gated_models.md)).
+- **NequIP and Allegro are compiled for your GPU** during install; to use them on
+  a different GPU, compile them there
+  ([GPU-architecture compilation](arch_first_run_compile.md)).
+
 ## 3. Do something with it
 
 ```text
@@ -67,3 +76,4 @@ From here:
 - [Install models](howto/install.md) — more models, exact replay, envs you already have
 - [Use a model](howto/use-a-model.md) — in your own scripts or across models
 - [Benchmark with CatBench](howto/catbench.md) · [Fine-tuning](howto/finetune.md) · [Distillation](howto/distill.md)
+- [Troubleshooting and help](help.md) — common problems, removing envs, reporting issues

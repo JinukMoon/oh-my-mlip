@@ -66,14 +66,3 @@ python3 scripts/adopt_env.py --list
 UMA and eSEN weights are gated. Accept the license on the model page with your
 Hugging Face account, then run `hf auth login` before installing.
 See [Gated models](../gated_models.md) and [Hugging Face token](../hf_token.md).
-
-## Prove a clean install
-
-`scripts/setup_sweep.py --fresh-root` builds each env in a disposable root,
-verifies every variant on the GPU, keeps the evidence and removes the root:
-
-```bash
-python3 scripts/setup_sweep.py sweep --fresh-root --targets mace --peak-gib 20
-```
-
-Full procedure: [`recipes/setup.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/setup.md).

@@ -25,9 +25,9 @@
 #                real install verifies its imports and adopts it (resuming the
 #                post-install steps) or removes and rebuilds it if broken.
 #     --with-accel  opt-in (default OFF): also PRINT the curated GPU compile/accel
-#                commands (NequIP/Allegro/SevenNet) for each targeted env. These
-#                are upstream-doc, GPU-UNVERIFIED recipes (see docs/compile.md);
-#                this flag only surfaces them — it does NOT run a GPU compile.
+#                commands (NequIP/Allegro/SevenNet) for each targeted env, as in
+#                docs/compile.md; this flag only prints them (the NequIP/Allegro
+#                compile itself runs during install via scripts/prepare_*_weights.py).
 #                '--with-accel --dry-run' prints the install plan AND the accel
 #                commands, installing nothing.
 #
