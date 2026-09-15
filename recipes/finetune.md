@@ -46,9 +46,10 @@ files:
   work for X".
 - **Settings** — from the variant's `--show-settings` table: training length
   (epochs, or steps for DeePMD), batch size, learning rate, energy / force /
-  stress weights and stress on or off. Ask only for those with no official
-  fine-tuning value or upstream default, and state the value each of the others
-  will take and where it comes from.
+  stress weights and stress on or off. Present these defaults with their origin
+  (official fine-tuning value or upstream default), let the user keep or replace
+  them, and run with what the user chose. A setting with neither value must be
+  asked.
 - **Output directory.**
 
 ## 2. Plan

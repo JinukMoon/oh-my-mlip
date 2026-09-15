@@ -179,10 +179,14 @@ command or config from memory.
    official fine-tuning value where upstream publishes one, and whether a value
    is required. Frameworks differ: DeePMD trains by steps, not epochs; MACE and
    SevenNet turn stress on through its weight; some have no EMA or early stopping.
-   Show the user the handful that matter for their run (training length, batch
-   size, learning rate, energy/force/stress weights, stress on or off) and ask only
-   for those without a usable value. Values resolve as: user > official fine-tuning
-   value > upstream default; a required setting with none of these is refused.
+   The run uses the defaults unless the user says otherwise. Show the user the
+   handful that matter for their run (training length, batch size, learning rate,
+   energy/force/stress weights, stress on or off) with the value each will take
+   and where it comes from, and ask whether to keep them or change any. Use the
+   values the user gives; do not tune or second-guess them. Values resolve as:
+   user > official fine-tuning value > upstream default; a required setting with
+   none of these (e.g. DPA4's learning rate) must be asked, and is refused if
+   still missing.
    Common knobs are flags (`--epochs`, `--max-steps`, `--batch-size`, `--lr`,
    `--energy-weight`, `--force-weight`, `--stress-weight`, `--include-stress` /
    `--no-stress`, `--patience`, `--ema`, `--precision`); any other setting passes

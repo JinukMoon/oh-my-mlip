@@ -31,10 +31,9 @@ its weight, and not every trainer has EMA or early stopping. Then it asks:
 
 - the exact variant, e.g. `MACE-MH-1-OMAT`;
 - where energies and forces are stored, if they are not on a calculator;
-- training length, batch size and learning rate, when upstream gives no official
-  fine-tuning value to start from;
-- energy, force and stress weights, and whether to train on stress when your data
-  has it;
+- whether to keep the defaults it shows for training length, batch size, learning
+  rate, energy/force/stress weights and stress on or off, or change any of them
+  (a setting upstream gives no value for must be set, e.g. DPA4's learning rate);
 - the output directory.
 
 Every value comes from you, from the framework's official fine-tuning example, or
