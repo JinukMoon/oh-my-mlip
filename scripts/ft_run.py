@@ -887,6 +887,8 @@ else:
 
 from nequip.model import ModelFromPackage
 model = ModelFromPackage(str(PACKAGE))
+if hasattr(model, "keys"):   # packages pickle a ModuleDict keyed by model name ("sole_model")
+    model = model["sole_model"] if "sole_model" in model else next(iter(model.values()))
 type_names = list(model.type_names)
 r_max = float(model.metadata["r_max"])
 print(f"[nequip_prestage] type_names={{len(type_names)}} r_max={{r_max}}")
@@ -1169,7 +1171,9 @@ def build_tace(ctx: Context) -> CommandSpec:
             "precision": precision,
             "strategy": "auto",
             "gradient_clip_val": 10.0,
-            "enable_progress_bar": False,
+            # enable_progress_bar is left at Lightning's default (True): tace always adds its
+            # own TQDMProgressBar (tace/lightning/trainer.py build_trainer), and Lightning
+            # rejects enable_progress_bar=False together with a progress-bar callback.
             "log_every_n_steps": 1,
             "enable_model_summary": False,
             "enable_checkpointing": True,
