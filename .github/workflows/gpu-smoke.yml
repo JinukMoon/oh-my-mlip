@@ -5,10 +5,14 @@ name: GPU smoke (self-hosted)
 # is then cancelled, turning the CI badge red even though every GPU-free check
 # passed. In its own workflow, runner downtime affects only this badge-less
 # workflow and never the "CI (GPU-free)" verdict.
+#
+# Manual only (Actions tab -> "GPU smoke (self-hosted)" -> Run workflow): it
+# needs a registered, online self-hosted GPU runner, and a push-triggered run
+# with no runner online only queues and is cancelled. Full GPU verification of
+# the registry is scripts/setup_sweep.py --fresh-root, run when recipes change.
 
 on:
-  push:
-    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   gpu-smoke-test:
