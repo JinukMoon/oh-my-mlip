@@ -45,8 +45,8 @@ scope for a job.
   with `scripts/build_lammps_nnmtp.sh`; a production run passes `--ref`
   with a specific LAMMPS tag or commit and records it (the default `stable`
   is a moving upstream branch).
-- **Engine checkout** — `--repo` or `$ONTHEFLY_REPO` (default printed by
-  `scripts/distill_bootstrap.py --help`).
+- **Engine checkout** — `--repo` or `$ONTHEFLY_REPO` (required; there is no
+  built-in default); clone it from https://github.com/JinukMoon/onthefly-distill.
 
 ## 2. Plan — the acceptance proposal, written before anything runs
 

@@ -31,7 +31,7 @@ You rarely need to type these; Claude picks the right one from your request.
 | `/oh-my-mlip:run <model>` | single-point energy and forces, or a structure relaxation |
 | `/oh-my-mlip:catbench` | CatBench adsorption benchmark across models, including your own VASP data |
 | `/oh-my-mlip:finetune` | fine-tune a model on your data with its framework's own trainer |
-| `/oh-my-mlip:distill` | distill a model into an NN-MTP student for LAMMPS |
+| `/oh-my-mlip:distill` | distill a model into an NN-MTP student for LAMMPS, with the [onthefly-distill](https://github.com/JinukMoon/onthefly-distill) engine |
 
 The skills are thin: model facts live in `models.json` and the procedures in
 `AGENTS.md` and `recipes/`, so the plugin and a Codex session follow the same

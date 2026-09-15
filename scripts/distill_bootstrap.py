@@ -8,8 +8,8 @@ Deterministic, write-then-execute (Principle 2): every artifact below is
 written to the ABSOLUTE work dir before anything computes. Each step is
 printed to stdout and appended to `<work>/bootstrap.log`.
 
-  1. locate D                       -- `--repo`, else `$ONTHEFLY_REPO`, else
-                                        `~/01_2026/onthefly-distill`. No clone,
+  1. locate D                       -- `--repo`, else `$ONTHEFLY_REPO` (one of
+                                        them is required). No clone,
                                         no `pip install`, no env mutation
                                         (D2b) -- `D` is invoked in place.
   2. `omm_teacher.py`                -- a zero-arg `make_calc()` whose body is
@@ -162,9 +162,7 @@ except ImportError as exc:  # pragma: no cover - environment hint
 MAX_SPECIES = 4  # pair_nnmtp v1: `int species_Z[4]` (F18) -- v2 is unbounded
                  # but is documented as "not used by the loop"; bound to v1.
 
-DEFAULT_REPO = os.environ.get(
-    "ONTHEFLY_REPO", str(Path.home() / "01_2026" / "onthefly-distill")
-)
+DEFAULT_REPO = os.environ.get("ONTHEFLY_REPO")  # no built-in default: pass --repo or set it
 DEFAULT_LMP_BIN = str(
     Path.home() / ".cache" / "oh-my-mlip" / "lammps" / "build" / "lmp"
 )
@@ -426,7 +424,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--teacher", required=True, help="oh-my-mlip model or version, e.g. MACE-MPA-0")
     ap.add_argument("--structure", required=True, type=Path, help="anything ase.io.read handles, <=4 species")
     ap.add_argument("--work", required=True, type=Path, help="work dir (created; rendered ABSOLUTE)")
-    ap.add_argument("--repo", type=Path, default=Path(DEFAULT_REPO), help="onthefly-distill checkout (D)")
+    ap.add_argument("--repo", type=Path, default=Path(DEFAULT_REPO) if DEFAULT_REPO else None,
+                    help="onthefly-distill checkout (D); required unless $ONTHEFLY_REPO is set")
     ap.add_argument("--target-ps", type=float, default=None,
                     help="al_loop.target_ps; defaults to 1.0 for a quick demo, REQUIRED with --acceptance")
     ap.add_argument("--lmp-bin", type=Path, default=Path(DEFAULT_LMP_BIN), help="LAMMPS binary with pair_style nnmtp")
@@ -528,6 +527,9 @@ def parse_args(argv=None) -> argparse.Namespace:
                          "install coreutils.")
     elif args.target_ps is None:
         args.target_ps = 1.0
+    if args.repo is None:
+        ap.error("--repo is required (or set $ONTHEFLY_REPO): an onthefly-distill checkout, "
+                 "https://github.com/JinukMoon/onthefly-distill")
     return args
 
 
