@@ -233,6 +233,7 @@ class Context:
     seed: int = 0
     settings: dict = field(default_factory=dict)  # resolved framework settings
     settings_origins: dict = field(default_factory=dict)  # origins of each setting
+    n_train: int | None = None  # training frames after the split, when known
 
     def native(self, name: str, default: Any = None) -> Any:
         """Resolve a native setting by name or knob from the framework's settings.
@@ -2082,6 +2083,17 @@ def build_orb(ctx: Context) -> CommandSpec:
         value = s.get(name)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             flags[name] = value
+    # finetune() calls next() on one pass of the loader for --num_steps steps per epoch and
+    # stops with StopIteration past the last batch, so steps cannot exceed batches per epoch
+    if ctx.n_train and "--num_steps" in flags:
+        batches = -(-int(ctx.n_train) // int(flags.get("--batch_size") or 100))
+        if flags["--num_steps"] > batches:
+            if origins.get("--num_steps") == "user":
+                raise ValueError(f"ORB: --num_steps {flags['--num_steps']} exceeds the {batches} batches in one "
+                                 f"epoch of {ctx.n_train} frames; finetune.py stops with StopIteration")
+            print(f"[ft_run] ORB: --num_steps default {flags['--num_steps']} is more than the {batches} batches "
+                  f"per epoch; using {batches}", file=sys.stderr)
+            flags["--num_steps"] = batches
     argv = [ctx.resolved["python"], str(ctx.out / "finetune.py"),
             "--base_model", base, "--data_path", str(ctx.out / "orb_data" / "train.db"),
             "--dataset", "finetune", "--checkpoint_path", str(ctx.out / "ckpts"),
@@ -2172,6 +2184,12 @@ for key in ("cmd", "slurm", "val_dataset", "test_dataset", "relax_dataset"):
     cfg.pop(key, None)
 cfg["trainer"] = "equiformer_v3_dens_trainer"
 cfg["logger"] = "tensorboard"
+blocks = patch["model"].get("gradient_checkpointing_block_list")
+if blocks is not None:
+    if len(blocks) != cfg["model"]["num_layers"]:
+        raise SystemExit("gradient_checkpointing_block_list needs " + str(cfg["model"]["num_layers"])
+                         + " entries (one per layer), got " + str(len(blocks)))
+    cfg["model"]["gradient_checkpointing_block_list"] = blocks
 
 optim = cfg["optim"]
 optim["load_pretrained_weights"] = patch["checkpoint"]
@@ -2238,9 +2256,18 @@ def build_equiformerv3(ctx: Context) -> CommandSpec:
             loss[name] = float(s[setting])
     if stress:
         loss["stress"] = float(s["stress_isotropic_coefficient"])
+    model = {}
+    if origins.get("gradient_checkpointing_block_list") == "user":
+        blocks = s["gradient_checkpointing_block_list"]
+        if isinstance(blocks, str):
+            blocks = yaml.safe_load(blocks)  # --set passes "[1,1,...]" as text
+        if not (isinstance(blocks, list) and blocks and all(type(b) is int and b in (0, 1) for b in blocks)):
+            raise ValueError("EquiformerV3: gradient_checkpointing_block_list must be a list of 0/1, "
+                             "one entry per layer, e.g. [1,1,1,1,1,1,1]")
+        model["gradient_checkpointing_block_list"] = blocks
     patch = {
         "checkpoint": checkpoint, "train": str(ctx.dataset_paths["train"]), "valid": str(valid), "stress": stress,
-        "optim": {k: v for k, v in optim.items() if v is not None}, "loss": loss,
+        "optim": {k: v for k, v in optim.items() if v is not None}, "loss": loss, "model": model,
     }
     patch_path = ctx.out / "eqv3_patch.json"
     config_path = ctx.out / "config.yml"
@@ -2593,7 +2620,7 @@ def main() -> int:
         epochs=int(epochs_value) if isinstance(epochs_value, (int, float)) else None,
         batch_size=int(batch_value) if isinstance(batch_value, (int, float)) else None,
         device=args.device, dataset_paths=conv["outputs"], elements=conv["elements"], seed=seed,
-        settings=resolved_settings, settings_origins=settings_origins,
+        settings=resolved_settings, settings_origins=settings_origins, n_train=conv.get("n_train"),
     )
     try:
         spec = builder(ctx)

@@ -415,6 +415,23 @@
       "ft_source": "configs/omat24/finetune/eqV2_31M_ft_salexmptrj.yml:34",
       "training_value": null,
       "training_source": null
+    },
+    {
+      "name": "gradient_checkpointing_block_list",
+      "where": "config model.gradient_checkpointing_block_list",
+      "meaning": "Per-block 0/1 list (one entry per layer): 1 recomputes that block's activations in backward to save GPU memory, at extra compute; accuracy is unchanged",
+      "type": "list",
+      "category": "runtime",
+      "knob": null,
+      "related_knob": null,
+      "default": null,
+      "default_required": false,
+      "default_note": "unset keeps the checkpoint's own config value; a missing value means [0] * num_layers (fairchem/experimental/models/equiformer_v3/equiformer_v3.py:241)",
+      "default_source": "fairchem/experimental/models/equiformer_v3/equiformer_v3.py:241",
+      "ft_value": null,
+      "ft_source": null,
+      "training_value": null,
+      "training_source": null
     }
   ]
 }

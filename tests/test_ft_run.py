@@ -99,6 +99,16 @@ def test_equiformerv3_builder_is_source_derived_weights_only_fine_tune(tmp_path)
     ctx.settings.update({"forces_coefficient": 7.0})
     ctx.settings_origins.update({"forces_coefficient": "user"})
     assert json.loads(ft_run.build_equiformerv3(ctx).config_text)["loss"] == {"forces": 7.0}
+    # the memory setting stays the checkpoint's own unless the user sets it
+    assert patch["model"] == {}
+    assert 'cfg["model"]["gradient_checkpointing_block_list"] = blocks' in prestage
+    ctx.settings.update({"gradient_checkpointing_block_list": "[1,1,1,1,1,1,1]"})
+    ctx.settings_origins.update({"gradient_checkpointing_block_list": "user"})
+    assert json.loads(ft_run.build_equiformerv3(ctx).config_text)["model"] == {
+        "gradient_checkpointing_block_list": [1] * 7}
+    ctx.settings.update({"gradient_checkpointing_block_list": "[2,1]"})
+    with pytest.raises(ValueError, match="list of 0/1"):
+        ft_run.build_equiformerv3(ctx)
 
 
 def test_orb_builder_fetches_finetune_script_and_uses_registry_loader(tmp_path):
@@ -119,6 +129,14 @@ def test_orb_builder_fetches_finetune_script_and_uses_registry_loader(tmp_path):
     # the wandb blocker clears live once wandb imports; the finetune.py one is the builder's job
     assert not ft_run.live_recheck_blockers("ORB", ["finetune.py is not shipped in the orb-models wheel"],
                                             ctx.resolved["python"])
+    # steps per epoch cannot pass the loader's batches (finetune.py StopIteration)
+    batch = ctx.settings["--batch_size"]
+    ctx.n_train = 3 * batch + 1
+    argv = ft_run.build_orb(ctx).argv
+    assert argv[argv.index("--num_steps") + 1] == "4"
+    ctx.settings["--num_steps"], ctx.settings_origins["--num_steps"] = 50, "user"
+    with pytest.raises(ValueError, match="exceeds the 4 batches"):
+        ft_run.build_orb(ctx)
 
 
 def test_unknown_model_is_a_clean_usage_error(tmp_path, synthetic_traj):
