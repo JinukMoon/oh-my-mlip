@@ -71,7 +71,12 @@ def test_check_gated_exports_path_for_child(monkeypatch):
     export HF_TOKEN_PATH into the process env (for child loaders) without ever
     setting an HF_TOKEN literal."""
     monkeypatch.delenv("HF_TOKEN", raising=False)
-    monkeypatch.delenv("HF_TOKEN_PATH", raising=False)
+    # setenv first so monkeypatch records HF_TOKEN_PATH's original state even
+    # when it is absent: _check_gated sets it with os.environ.setdefault, and a
+    # bare delenv(raising=False) of an absent variable records nothing, which
+    # would leak the export into every later test in the session.
+    monkeypatch.setenv("HF_TOKEN_PATH", "")
+    monkeypatch.delenv("HF_TOKEN_PATH")
     monkeypatch.setenv("OMM_HF_TOKEN_FILE", "/path/outside/repo/token")
     # Hide any real `huggingface-cli login` cache on the test host (the
     # hf_cache precedence step would otherwise win over OMM_HF_TOKEN_FILE).
