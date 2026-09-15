@@ -216,8 +216,8 @@
       "default_required": false,
       "default_note": null,
       "default_source": "metatrain/pet/documentation.py:168",
-      "ft_value": "1e-3",
-      "ft_source": "examples/0-beginner/options-ft.yaml:6",
+      "ft_value": null,
+      "ft_source": null,
       "training_value": null,
       "training_source": null
     },
