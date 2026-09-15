@@ -2032,7 +2032,14 @@ if not cached.exists():
             cached.write_bytes(resp.read())
     except Exception as exc:
         raise SystemExit("[orb_prestage] could not fetch " + url + " for orb-models " + version + ": " + repr(exc))
-shutil.copyfile(cached, OUT / "finetune.py")
+# init_wandb_from_config passes mode="online" explicitly, which overrides WANDB_MODE and then
+# demands an API key; the run copy reads WANDB_MODE instead (upstream behaviour when unset)
+text = cached.read_text()
+online = 'mode="online",'
+if text.count(online) != 1:
+    raise SystemExit("[orb_prestage] expected exactly one mode=\\"online\\" in finetune.py " + version
+                     + "; found " + str(text.count(online)))
+(OUT / "finetune.py").write_text(text.replace(online, 'mode=os.environ.get("WANDB_MODE", "online"),'))
 
 db = OUT / "orb_data" / "train.db"
 db.parent.mkdir(parents=True, exist_ok=True)

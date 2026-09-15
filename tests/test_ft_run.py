@@ -114,6 +114,8 @@ def test_orb_builder_fetches_finetune_script_and_uses_registry_loader(tmp_path):
     prestage = spec.extra_files[ctx.out / "orb_prestage.py"]
     compile(prestage, "orb_prestage.py", "exec")
     assert "raw.githubusercontent.com/orbital-materials/orb-models/" in prestage
+    # finetune.py hard-codes wandb mode="online"; the run copy reads WANDB_MODE (set offline)
+    assert 'mode=os.environ.get("WANDB_MODE", "online"),' in prestage and "text.count(online) != 1" in prestage
     # the wandb blocker clears live once wandb imports; the finetune.py one is the builder's job
     assert not ft_run.live_recheck_blockers("ORB", ["finetune.py is not shipped in the orb-models wheel"],
                                             ctx.resolved["python"])
