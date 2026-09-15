@@ -1,0 +1,11 @@
+{
+  "framework": "MatRIS",
+  "pinned": "matris @ git+https://github.com/HPC-AI-Team/MatRIS@c16f569ca08e6905e91b64e2ee68614303e46f7f",
+  "entrypoint": "none for training; inference only: MatRISCalculator(model='matris_10m_oam', task='efsm', device='cuda')",
+  "stress": {
+    "supported": true,
+    "how_enabled": "inference only: task='efs' or 'efsm'"
+  },
+  "runnable_as_pinned": "not-supported",
+  "settings": []
+}

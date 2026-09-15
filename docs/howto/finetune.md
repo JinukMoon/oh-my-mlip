@@ -25,11 +25,20 @@ Fine-tune SevenNet-MF-OMPA on my DFT frames for 100 epochs.
 
 ## What it asks you
 
+Your agent first reads which settings that framework really has — they differ:
+DeePMD counts steps instead of epochs, MACE and SevenNet switch stress on through
+its weight, and not every trainer has EMA or early stopping. Then it asks:
+
 - the exact variant, e.g. `MACE-MH-1-OMAT`;
 - where energies and forces are stored, if they are not on a calculator;
-- a real fine-tune (epochs, batch size, split, seed) or a quick check on small
-  data;
+- training length, batch size and learning rate, when upstream gives no official
+  fine-tuning value to start from;
+- energy, force and stress weights, and whether to train on stress when your data
+  has it;
 - the output directory.
+
+Every value comes from you, from the framework's official fine-tuning example, or
+from its upstream default, and the run records which one it was.
 
 ## What you get
 
@@ -42,12 +51,18 @@ Fine-tune SevenNet-MF-OMPA on my DFT frames for 100 epochs.
 ??? note "Run it yourself"
 
     ```bash
+    python scripts/ft_run.py MACE --show-settings      # the settings this framework has
     python scripts/ft_run.py MACE --dataset frames.traj --out ft_mace --epochs 50 --seed 0
     python scripts/ft_verify.py ft_mace/<checkpoint> --model MACE --json
     ```
 
     | Option | Effect |
     |---|---|
+    | `--show-settings` | list native settings, their common knob, default, official fine-tuning value and whether they are required |
+    | `--epochs`, `--max-steps`, `--batch-size`, `--lr` | training length, batch size, learning rate |
+    | `--energy-weight`, `--force-weight`, `--stress-weight` | loss weights |
+    | `--include-stress`, `--no-stress` | train on stress or not |
+    | `--set NAME=VALUE` | any other native setting, by its name in `--show-settings` |
     | `--version MACE-MH-1-OMAT` | start from a specific checkpoint |
     | `--emit-only` | write the dataset, config and command without running |
     | `--slurm --partition <p>` | also write a SLURM script (nothing is submitted) |

@@ -82,6 +82,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -91,6 +92,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from oh_my_mlip import registry as reg  # noqa: E402
+import ft_settings  # noqa: E402
 
 FT_DATASET = _SCRIPTS_DIR / "ft_dataset.py"
 
@@ -144,10 +146,9 @@ SEED_CONTROL = {
     "PET": ("native", "top-level `seed` (metatrain 2026.1 options.yaml: seeds torch / numpy / random / "
                       "PYTHONHASHSEED)"),
     "NequIP": ("data-split-only", "data.seed (ASEDataModule split/shuffle) ONLY -- the training seed is "
-                                  "hard-coded seed_everything(123) in nequip/utils/global_state.py:79 of "
-                                  "both installed versions (0.17.1 NequIP env, 0.15.0 Allegro env) and no "
-                                  "config key reaches it"),
-    "Allegro": ("data-split-only", "same as NequIP: data.seed only; nequip 0.15.0 utils/global_state.py:79 "
+                                  "hard-coded seed_everything(123) in pinned nequip 0.15.0 utils/global_state.py:79 "
+                                  "and no config key reaches it"),
+    "Allegro": ("data-split-only", "same as NequIP: data.seed only; pinned nequip 0.15.0 utils/global_state.py:79 "
                                    "pins the training seed to 123"),
     "MatterSim": ("native", "--seed (mattersim 1.2.1 training/finetune_mattersim.py seeds random / numpy / torch)"),
     "TACE": ("native", "misc.global_seed + dataset.split_seed (tace 0.2.0 scripts/train.py, dataset/read.py)"),
@@ -203,12 +204,47 @@ class Context:
     finetune: dict
     resolved: dict
     out: Path
-    epochs: int
-    batch_size: int
+    epochs: int | None
+    batch_size: int | None
     device: str
     dataset_paths: dict
     elements: list
     seed: int = 0
+    settings: dict = field(default_factory=dict)  # resolved framework settings
+    settings_origins: dict = field(default_factory=dict)  # origins of each setting
+
+    def native(self, name: str, default: Any = None) -> Any:
+        """Resolve a native setting by name or knob from the framework's settings.
+
+        Retrieves the value of a native setting by either its native name
+        (e.g. 'learning_rate', 'targets.<energy>.stress') or its common knob name
+        (e.g. 'lr', 'include_stress'). The setting must have been resolved by
+        ft_settings.resolve_settings().
+
+        Args:
+            name: Native setting name or knob name as defined in the framework's JSON config
+            default: Default value to return if setting not found (None means not found)
+
+        Returns:
+            The resolved value for this setting, or default if not found
+
+        Raises:
+            ValueError if default is None and the setting has no resolved value
+        """
+        # Try direct lookup by native name first
+        if name in self.settings:
+            return self.settings[name]
+
+        # If no default provided, raise error
+        if default is None:
+            origin = self.settings_origins.get(name)
+            raise ValueError(
+                f"[Context.native] {self.family}/{self.version}: setting '{name}' has no resolved value "
+                f"(origin: {origin or 'unknown'}). Check that the setting exists and has a default, "
+                f"ft_value, or user-supplied value."
+            )
+
+        return default
 
 
 @dataclass
@@ -318,23 +354,43 @@ def build_mace(ctx: Context) -> CommandSpec:
     foundation = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
     variant_args = ctx.finetune.get("variant_args") or {}
     train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
+
+    # Read all resolved settings by native name from ctx.settings
+    multiheads = ctx.settings.get("--multiheads_finetuning", False)
+    lr = ctx.settings.get("--lr", 0.01)
+    batch_size = ctx.settings.get("--batch_size", 10)
+    max_num_epochs = ctx.settings.get("--max_num_epochs", 2048)
+    energy_weight = ctx.settings.get("--energy_weight", 1.0)
+    forces_weight = ctx.settings.get("--forces_weight", 100.0)
+    stress_weight = ctx.settings.get("--stress_weight", 1.0)
+    ema = ctx.settings.get("--ema", False)
+    ema_decay = ctx.settings.get("--ema_decay", 0.99)
+    default_dtype = ctx.settings.get("--default_dtype", "float64")
+    scheduler_patience = ctx.settings.get("--scheduler_patience", 50)
+    patience = ctx.settings.get("--patience", 2048)
+
     argv = [
         entrypoint_bin(ctx.resolved, "mace_run_train"),
         f"--name={ctx.version}",
         f"--foundation_model={foundation}",
-        "--multiheads_finetuning=False",  # C7/note: bare invocation defaults True in 0.3.15
+        f"--multiheads_finetuning={str(multiheads).lower()}",
         f"--train_file={train_path}",
         *( [f"--valid_file={valid_path}"] if valid_path else ["--valid_fraction=0.1"] ),
         "--energy_key=REF_energy",
         "--forces_key=REF_forces",
         "--E0s=average",
-        "--lr=0.01",
-        f"--batch_size={ctx.batch_size}",
-        f"--max_num_epochs={ctx.epochs}",
+        f"--lr={lr}",
+        f"--batch_size={int(batch_size)}",
+        f"--max_num_epochs={int(max_num_epochs)}",
+        f"--energy_weight={float(energy_weight)}",
+        f"--forces_weight={float(forces_weight)}",
+        f"--stress_weight={float(stress_weight)}",
         f"--seed={int(ctx.seed)}",
-        "--ema",
-        "--ema_decay=0.99",
-        "--default_dtype=float64",
+        f"--ema={str(ema).lower()}",
+        f"--ema_decay={float(ema_decay)}",
+        f"--default_dtype={default_dtype}",
+        f"--scheduler_patience={int(scheduler_patience)}",
+        f"--patience={int(patience)}",
         f"--device={ctx.device}",
         f"--model_dir={ctx.out}",
         f"--checkpoints_dir={ctx.out}/checkpoints",
@@ -411,12 +467,20 @@ def sevennet_patch(ctx: Context) -> dict:
     """The dotted-key patch applied on top of the upstream preset; insertion
     order is the application order (variant_args last, so they win)."""
     foundation = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
+    # Read resolved settings by native name from ctx.settings
+    train_epoch = ctx.settings.get("train.epoch", 100)
+    batch_size = ctx.settings.get("data.batch_size", 4)
+    train_lr = ctx.settings.get("train.lr", 0.004)
+    train_energy_weight = ctx.settings.get("train.energy_weight")
+    train_force_weight = ctx.settings.get("train.force_weight", 1.0)
+    train_stress_weight = ctx.settings.get("train.stress_weight")
+
     patch: dict = {
         "train.continue.checkpoint": foundation,
         "train.continue.reset_optimizer": True,
         "train.continue.reset_scheduler": True,
         "train.continue.reset_epoch": True,
-        "train.epoch": int(ctx.epochs),
+        "train.epoch": int(train_epoch),
         # mf_ompa_fine_tune.yaml sets no `per_epoch` at all (unlike the generic
         # fine_tune.yaml's per_epoch: 10) -- on a short demo run (epochs=2)
         # that leaves only the epoch-0 pre-training snapshot on disk. Force a
@@ -424,7 +488,16 @@ def sevennet_patch(ctx: Context) -> dict:
         "train.per_epoch": 1,
         # every preset ships its own random_seed (1 or 777); --seed replaces it
         "train.random_seed": int(ctx.seed),
+        "train.lr": float(train_lr),
     }
+    # Add energy and force weights if they are resolved
+    if train_energy_weight is not None:
+        patch["train.energy_weight"] = float(train_energy_weight)
+    if train_force_weight is not None:
+        patch["train.force_weight"] = float(train_force_weight)
+    if train_stress_weight is not None:
+        patch["train.stress_weight"] = float(train_stress_weight)
+
     modality = _SEVENNET_MODALITY.get(ctx.version)
     valid = ctx.dataset_paths.get("valid")
     if modality:
@@ -435,7 +508,7 @@ def sevennet_patch(ctx: Context) -> dict:
         patch["data.load_trainset_path"] = [str(ctx.dataset_paths["train"])]
         if valid:
             patch["data.load_validset_path"] = [str(valid)]
-    patch["data.batch_size"] = int(ctx.batch_size)
+    patch["data.batch_size"] = int(batch_size)
     for k, v in (ctx.finetune.get("variant_args") or {}).items():
         patch[k] = v
     return patch
@@ -473,25 +546,56 @@ def build_deepmd(ctx: Context) -> CommandSpec:
             link.symlink_to(foundation_path)
         ckpt_for_cli = link
 
+    # Resolved settings (user > official fine-tuning value > upstream default), by the
+    # native names of each family's settings file: DeePMD nests them (training.*,
+    # learning_rate.*, loss.*); DPA4's file lists the same argcheck keys unnested.
+    dpa4 = ctx.family == "DPA4"
+
+    def setting(deepmd_name: str, dpa4_name: str):
+        return ctx.settings.get(dpa4_name if dpa4 else deepmd_name)
+
+    numb_steps = setting("training.numb_steps", "numb_steps")
+    numb_epoch = ctx.settings.get("numb_epoch") if dpa4 else None
+    if numb_steps is None and numb_epoch is None:
+        raise ValueError(f"{ctx.family}: training length is not set; pass --max-steps"
+                         + (" or --epochs" if dpa4 else "") + " (deepmd-kit requires numb_steps)")
+    start_lr = setting("learning_rate.start_lr", "start_lr")
+    if start_lr is None:
+        raise ValueError(f"{ctx.family}: learning rate has no default at the pinned deepmd-kit; pass --lr")
+    train_batch_size = ctx.settings.get("training.training_data.batch_size", "auto") if not dpa4 else "auto"
+    valid_batch_size = ctx.settings.get("training.validation_data.batch_size", "auto") if not dpa4 else "auto"
+    loss_dict = {"type": "ener"}
+    for key in ("start_pref_e", "limit_pref_e", "start_pref_f", "limit_pref_f", "start_pref_v", "limit_pref_v"):
+        val = setting(f"loss.{key}", key)
+        if val is not None:
+            loss_dict[key] = float(val)
+
     train_systems = ctx.dataset_paths.get("train_systems") or []
     valid_systems = ctx.dataset_paths.get("valid_systems") or []
     training: dict = {
-        "training_data": {"systems": train_systems, "batch_size": "auto"},
-        "numb_steps": max(int(ctx.epochs) * 100, 100),
+        "training_data": {"systems": train_systems, "batch_size": train_batch_size},
         "seed": int(ctx.seed),
-        "disp_freq": 10,
-        "save_freq": 50,
+        "disp_freq": 10,   # logging cadence, not a model setting
+        "save_freq": 50,   # checkpoint cadence, not a model setting
     }
+    if numb_steps is not None:
+        training["numb_steps"] = int(numb_steps)
+    if numb_epoch is not None:
+        training["numb_epoch"] = int(numb_epoch)
     if valid_systems:
-        training["validation_data"] = {"systems": valid_systems, "batch_size": "auto"}
+        training["validation_data"] = {"systems": valid_systems, "batch_size": valid_batch_size}
+
     input_json = {
         # descriptor/fitting_net left empty: --use-pretrain-script (below)
         # pulls the real model section from the checkpoint (same reason
         # DPA4's upstream cmd uses it -- the local architecture is not
         # otherwise known to a hand-written input.json).
         "model": {"type_map": ctx.elements, "descriptor": {}, "fitting_net": {}},
-        "learning_rate": {"type": "exp", "decay_steps": 100, "start_lr": 0.001, "stop_lr": 3.5e-5},
-        "loss": {"type": "ener", "start_pref_e": 0.2, "limit_pref_e": 20, "start_pref_f": 100, "limit_pref_f": 60},
+        "learning_rate": {k: v for k, v in (("type", setting("learning_rate.type", "type") or "exp"),
+                                              ("decay_steps", setting("learning_rate.decay_steps", "decay_steps")),
+                                              ("start_lr", float(start_lr)),
+                                              ("stop_lr", setting("learning_rate.stop_lr", "stop_lr"))) if v is not None},
+        "loss": loss_dict,
         "training": training,
     }
     config_path = ctx.out / "input.json"
@@ -514,6 +618,20 @@ def build_deepmd(ctx: Context) -> CommandSpec:
 # square|huber) and resources/input_template.yaml (fit section keys).
 def build_grace(ctx: Context) -> CommandSpec:
     train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
+    # Read resolved settings by native name from ctx.settings
+    maxiter = ctx.settings.get("maxiter", 500)
+    batch_size = ctx.settings.get("batch_size", 8)
+    test_batch_size = ctx.settings.get("test_batch_size", 1)
+    opt_params_lr = ctx.settings.get("opt_params.learning_rate", 0.01)
+    opt_params_use_ema = ctx.settings.get("opt_params.use_ema", False)
+    opt_params_ema_momentum = ctx.settings.get("opt_params.ema_momentum", 0.99)
+    energy_weight = ctx.settings.get("loss.energy.weight", 1.0)
+    forces_weight = ctx.settings.get("loss.forces.weight", 100.0)
+    loss_stress = ctx.settings.get("loss.stress")
+    loss_stress_weight = ctx.settings.get("loss.stress.weight")
+    float_dtype = ctx.settings.get("float_dtype", "float64")
+    stop_at_min = ctx.settings.get("stop_at_min", False)
+
     cfg = {
         "seed": int(ctx.seed),
         # gracemaker overwrites `cutoff` from the foundation model.yaml (rcut)
@@ -532,26 +650,46 @@ def build_grace(ctx: Context) -> CommandSpec:
             # Restrict the chemical embedding to the elements in the data.
             "reduce_elements": True,
         },
+        "float_dtype": float_dtype,
         "fit": {
             "loss": {
-                "energy": {"weight": 1.0, "type": "huber", "delta": 0.01},
-                "forces": {"weight": 5.0, "type": "huber", "delta": 0.01},
+                "energy": {"weight": float(energy_weight), "type": "huber", "delta": 0.01},
+                "forces": {"weight": float(forces_weight), "type": "huber", "delta": 0.01},
             },
-            "maxiter": int(ctx.epochs),
+            "maxiter": int(maxiter),
             "optimizer": "Adam",
             "opt_params": {
-                "learning_rate": 0.001, "amsgrad": True, "use_ema": True,
-                "ema_momentum": 0.99, "weight_decay": None, "clipvalue": 1.0,
+                "learning_rate": float(opt_params_lr), "amsgrad": True, "use_ema": bool(opt_params_use_ema),
+                "ema_momentum": float(opt_params_ema_momentum), "weight_decay": None, "clipvalue": 1.0,
             },
-            "batch_size": int(ctx.batch_size),
-            "test_batch_size": int(ctx.batch_size),
+            # Bug fix: gracemaker expects scheduler_params for Adam optimizer even when
+            # scheduler is not specified; values from tensorpotential 0.5.3 cli/train_callbacks.py
+            # DEFAULT_VALUES (unconditionally read by train_adam, tensorpotential/cli/train.py:336)
+            "scheduler_params": {
+                "minimum_learning_rate": 1e-4,
+                "warmup_epochs": 0,
+                "cold_learning_rate": 1e-7,
+                "reduction_factor": 0.8,
+                "patience": 10,
+                "monitor": "test_loss",
+                "cooldown": 0,
+            },
+            "batch_size": int(batch_size),
+            "test_batch_size": int(test_batch_size),
             "jit_compile": True,
             "eval_init_stats": True,
             "checkpoint_freq": 1,
             "progressbar": False,
             "train_shuffle": True,
+            "stop_at_min": stop_at_min,
         },
     }
+    # Add stress loss if specified
+    if loss_stress is not None:
+        cfg["fit"]["loss"]["stress"] = loss_stress
+    if loss_stress_weight is not None:
+        cfg["fit"]["loss"]["stress"] = {"weight": float(loss_stress_weight)}
+
     config_path = ctx.out / "input.yaml"
     config_text = yaml.safe_dump(cfg, sort_keys=False)
     argv = [entrypoint_bin(ctx.resolved, "gracemaker"), str(config_path)]
@@ -592,17 +730,29 @@ def _pet_dataset_spec(path: str) -> dict:
 def build_pet(ctx: Context) -> CommandSpec:
     foundation = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
     train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
+
+    # Read resolved settings by native name from ctx.settings
+    batch_size = ctx.settings.get("batch_size", 32)
+    num_epochs = ctx.settings.get("num_epochs", 1000)
+    learning_rate = ctx.settings.get("learning_rate", 1e-3)
+    base_precision = ctx.settings.get("base_precision", 32)
+    include_stress = ctx.settings.get("targets.<energy>.stress", False)
+    loss_energy_weight = ctx.settings.get("loss.<target>.weight")
+    loss_force_weight = ctx.settings.get("loss.<target>.gradients.positions.weight")
+    loss_stress_weight = ctx.settings.get("loss.<target>.gradients.strain.weight")
+
     cfg = {
         "seed": int(ctx.seed),
         "device": "gpu" if ctx.device == "cuda" else "cpu",
-        "base_precision": 32,
+        "base_precision": int(base_precision),
         "architecture": {
             "name": "pet",
             "training": {
-                "batch_size": int(ctx.batch_size),
-                "num_epochs": int(ctx.epochs),
+                "batch_size": int(batch_size),
+                "num_epochs": int(num_epochs),
                 "checkpoint_interval": 1,
                 "log_interval": 1,
+                "learning_rate": float(learning_rate),
                 "finetune": {"read_from": foundation, "method": "full"},
             },
         },
@@ -610,6 +760,19 @@ def build_pet(ctx: Context) -> CommandSpec:
         "validation_set": _pet_dataset_spec(str(valid_path)) if valid_path else 0.1,
         "test_set": 0.0,
     }
+    # Add stress to the energy target if enabled
+    if include_stress:
+        cfg["training_set"]["targets"]["energy"]["stress"] = {
+            "read_from": str(train_path), "reader": "ase", "key": "stress"
+        }
+    # Add loss weights if specified
+    if loss_energy_weight is not None:
+        cfg["training_set"]["targets"]["energy"]["loss_weight"] = float(loss_energy_weight)
+    if loss_force_weight is not None:
+        cfg["training_set"]["targets"]["energy"]["forces"]["loss_weight"] = float(loss_force_weight)
+    if loss_stress_weight is not None and include_stress:
+        cfg["training_set"]["targets"]["energy"]["stress"]["loss_weight"] = float(loss_stress_weight)
+
     config_path = ctx.out / "options.yaml"
     config_text = yaml.safe_dump(cfg, sort_keys=False)
     argv = [
@@ -702,6 +865,36 @@ def build_nequip_framework(ctx: Context) -> CommandSpec:
         # run dies inside Lightning instead of here.
         raise SystemExit(f"[ft_run] {ctx.family}/{ctx.version}: the NequIP-framework fine-tune needs a "
                          f"validation split (none was produced -- see <out>/data/conversion.json)")
+
+    # Read resolved settings by native name from ctx.settings
+    batch_size = ctx.settings.get("data.train_dataloader.batch_size", 8)
+    max_epochs = ctx.settings.get("trainer.max_epochs")
+    max_steps = ctx.settings.get("trainer.max_steps")
+    lr = ctx.settings.get("training_module.optimizer.lr", 0.001)
+    energy_weight = ctx.settings.get("training_module.loss.coeffs.total_energy", 1.0)
+    force_weight = ctx.settings.get("training_module.loss.coeffs.forces", 1.0)
+    stress_weight = ctx.settings.get("training_module.loss.coeffs.stress")
+    include_stress_setting_name = "include stress (training_module.loss._target_: nequip.train.EnergyForceStressLoss)"
+    include_stress = ctx.settings.get(include_stress_setting_name, False)
+    ema_decay = ctx.settings.get("training_module.ema_decay", 0.99)
+
+    # Choose loss class based on whether stress is included
+    if include_stress:
+        loss_target = "nequip.train.EnergyForceStressLoss"
+        loss_coeffs = {"total_energy": float(energy_weight), "forces": float(force_weight),
+                       "stress": float(stress_weight) if stress_weight is not None else 0.001}
+        val_metrics_target = "nequip.train.EnergyForceStressMetrics"
+        val_metrics_coeffs = {"total_energy_rmse": 1.0, "forces_rmse": 1.0, "stress_rmse": 1.0}
+    else:
+        loss_target = "nequip.train.EnergyForceLoss"
+        loss_coeffs = {"total_energy": float(energy_weight), "forces": float(force_weight)}
+        val_metrics_target = "nequip.train.EnergyForceMetrics"
+        val_metrics_coeffs = {"total_energy_rmse": 1.0, "forces_rmse": 1.0}
+
+    # Resolve max_epochs: use resolved max_epochs if available, otherwise fallback to ctx.epochs
+    if max_epochs is None:
+        max_epochs = ctx.epochs
+
     template = {
         "run": ["train"],
         # filled by the prestage step from the package itself
@@ -719,15 +912,15 @@ def build_nequip_framework(ctx: Context) -> CommandSpec:
                  "r_max": "${cutoff_radius}"},
             ],
             "train_dataloader": {"_target_": "torch.utils.data.DataLoader",
-                                 "batch_size": int(ctx.batch_size), "shuffle": True},
+                                 "batch_size": int(batch_size), "shuffle": True},
             "val_dataloader": {"_target_": "torch.utils.data.DataLoader",
-                               "batch_size": int(ctx.batch_size)},
+                               "batch_size": int(batch_size)},
         },
         "trainer": {
             "_target_": "lightning.Trainer",
             "accelerator": "gpu" if ctx.device == "cuda" else "cpu",
             "devices": 1,
-            "max_epochs": int(ctx.epochs),
+            "max_epochs": int(max_epochs),
             "callbacks": [
                 {"_target_": "lightning.pytorch.callbacks.ModelCheckpoint",
                  "dirpath": str(ctx.out / "checkpoints"),
@@ -739,14 +932,17 @@ def build_nequip_framework(ctx: Context) -> CommandSpec:
         "training_module": {
             "_target_": "nequip.train.EMALightningModule",
             "model": {"_target_": "nequip.model.ModelFromPackage", "package_path": None},
-            "loss": {"_target_": "nequip.train.EnergyForceLoss", "per_atom_energy": True,
-                     "coeffs": {"total_energy": 1.0, "forces": 1.0}},
-            "val_metrics": {"_target_": "nequip.train.EnergyForceMetrics",
-                            "coeffs": {"total_energy_rmse": 1.0, "forces_rmse": 1.0}},
-            "optimizer": {"_target_": "torch.optim.Adam", "lr": 0.001},
+            "loss": {"_target_": loss_target, "per_atom_energy": True, "coeffs": loss_coeffs},
+            "val_metrics": {"_target_": val_metrics_target, "coeffs": val_metrics_coeffs},
+            "optimizer": {"_target_": "torch.optim.Adam", "lr": float(lr)},
+            "ema_decay": float(ema_decay),
         },
         "hydra": {"run": {"dir": str(ctx.out / "hydra")}},
     }
+    # Add max_steps if resolved
+    if max_steps is not None:
+        template["trainer"]["max_steps"] = int(max_steps)
+
     template_path = ctx.out / "config_template.yaml"
     config_path = ctx.out / "config.yaml"
     prestage_path = ctx.out / "nequip_prestage.py"
@@ -779,6 +975,15 @@ def build_nequip_framework(ctx: Context) -> CommandSpec:
 def build_mattersim(ctx: Context) -> CommandSpec:
     foundation = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
     train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
+    # Native names from finetune/settings/MatterSim.json. There is no energy
+    # loss weight upstream (finetune_mattersim.py:216-217 expose only
+    # --force_loss_ratio / --stress_loss_ratio; energy is implicitly 1).
+    epochs = ctx.native("--epochs", default=ctx.epochs)
+    batch_size = ctx.native("--batch_size", default=ctx.batch_size)
+    lr = ctx.native("--lr", default=2e-4)
+    force_loss_ratio = ctx.native("--force_loss_ratio", default=1.0)
+    stress_loss_ratio = ctx.native("--stress_loss_ratio", default=0.1)
+    include_stresses = bool(ctx.native("--include_stresses", default=False))
     argv = [
         entrypoint_bin(ctx.resolved, "torchrun"), "--nproc_per_node=1", "--standalone",
         "-m", "mattersim.training.finetune_mattersim",
@@ -787,10 +992,15 @@ def build_mattersim(ctx: Context) -> CommandSpec:
         *(["--valid_data_path", str(valid_path)] if valid_path else []),
         "--save_path", str(ctx.out / "results"),
         "--save_checkpoint",
-        "--epochs", str(int(ctx.epochs)),
-        "--batch_size", str(int(ctx.batch_size)),
-        "--lr", "2e-4",
+        f"--epochs={int(epochs)}",
+        f"--batch_size={int(batch_size)}",
+        f"--lr={float(lr)}",
         "--include_forces",
+        f"--force_loss_ratio={float(force_loss_ratio)}",
+        # BooleanOptionalAction (finetune_mattersim.py:210-215): emit the
+        # explicit form either way so the choice is visible in the .sh
+        "--include_stresses" if include_stresses else "--no-include_stresses",
+        f"--stress_loss_ratio={float(stress_loss_ratio)}",
         "--device", ctx.device,
         "--seed", str(int(ctx.seed)),
         "--run_name", ctx.version,
@@ -837,13 +1047,50 @@ print(f"[tace_prestage] finetune_from_model = {{path}}")
 def build_tace(ctx: Context) -> CommandSpec:
     foundation_name = resolve_foundation_checkpoint(ctx.version, ctx.resolved)
     train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
+
+    # Bug fix: TACE LoRA fine-tuning is broken at the pinned commit
+    # Only allow full fine-tuning
+    if ctx.settings.get("finetune_method") == "lora":
+        raise SystemExit(f"[ft_run] {ctx.family}/{ctx.version}: LoRA fine-tuning is not supported "
+                         f"(broken at pinned commit tace 0.2.0) -- use full fine-tuning only")
+
+    # Native names from finetune/settings/TACE.json
+    epochs = ctx.native("trainer.max_epochs", default=ctx.epochs)
+    precision = ctx.native("trainer.precision", default=32)
+    lr = ctx.native("optimizer.lr", default=1e-4)
+    energy_weight = ctx.native("loss.loss_property_weights[energy]", default=1.0)
+    forces_weight = ctx.native("loss.loss_property_weights[forces]", default=5.0)
+    stress_weight = ctx.native("loss.loss_property_weights[stress]", default=1.0)
+    # the batch_size knob lands on dataset.train_dataloader as a plain int; a
+    # --set of the whole dataloader dict carries its own batch_size
+    train_loader_setting = ctx.native("dataset.train_dataloader", default=ctx.batch_size)
+    batch_size = (train_loader_setting.get("batch_size", ctx.batch_size)
+                  if isinstance(train_loader_setting, dict) else train_loader_setting)
+    # include_stress knob -> loss.loss_property (True/False from the flag, or
+    # an explicit property list via --set)
+    loss_property_setting = ctx.native("loss.loss_property", default=False)
+    include_stress = ("stress" in loss_property_setting
+                      if isinstance(loss_property_setting, (list, tuple)) else bool(loss_property_setting))
+
+    loss_property = ["energy", "forces"]
+    loss_function_name = ["mse_energy_per_atom", "mse_forces"]
+    loss_property_weights = [float(energy_weight), float(forces_weight)]
+    keys = {"energy_key": "energy", "forces_key": "forces"}
+    if include_stress:
+        # tace/utils/loss/mse_fn.py:57 mse_stress; dataset/quantity.py maps
+        # `<property>_key` -> info key, so stress_key reads ASE's stress
+        loss_property.append("stress")
+        loss_function_name.append("mse_stress")
+        loss_property_weights.append(float(stress_weight))
+        keys["stress_key"] = "stress"
+
     monitor = "val/synth_metric"
     loader = {"_target_": "torch_geometric.loader.DataLoader", "drop_last": False, "num_workers": 0}
     cfg = {
         "defaults": ["_self_"],
         "resume_from_model": None,
         "finetune_from_model": None,  # filled by tace_prestage.py
-        "finetune": None,             # + no finetune_config.yaml => full fine-tune
+        "finetune": None,             # + no finetune_config.yaml => full fine-tune (not LoRA)
         "misc": {
             "project_name": ctx.version,
             "global_seed": int(ctx.seed),
@@ -860,9 +1107,9 @@ def build_tace(ctx: Context) -> CommandSpec:
             "num_nodes": 1,
             "accelerator": "gpu" if ctx.device == "cuda" else "cpu",
             "devices": 1,
-            "max_epochs": int(ctx.epochs),
+            "max_epochs": int(epochs),
             "min_epochs": 1,
-            "precision": 32,
+            "precision": precision,
             "strategy": "auto",
             "gradient_clip_val": 10.0,
             "enable_progress_bar": False,
@@ -898,13 +1145,13 @@ def build_tace(ctx: Context) -> CommandSpec:
             "no_valid_set": False,
             "neighborlist_backend": "matscipy",
             "storage_mode": "memory",
-            "keys": {"energy_key": "energy", "forces_key": "forces"},
-            "train_dataloader": {**loader, "batch_size": int(ctx.batch_size), "shuffle": True},
-            "statistics_dataloader": {"batch_size": int(ctx.batch_size)},
-            "valid_dataloader": {**loader, "batch_size": int(ctx.batch_size), "shuffle": False},
+            "keys": keys,
+            "train_dataloader": {**loader, "batch_size": int(batch_size), "shuffle": True},
+            "statistics_dataloader": {"batch_size": int(batch_size)},
+            "valid_dataloader": {**loader, "batch_size": int(batch_size), "shuffle": False},
             "test_dataloader": "${dataset.valid_dataloader}",
         },
-        "optimizer": {"_target_": "torch.optim.AdamW", "lr": 1e-4, "weight_decay": 1e-8},
+        "optimizer": {"_target_": "torch.optim.AdamW", "lr": float(lr), "weight_decay": 1e-8},
         "scheduler": {
             "_target_": "torch.optim.lr_scheduler.ReduceLROnPlateau",
             "mode": "min", "factor": 0.5, "patience": 25,
@@ -914,10 +1161,10 @@ def build_tace(ctx: Context) -> CommandSpec:
                          "val/energy_per_atom_mae": 1.0, "val/forces_mae": 1.0},
         "loss": {
             "_target_": "tace.utils.loss.NormalLoss",
-            "loss_property": ["energy", "forces"],
-            "loss_function_name": ["mse_energy_per_atom", "mse_forces"],
-            "loss_property_weights": [1.0, 5.0],
-            "loss_function_kwargs": [{}, {}],
+            "loss_property": loss_property,
+            "loss_function_name": loss_function_name,
+            "loss_property_weights": loss_property_weights,
+            "loss_function_kwargs": [{} for _ in loss_property],
         },
         # replaced from the checkpoint at fine-tune time; `fidelity` is read
         # before that replacement so it must be present.
@@ -971,6 +1218,11 @@ SAVE_DIR = {save_dir!r}
 MODEL_NAME = {model_name!r}
 EPOCHS = {epochs}
 BATCH_SIZE = {batch_size}
+LEARNING_RATE = {learning_rate!r}
+TARGETS = {targets!r}
+ENERGY_LOSS_RATIO = {energy_loss_ratio!r}
+FORCE_LOSS_RATIO = {force_loss_ratio!r}
+STRESS_LOSS_RATIO = {stress_loss_ratio!r}
 DEVICE = {device!r}
 SEED = {seed}
 
@@ -983,19 +1235,26 @@ torch.manual_seed(SEED)
 
 
 def dataset(path):
-    structures, energies, forces = [], [], []
+    structures, energies, forces, stresses = [], [], [], []
     for atoms in read(path, index=":"):
         structures.append(AseAtomsAdaptor.get_structure(atoms))
         energies.append(float(atoms.get_potential_energy()) / len(atoms))  # eV/atom
         forces.append(atoms.get_forces().tolist())
-    return StructureData(structures=structures, energies=energies, forces=forces, shuffle=False)
+        if "s" in TARGETS:
+            # CHGNet labels are GPa with ASE's sign (model/dynamics.py:156
+            # returns prediction["s"] / 160.21766208 as the ASE stress)
+            stresses.append((atoms.get_stress(voigt=False) * 160.21766208).tolist())
+    return StructureData(structures=structures, energies=energies, forces=forces,
+                         stresses=stresses or None, shuffle=False)
 
 
 train_loader = get_loader(dataset(TRAIN), batch_size=BATCH_SIZE)
 val_loader = get_loader(dataset(VALID), batch_size=BATCH_SIZE) if VALID else train_loader
 model = CHGNet.load(model_name=MODEL_NAME, use_device=DEVICE)
-trainer = Trainer(model=model, targets="ef", optimizer="Adam", scheduler="CosLR", criterion="MSE",
-                  epochs=EPOCHS, learning_rate=1e-3, use_device=DEVICE, torch_seed=SEED, data_seed=SEED)
+trainer = Trainer(model=model, targets=TARGETS, energy_loss_ratio=ENERGY_LOSS_RATIO,
+                  force_loss_ratio=FORCE_LOSS_RATIO, stress_loss_ratio=STRESS_LOSS_RATIO,
+                  optimizer="Adam", scheduler="CosLR", criterion="MSE",
+                  epochs=EPOCHS, learning_rate=LEARNING_RATE, use_device=DEVICE, torch_seed=SEED, data_seed=SEED)
 pathlib.Path(SAVE_DIR).mkdir(parents=True, exist_ok=True)
 trainer.train(train_loader, val_loader, save_dir=SAVE_DIR)
 print(f"[chgnet_finetune] checkpoints in {{SAVE_DIR}}: " + ", ".join(sorted(p.name for p in pathlib.Path(SAVE_DIR).glob("*.pth.tar"))))
@@ -1005,11 +1264,32 @@ print(f"[chgnet_finetune] checkpoints in {{SAVE_DIR}}: " + ", ".join(sorted(p.na
 def build_chgnet(ctx: Context) -> CommandSpec:
     model_name = resolve_foundation_checkpoint(ctx.version, ctx.resolved)  # '0.3.0'
     train_path, valid_path = ctx.dataset_paths["train"], ctx.dataset_paths.get("valid")
+    # Native names from finetune/settings/CHGNet.json (Trainer kwargs)
+    epochs = ctx.native("epochs", default=ctx.epochs)
+    batch_size = ctx.native("batch_size", default=ctx.batch_size)
+    learning_rate = ctx.native("learning_rate", default=1e-3)
+    energy_loss_ratio = ctx.native("energy_loss_ratio", default=1.0)
+    force_loss_ratio = ctx.native("force_loss_ratio", default=1.0)
+    stress_loss_ratio = ctx.native("stress_loss_ratio", default=0.1)
+    # include_stress knob -> targets. The official "efsm" needs magmom labels
+    # the canonical extxyz does not carry, and stress labels it may not carry,
+    # so only a user choice turns on "s": True/False from the flag, or an
+    # explicit string via --set (its "m" is still dropped).
+    targets_setting = ctx.native("targets", default="ef")
+    if ctx.settings_origins.get("targets") != "user":
+        targets = "ef"
+    elif isinstance(targets_setting, bool):
+        targets = "efs" if targets_setting else "ef"
+    else:
+        targets = "efs" if "s" in str(targets_setting) else "ef"
     driver_path = ctx.out / "finetune_chgnet.py"
     driver_text = _CHGNET_DRIVER.format(
         train=str(train_path), valid=str(valid_path) if valid_path else None,
         save_dir=str(ctx.out / "chgnet_ft"), model_name=model_name,
-        epochs=int(ctx.epochs), batch_size=int(ctx.batch_size), device=ctx.device,
+        epochs=int(epochs), batch_size=int(batch_size), device=ctx.device,
+        learning_rate=float(learning_rate), targets=targets,
+        energy_loss_ratio=float(energy_loss_ratio), force_loss_ratio=float(force_loss_ratio),
+        stress_loss_ratio=float(stress_loss_ratio),
         seed=int(ctx.seed),
     )
     argv = [ctx.resolved["python"], str(driver_path)]
@@ -1112,12 +1392,28 @@ def render_slurm(resolved: dict, argv: list[str], out_dir: Path, *, job_name: st
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("model", help="framework or version name from models.json")
+    ap.add_argument("model", nargs="?", help="framework or version name from models.json")
     ap.add_argument("--version", default=None, help="specific version (default: family default_version)")
-    ap.add_argument("--dataset", required=True, type=Path, help="anything ase.io.read handles")
+    ap.add_argument("--dataset", type=Path, help="anything ase.io.read handles")
     ap.add_argument("--out", default=None, help="output directory (default: ./ft_<version>)")
-    ap.add_argument("--epochs", type=int, default=2)
-    ap.add_argument("--batch-size", type=int, default=2)
+    ap.add_argument("--show-settings", action="store_true",
+                    help="print the model's available settings and exit")
+    # Common knob flags
+    ap.add_argument("--epochs", type=int, default=None, help="override official FT value")
+    ap.add_argument("--max-steps", type=int, default=None, help="override official FT value")
+    ap.add_argument("--batch-size", type=int, default=None, help="override official FT value")
+    ap.add_argument("--lr", type=float, default=None, help="learning rate")
+    ap.add_argument("--scheduler", default=None, help="learning rate scheduler type")
+    ap.add_argument("--energy-weight", type=float, default=None, help="weight of energy loss")
+    ap.add_argument("--force-weight", type=float, default=None, help="weight of force loss")
+    ap.add_argument("--stress-weight", type=float, default=None, help="weight of stress loss")
+    ap.add_argument("--include-stress", action="store_true", default=None,
+                    help="include stress in training (explicit on)")
+    ap.add_argument("--no-stress", action="store_true", default=None,
+                    help="exclude stress from training (explicit off)")
+    ap.add_argument("--patience", type=int, default=None, help="early stopping patience")
+    ap.add_argument("--ema", action="store_true", default=None, help="enable exponential moving average")
+    ap.add_argument("--precision", default=None, help="floating-point precision (float32/float64)")
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     ap.add_argument("--split", type=float, default=0.9)
     ap.add_argument("--seed", type=int, default=None,
@@ -1126,11 +1422,32 @@ def main() -> int:
                          "unless --allow-partial-seed is given")
     ap.add_argument("--allow-partial-seed", action="store_true",
                     help="accept a data-split-only seed for NequIP/Allegro (recorded in ft_run.json)")
+    ap.add_argument("--set", action="append", dest="set_args", default=[],
+                    help="pass native setting: --set NAME=VALUE (repeatable)")
     ap.add_argument("--emit-only", action="store_true", help="write artifacts, never execute")
     ap.add_argument("--slurm", action="store_true",
                     help="also emit an SBATCH-wrapped script; implies --emit-only (nothing is run or sbatch'd)")
     ap.add_argument("--partition", default="gpu")
     args = ap.parse_args()
+
+    # Handle --show-settings early (no model/dataset required)
+    if args.show_settings:
+        if not args.model:
+            print("Error: model required for --show-settings", file=sys.stderr)
+            return 1
+        try:
+            resolved = reg.resolve(args.model)
+            framework = resolved["model"]
+            print(ft_settings.show_settings(framework))
+            return 0
+        except (ft_settings.SettingsError, reg.RegistryError) as e:
+            print(f"[ft_run] {e}", file=sys.stderr)
+            return 1
+
+    # Normal mode: model and dataset are required
+    if not args.model or not args.dataset:
+        ap.print_help(file=sys.stderr)
+        return 1
     seed_requested = args.seed is not None
     seed = int(args.seed) if seed_requested else 0
 
@@ -1138,6 +1455,77 @@ def main() -> int:
         family, version, finetune, resolved = load_finetune(args.model, args.version)
     except reg.RegistryError as exc:
         print(f"[ft_run] {exc}", file=sys.stderr)
+        return 1
+
+    # Parse --set NAME=VALUE arguments
+    user_values = {}
+    for arg in args.set_args:
+        if "=" not in arg:
+            print(f"[ft_run] --set format: NAME=VALUE (got {arg!r})", file=sys.stderr)
+            return 1
+        name, val_str = arg.split("=", 1)
+        user_values[name] = ft_settings._parse_yaml_scalar(val_str)
+
+    # Build knob overrides from CLI flags
+    user_knobs = {}
+    if args.epochs is not None:
+        user_knobs["epochs"] = args.epochs
+    if args.max_steps is not None:
+        user_knobs["max_steps"] = args.max_steps
+    if args.batch_size is not None:
+        user_knobs["batch_size"] = args.batch_size
+    if args.lr is not None:
+        user_knobs["lr"] = args.lr
+    if args.scheduler is not None:
+        user_knobs["scheduler"] = args.scheduler
+    if args.energy_weight is not None:
+        user_knobs["energy_weight"] = args.energy_weight
+    if args.force_weight is not None:
+        user_knobs["force_weight"] = args.force_weight
+    if args.stress_weight is not None:
+        user_knobs["stress_weight"] = args.stress_weight
+    if args.include_stress:
+        user_knobs["include_stress"] = True
+    if args.no_stress:
+        user_knobs["include_stress"] = False
+    if args.patience is not None:
+        user_knobs["patience"] = args.patience
+    if args.ema:
+        user_knobs["ema"] = True
+    if args.precision is not None:
+        user_knobs["precision"] = args.precision
+
+    # Handle --include-stress/--no-stress for frameworks that don't expose include_stress knob
+    # but do expose stress_weight knob (MACE, SevenNet, DeePMD). Map to stress_weight instead.
+    if "include_stress" in user_knobs:
+        settings_file = ft_settings.load_settings_file(family)
+        available_knobs = {s.get("knob") for s in settings_file.get("settings", []) if s.get("knob")}
+        if "include_stress" not in available_knobs and "stress_weight" in available_knobs:
+            # Framework doesn't expose include_stress knob, but does expose stress_weight
+            # Map --include-stress to stress_weight=positive (e.g., 1.0) or --no-stress to stress_weight=0
+            if user_knobs["include_stress"]:
+                # --include-stress: set stress_weight to a positive value if not already set
+                if "stress_weight" not in user_knobs:
+                    user_knobs["stress_weight"] = 1.0
+            else:
+                # --no-stress: set stress_weight to 0
+                user_knobs["stress_weight"] = 0.0
+            del user_knobs["include_stress"]  # remove the knob we just handled
+
+    # Validate that all requested knobs are supported by this framework (defect 3)
+    try:
+        ft_settings.validate_knobs_exist(family, set(user_knobs.keys()))
+    except ft_settings.SettingsError as e:
+        print(f"[ft_run] {e}", file=sys.stderr)
+        return 1
+
+    # Resolve settings
+    try:
+        resolved_settings, settings_origins = ft_settings.resolve_settings(
+            family, user_values=user_values, user_knobs=user_knobs
+        )
+    except ft_settings.SettingsError as e:
+        print(f"[ft_run] {e}", file=sys.stderr)
         return 1
 
     status = finetune.get("status")
@@ -1206,12 +1594,32 @@ def main() -> int:
     conv = run_ft_dataset(dataset, target, out / "data", args.split, seed,
                           python_bin=resolved["python"])
 
+    # Epochs and batch size as the user's knob values, when the framework exposes those
+    # knobs. Builders read every emitted value from `resolved_settings` by native name and
+    # refuse a setting that has no value; these two only feed builders that still take
+    # the common value directly.
+    knob_names = {s_["name"]: s_.get("knob") for s_ in ft_settings.load_settings_file(family)["settings"]}
+
+    def knob_value(knob):
+        for native, value in resolved_settings.items():
+            if knob_names.get(native) == knob and not isinstance(value, (dict, list)):
+                return value
+        return None
+
+    epochs_value = knob_value("epochs")
+    batch_value = knob_value("batch_size")
     ctx = Context(
         family=family, version=version, finetune=finetune, resolved=resolved, out=out,
-        epochs=args.epochs, batch_size=args.batch_size, device=args.device,
-        dataset_paths=conv["outputs"], elements=conv["elements"], seed=seed,
+        epochs=int(epochs_value) if isinstance(epochs_value, (int, float)) else None,
+        batch_size=int(batch_value) if isinstance(batch_value, (int, float)) else None,
+        device=args.device, dataset_paths=conv["outputs"], elements=conv["elements"], seed=seed,
+        settings=resolved_settings, settings_origins=settings_origins,
     )
-    spec = builder(ctx)
+    try:
+        spec = builder(ctx)
+    except ValueError as exc:
+        print(f"[ft_run] {version}: {exc}", file=sys.stderr)
+        return 1
 
     if spec.config_path is not None:
         spec.config_path.write_text(spec.config_text)
@@ -1233,7 +1641,9 @@ def main() -> int:
 
     record = run_record(args, version=version, family=family, resolved=resolved, out=out, dataset=dataset,
                         seed=seed, seed_requested=seed_requested, seed_scope=seed_scope, seed_basis=seed_basis,
-                        spec=spec, sh_path=sh_path, slurm_path=slurm_path, conversion=conv)
+                        spec=spec, sh_path=sh_path, slurm_path=slurm_path, conversion=conv,
+                        resolved_settings=resolved_settings, settings_origins=settings_origins,
+                        final_epochs=ctx.epochs, final_batch_size=ctx.batch_size)
     (out / "ft_run.json").write_text(json.dumps(record, indent=2) + "\n")
 
     if args.slurm:
@@ -1249,7 +1659,9 @@ def main() -> int:
 
 def run_record(args, *, version: str, family: str, resolved: dict, out: Path, dataset: Path,
                seed: int, seed_requested: bool, seed_scope: str, seed_basis: str,
-               spec: CommandSpec, sh_path: Path, slurm_path: Path | None, conversion: dict) -> dict:
+               spec: CommandSpec, sh_path: Path, slurm_path: Path | None, conversion: dict,
+               resolved_settings: dict | None = None, settings_origins: dict | None = None,
+               final_epochs: int | None = None, final_batch_size: int | None = None) -> dict:
     """<out>/ft_run.json -- the provenance the emitted artifacts alone do not
     carry: what was asked (the exact ft_run.py argv to re-materialize this
     run), how far the seed reaches, which file is the designated checkpoint,
@@ -1257,21 +1669,29 @@ def run_record(args, *, version: str, family: str, resolved: dict, out: Path, da
     hub-owned inputs it names by absolute path (models/<env>/... foundation
     weights, prestage caches) are re-created by install.sh and the prestage
     steps, not by the .sh -- after a fresh_root cleanup use `rematerialize`."""
+    # Build rematerialize argv from what was actually used
     rematerialize = [
         sys.executable, str(_SCRIPTS_DIR / "ft_run.py"), version,
         "--dataset", str(dataset), "--out", str(out),
-        "--epochs", str(args.epochs), "--batch-size", str(args.batch_size),
         "--device", args.device, "--split", str(args.split), "--seed", str(seed),
+    ]
+    # Add epochs/batch-size if they came from CLI (not defaults)
+    if args.epochs is not None:
+        rematerialize.extend(["--epochs", str(args.epochs)])
+    if args.batch_size is not None:
+        rematerialize.extend(["--batch-size", str(args.batch_size)])
+    rematerialize.extend([
         *(["--allow-partial-seed"] if seed_scope != "native" else []),
         "--emit-only",
-    ]
-    return {
+    ])
+    result = {
         "schema": "ft_run.json/1",
         "family": family, "version": version,
         "env": resolved.get("env"), "python": resolved.get("python"),
         "dataset": str(dataset),
         "out": str(out),
-        "epochs": int(args.epochs), "batch_size": int(args.batch_size),
+        "epochs": int(final_epochs) if final_epochs is not None else int(args.epochs or 0),
+        "batch_size": int(final_batch_size) if final_batch_size not in (None, "auto") else (int(args.batch_size or 0) if args.batch_size else 0),
         "device": args.device, "split": float(args.split),
         "seed": int(seed), "seed_requested": bool(seed_requested),
         "seed_control": {"scope": seed_scope, "basis": seed_basis},
@@ -1289,6 +1709,11 @@ def run_record(args, *, version: str, family: str, resolved: dict, out: Path, da
         "pre_steps": [[str(a) for a in step] for step in spec.pre_steps],
         "rematerialize": rematerialize,
     }
+    # Record all resolved settings with their origins
+    if resolved_settings:
+        result["settings"] = {name: {"value": val, "origin": settings_origins.get(name, "unknown")}
+                             for name, val in resolved_settings.items()}
+    return result
 
 
 if __name__ == "__main__":

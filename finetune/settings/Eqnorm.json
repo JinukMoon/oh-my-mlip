@@ -1,0 +1,11 @@
+{
+  "framework": "Eqnorm",
+  "pinned": "eqnorm @ git+https://github.com/yzchen08/eqnorm.git@57527db44fee9fab3fb5775dd860ca4bbe014f44",
+  "entrypoint": "none for training; inference only: EqnormCalculator(model_name='eqnorm', model_variant='eqnorm-mptrj', device='cuda')",
+  "stress": {
+    "supported": true,
+    "how_enabled": "inference only: STRESS: True in model_settings/eqnorm-mptrj.yaml:3"
+  },
+  "runnable_as_pinned": "not-supported",
+  "settings": []
+}

@@ -172,6 +172,23 @@ training SevenNet from the foundation checkpoint with my extxyz". Ask **which
 model** and **where the data is** if either is missing. Never write a training
 command or config from memory.
 
+0. **Read the framework's settings before asking about hyperparameters.**
+   `scripts/ft_run.py <model> --show-settings` prints the settings that framework
+   really has (from `finetune/settings/<Framework>.json`, taken from its pinned
+   source): native name, the common knob it belongs to, upstream default, the
+   official fine-tuning value where upstream publishes one, and whether a value
+   is required. Frameworks differ: DeePMD trains by steps, not epochs; MACE and
+   SevenNet turn stress on through its weight; some have no EMA or early stopping.
+   Show the user the handful that matter for their run (training length, batch
+   size, learning rate, energy/force/stress weights, stress on or off) and ask only
+   for those without a usable value. Values resolve as: user > official fine-tuning
+   value > upstream default; a required setting with none of these is refused.
+   Common knobs are flags (`--epochs`, `--max-steps`, `--batch-size`, `--lr`,
+   `--energy-weight`, `--force-weight`, `--stress-weight`, `--include-stress` /
+   `--no-stress`, `--patience`, `--ema`, `--precision`); any other setting passes
+   as `--set <native name>=<value>`. A knob the framework does not have is refused
+   with its list of available knobs; never map it to something else. `ft_run.json`
+   records every emitted value with its origin (user, official-finetune, default).
 1. **Convert the data.** `scripts/ft_dataset.py` reads anything `ase.io.read`
    reads and writes one extxyz with a `SinglePointCalculator` **and** the same
    values as `REF_energy`/`REF_forces`, so a single file serves MACE (reads
