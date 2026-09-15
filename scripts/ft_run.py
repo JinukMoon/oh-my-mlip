@@ -572,6 +572,12 @@ missing = sorted(set(cfg["model"]["type_map"]) - set(type_map))
 if missing:
     raise SystemExit(f"[dpa4_prestage] dataset elements not in the checkpoint type_map: {{missing}}")
 cfg["model"]["type_map"] = type_map
+# --use-pretrain-script copies only descriptor and fitting_net; the model type ("dpa4",
+# as in upstream examples/water/dpa4/lora_ft.json) and the bridging keys shape the
+# network too, so they are taken from the checkpoint as well.
+for key in ("type", "bridging_method", "bridging_r_inner", "bridging_r_outer"):
+    if key in params:
+        cfg["model"][key] = params[key]
 CONFIG.write_text(json.dumps(cfg, indent=2) + "\\n")
 print(f"[dpa4_prestage] type_map={{len(type_map)}} types from {{CKPT}} -> {{CONFIG}}")
 '''
