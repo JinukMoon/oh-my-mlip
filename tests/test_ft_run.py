@@ -463,6 +463,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         "UMA": ["runs/ft/checkpoints/step_1000/inference_ckpt.pt", "runs/ft/checkpoints/final/resume.yaml"],
         "fairchemv1": ["runs/checkpoints/ft/best_checkpoint.pt"],
         "EquFlash": ["runs/ft/checkpoints/best_checkpoint.pt", "runs/ft/logs/files/log.txt"],
+        "Nequix": ["wandb/offline-run-20260915_120000-abc/files/state.pkl", "state.pkl"],
     }
     for fam, globs in ft_run.FAMILY_CHECKPOINT_GLOBS.items():
         assert len(globs) == 1, (fam, globs)
@@ -616,6 +617,27 @@ def test_equflash_builder_uses_template_finetune_keys_on_checkpoint_config(tmp_p
     assert patch["stress"] is True and patch["loss"]["stress"] == 0.5
 
 
+def test_nequix_builder_uses_nqx_header_config_and_offline_wandb(tmp_path):
+    import json
+    ctx = _ctx("Nequix-MP-1", tmp_path)
+    spec = ft_run.build_nequix(ctx)
+    assert spec.argv == [ft_run.entrypoint_bin(ctx.resolved, "nequix_train"), str(ctx.out / "config.yml")]
+    assert spec.extra_env == {"WANDB_MODE": "offline", "WANDB_DIR": str(ctx.out)}
+    prestage = spec.extra_files[ctx.out / "nequix_prestage.py"]
+    compile(prestage, "nequix_prestage.py", "exec")
+    # finetune_from with atom_energies raises NotImplementedError in the JAX trainer
+    assert 'for key in ("atom_energies", "resume_from", "valid_frac")' in prestage
+    patch = json.loads(spec.config_text)
+    assert patch["checkpoint"].endswith("nequix-mp-1.nqx")
+    assert patch["config"]["stress_weight"] == 0.0 and patch["kernel"] is None
+    assert patch["config"]["learning_rate"] == 0.003 and patch["config"]["optimizer"] == "muon"
+    ctx.settings.update({"stress_weight": 5.0, "kernel": False})
+    ctx.settings_origins.update({"stress_weight": "user", "kernel": "user"})
+    patch = json.loads(ft_run.build_nequix(ctx).config_text)
+    assert patch["config"]["stress_weight"] == 5.0 and patch["kernel"] is False
+    assert ft_run.SEED_CONTROL["Nequix"][0] == "none"
+
+
 def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):
     import json
     ctx = _ctx("SevenNet-Omni", tmp_path)
@@ -630,7 +652,7 @@ def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):
 def test_seed_control_table_covers_every_builder():
     assert set(ft_run.SEED_CONTROL) == set(ft_run.BUILDERS)
     for fam, (scope, basis) in ft_run.SEED_CONTROL.items():
-        assert scope in ("native", "data-split-only"), fam
+        assert scope in ("native", "data-split-only", "none"), fam
         assert basis and ("." in basis), fam  # names an installed source
     assert ft_run.SEED_CONTROL["NequIP"][0] == ft_run.SEED_CONTROL["Allegro"][0] == "data-split-only"
     assert "global_state.py:79" in ft_run.SEED_CONTROL["NequIP"][1]
@@ -662,6 +684,8 @@ def test_seed_is_never_silently_dropped(tmp_path):
     """Grep-level replay of the reviewer's probe: the literal seed must
     appear in the rendered command or config of every builder family."""
     for fam in ft_run.BUILDERS:
+        if ft_run.SEED_CONTROL[fam][0] == "none":
+            continue  # no seed key exists; an explicit --seed is refused instead (exit 5)
         version = next(v for v, e in reg.load_models()[fam]["versions"].items() if (e or {}).get("finetune"))
         ctx = _ctx(version, tmp_path)
         ctx.seed = 4242

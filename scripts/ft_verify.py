@@ -45,6 +45,9 @@ Witness contract (consumed by scripts/ft_sweep.py): the verdict JSON carries
                                     kernel activity) count as GPU compute, which
                                     covers a saved_model forward run as one XLA
                                     cluster that logs no per-op placement.
+                    Nequix (JAX)    jax.profiler traces the forward; a GPU
+                                    forward adds a /device:GPU:N process whose
+                                    CUPTI stream names include Compute.
   witness         the raw counts behind gpu_used (backend, op totals, names)
 A `--device cpu` run pins CUDA_VISIBLE_DEVICES="" (and deepmd's DEVICE=cpu)
 in the child so families whose calculators auto-select a GPU really stay on
@@ -242,8 +245,71 @@ print(json.dumps({
 }))
 '''
 
+# JAX (Nequix): jax.profiler.start_trace/stop_trace around the forward writes a Chrome
+# trace. Checked in the nequix env (jax 0.6.2, RTX 4060 Ti): a GPU forward adds a process
+# named /device:GPU:0 whose stream thread names list the CUPTI activity kinds seen
+# (e.g. "Stream #13(MemcpyH2D,Memset,Compute,MemcpyD2D)"); with CUDA_VISIBLE_DEVICES=""
+# there is no GPU process. The export caps the event list, so the per-kernel events can be
+# cut, but the process/stream name records come first; a stream whose name includes
+# Compute on a GPU process is the execution record counted here. jax.profiler.ProfileData
+# is unavailable in that env and no xplane protobuf reader is installed.
+_JAX_WITNESS_TAIL = '''
+import glob
+import gzip
+import os
+import shutil
+import sys
+import tempfile
+import jax
+import jax.profiler
+
+_gpus = [str(d) for d in jax.devices() if "cuda" in str(d).lower() or "gpu" in str(d).lower()]
+_prof_dir = tempfile.mkdtemp(prefix="ft_verify_jaxprof_")
+_prof_error = None
+try:
+    jax.profiler.start_trace(_prof_dir)
+except Exception as _exc:
+    _prof_error = repr(_exc)
+e = float(atoms.get_potential_energy())
+f = atoms.get_forces()
+compute_streams = 0
+stream_names = []
+if _prof_error is None:
+    try:
+        jax.profiler.stop_trace()
+        for _p in glob.glob(os.path.join(_prof_dir, "**", "*.trace.json.gz"), recursive=True):
+            with gzip.open(_p) as _fh:
+                _trace = json.load(_fh)
+            _gpu_pids, _compute = set(), {}
+            for _ev in _trace.get("traceEvents", []):
+                if _ev.get("ph") != "M":
+                    continue
+                _args = _ev.get("args") or {}
+                if _ev.get("name") == "process_name" and str(_args.get("name", "")).startswith("/device:GPU:"):
+                    _gpu_pids.add(_ev.get("pid"))
+                elif _ev.get("name") == "thread_name" and "Compute" in str(_args.get("name", "")):
+                    _compute.setdefault(_ev.get("pid"), []).append(str(_args["name"]))
+            for _pid, _names in _compute.items():
+                if _pid in _gpu_pids:
+                    compute_streams += len(_names)
+                    stream_names.extend(_names)
+    except Exception as _exc:
+        _prof_error = repr(_exc)
+        compute_streams = 0
+shutil.rmtree(_prof_dir, ignore_errors=True)
+gpu_used = bool(_gpus) and compute_streams > 0
+import numpy as _np
+print(json.dumps({
+    "energy_ev": e, "forces_shape": list(f.shape), "forces_finite": bool(_np.isfinite(_np.asarray(f, dtype=float)).all()),
+    "gpu_used": gpu_used, "device": DEVICE,
+    "witness": {"backend": "jax", "method": "jax.profiler trace: Compute streams on /device:GPU processes during E/F forward",
+                "jax_gpu_devices": _gpus, "gpu_compute_streams": compute_streams,
+                "stream_names": stream_names[:8], "profiler_error": _prof_error},
+}))
+'''
+
 # Which witness tail each family's backend needs.
-_WITNESS_FOR = {"GRACE": _TF_WITNESS_TAIL}
+_WITNESS_FOR = {"GRACE": _TF_WITNESS_TAIL, "Nequix": _JAX_WITNESS_TAIL}
 
 # One inline script per family: {ckpt} is substituted with the repr()'d
 # absolute checkpoint path, {device} with "cuda"/"cpu". Each template binds
@@ -383,6 +449,16 @@ from GGNN.common.calculator import UCalculator
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 atoms.calc = UCalculator(checkpoint_path={ckpt}, cpu={device!r} == "cpu")
 ''',
+    # nequix_train writes a JAX checkpoint.nqx, reloaded with the registry's own JAX backend
+    # (the torch backend needs e3nn, which the env does not carry). use_kernel needs
+    # OpenEquivariance, which the fine-tune does not require.
+    "Nequix": '''
+import json
+from ase.build import bulk
+from nequix.calculator import NequixCalculator
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
+atoms.calc = NequixCalculator(model_path={ckpt}, backend="jax", use_kernel=False)
+''',
 }
 _LOADER_TEMPLATE["DPA4"] = _LOADER_TEMPLATE["DeePMD"]
 _LOADER_TEMPLATE["Allegro"] = _LOADER_TEMPLATE["NequIP"]
@@ -481,7 +557,7 @@ N_ATOMS = 4
 
 # The count the witness tail must have recorded on the GPU for gpu_used to be
 # true -- the verdict re-derives gpu_used from it instead of trusting the flag.
-_GPU_COUNT_KEY = {"torch": "cuda_compute_ops", "tensorflow": "gpu_compute_ops"}
+_GPU_COUNT_KEY = {"torch": "cuda_compute_ops", "tensorflow": "gpu_compute_ops", "jax": "gpu_compute_streams"}
 
 
 def judge(witness: dict, device: str) -> str:

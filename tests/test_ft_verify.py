@@ -87,6 +87,12 @@ def test_every_template_defers_the_forward_to_a_backend_witness(family):
         assert "gpu_count = sum(gpu_ops.values()) + gpu_plane_events" in tail
         assert "gpu_used = bool(_gpus) and gpu_count > 0" in tail
         assert '"backend": "tensorflow"' in tail
+    elif family == "Nequix":
+        # JAX: CUPTI Compute streams on a /device:GPU process in the jax.profiler trace
+        assert "jax.profiler.start_trace(_prof_dir)" in tail
+        assert 'startswith("/device:GPU:")' in tail and '"Compute" in' in tail
+        assert "gpu_used = bool(_gpus) and compute_streams > 0" in tail
+        assert '"backend": "jax"' in tail
     else:
         assert "TorchDispatchMode" in tail
         assert "gpu_used = bool(_w.cuda_ops)" in tail
@@ -150,6 +156,15 @@ def _tf_line(**over) -> dict:
 def test_judge_passes_a_consistent_cuda_witness():
     assert ft_verify.judge(_torch_line(), "cuda") == ""
     assert ft_verify.judge(_tf_line(), "cuda") == ""
+
+
+def test_judge_reads_the_jax_compute_stream_count():
+    line = {"energy_ev": -16.38, "forces_shape": [4, 3], "forces_finite": True, "gpu_used": True, "device": "cuda",
+            "witness": {"backend": "jax", "gpu_compute_streams": 1, "jax_gpu_devices": ["cuda:0"]}}
+    assert ft_verify.judge(line, "cuda") == ""
+    line.update(gpu_used=False)
+    line["witness"]["gpu_compute_streams"] = 0
+    assert ft_verify.judge(line, "cuda") == "gpu_not_used"
 
 
 def test_judge_cuda_fails_when_no_compute_op_ran_on_the_gpu():

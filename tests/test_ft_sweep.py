@@ -256,6 +256,7 @@ EXPECTED_CKPT = {
     "UMA": "runs/ft/checkpoints/final/inference_ckpt.pt",
     "fairchemv1": "runs/checkpoints/ft/checkpoint.pt",
     "EquFlash": "runs/ft/checkpoints/checkpoint.pt",
+    "Nequix": "wandb/offline-run-20260915_120000-abc/files/checkpoint.nqx",
 }
 # Files that ALSO exist in the same tree and must not be chosen
 DECOYS = {
