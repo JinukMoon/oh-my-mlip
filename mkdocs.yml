@@ -18,6 +18,8 @@ exclude_docs: |
 
 theme:
   name: material
+  logo: assets/icon.png
+  favicon: assets/icon.png
   features:
     - navigation.sections
     - navigation.top

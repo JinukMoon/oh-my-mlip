@@ -1,5 +1,9 @@
 # oh-my-mlip
 
+<p align="center">
+  <img src="assets/logo.png" alt="oh-my-mlip — machine learning interatomic potentials" width="560">
+</p>
+
 **One registry, many MLIPs.** oh-my-mlip installs 20 machine-learning
 interatomic-potential frameworks (32 model variants), each in its own conda
 environment built from a pinned recipe, and gives you the exact lines to use
