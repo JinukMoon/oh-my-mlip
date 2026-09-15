@@ -435,7 +435,7 @@
       "default_required": false,
       "default_note": null,
       "default_source": "mace/tools/arg_parser.py:813",
-      "ft_value": "--ema",
+      "ft_value": true,
       "ft_source": "README.md:313",
       "training_value": null,
       "training_source": null
@@ -659,7 +659,7 @@
       "default_required": false,
       "default_note": null,
       "default_source": "mace/tools/arg_parser.py:770",
-      "ft_value": "--amsgrad",
+      "ft_value": true,
       "ft_source": "README.md:315",
       "training_value": null,
       "training_source": null

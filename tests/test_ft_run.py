@@ -479,11 +479,14 @@ def test_sevennet_builder_defers_preset_to_prestage_and_seeds(tmp_path):
     # train.epoch / data.batch_size come from SevenNet.json ft_value (100 / 4), not ctx.epochs
     assert patch["train.per_epoch"] == 1 and patch["train.epoch"] == 100 and patch["data.batch_size"] == 4
     assert patch["data.load_trainset_path"] == [{"data_modality": "mpa", "file_list": [{"file": ctx.dataset_paths["train"]}]}]
-    assert patch["data.load_mpa_validset_path"][0]["file_list"][0]["file"] == ctx.dataset_paths["valid"]
+    # loaded as `validset` so sevenn writes checkpoint_best.pth; the preset's modal key is removed
+    assert patch["data.load_validset_path"][0]["file_list"][0]["file"] == ctx.dataset_paths["valid"]
+    assert patch["data.load_mpa_validset_path"] is None
     # the prestage applies the patch to whatever the installed preset prints
     ns: dict = {}
     fake_bin = tmp_path / "sevenn_preset"
-    fake_bin.write_text("#!/bin/sh\nprintf 'train:\\n  random_seed: 777\\n  epoch: 100\\ndata:\\n  batch_size: 8\\n'\n")
+    fake_bin.write_text("#!/bin/sh\nprintf 'train:\\n  random_seed: 777\\n  epoch: 100\\ndata:\\n  batch_size: 8\\n"
+                        "  load_mpa_validset_path: placeholder\\n'\n")
     fake_bin.chmod(0o755)
     text = prestage.replace(f"PRESET_BIN = '{ft_run.entrypoint_bin(ctx.resolved, 'sevenn_preset')}'",
                             f"PRESET_BIN = '{fake_bin}'")
@@ -492,6 +495,7 @@ def test_sevennet_builder_defers_preset_to_prestage_and_seeds(tmp_path):
     cfg = yaml.safe_load((ctx.out / "input.yaml").read_text())
     assert cfg["train"]["random_seed"] == 7 and cfg["train"]["epoch"] == 100 and cfg["train"]["per_epoch"] == 1
     assert cfg["data"]["batch_size"] == 4 and cfg["train"]["continue"]["checkpoint"] == "7net-mf-ompa"
+    assert "load_mpa_validset_path" not in cfg["data"] and "load_validset_path" in cfg["data"]
 
 
 def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):
