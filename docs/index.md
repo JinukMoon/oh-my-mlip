@@ -32,8 +32,8 @@ With Claude Code, install the plugin once and ask in plain language
 | Use a model in your own script | [Use a model](howto/use-a-model.md) |
 | Benchmark adsorption energies | [Benchmark with CatBench](howto/catbench.md) |
 | Turn your VASP calculations into a benchmark | [Convert VASP results](howto/vasp-to-catbench.md) |
-| Fine-tune a foundation model on your data | [Fine-tune](howto/finetune.md) |
-| Distill a model into a LAMMPS student | [Distill](howto/distill.md) |
+| Fine-tune a foundation model on your data | [Fine-tuning](howto/finetune.md) |
+| Distill any hub model into an NN-MTP student for LAMMPS | [Distillation](howto/distill.md) |
 
 ## How it works
 

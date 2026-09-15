@@ -1,9 +1,15 @@
-# Distill
+# Distillation
 
-Distillation turns a large teacher MLIP into a small NN-MTP student that runs
-in LAMMPS on CPUs. The active-learning loop is the separate GPL-2.0 project
-[onthefly-distill](https://github.com/JinukMoon/onthefly-distill); oh-my-mlip
-prepares the run and invokes it, copying nothing in.
+Distill any model in the hub into an **NN-MTP** student. NN-MTP is a compact
+machine-learning potential with a ready LAMMPS pair style (`nnmtp`), so the
+student runs large MD on CPUs — no Python and no LibTorch at run time.
+
+Pick a teacher with `--teacher` (any installed model or version, e.g.
+`MACE-MPA-0`, `UMA-s-1p2-OMAT`); oh-my-mlip builds the teacher hook from the
+registry's own calculator lines, so no teacher-specific code is written by
+hand. The active-learning loop is the separate GPL-2.0 project
+[onthefly-distill](https://github.com/JinukMoon/onthefly-distill), invoked and
+never copied in. Structures may contain up to four chemical species.
 
 ## Prerequisites
 

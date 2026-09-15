@@ -22,8 +22,8 @@ and never reimplements a model.
 |---|---|---|
 | 1 | [Install & environments](#install--environments) | `/oh-my-mlip:setup MACE` |
 | 2 | [Benchmark (catbench)](#benchmark-catbench) | `/oh-my-mlip:catbench` |
-| 3 | [Fine-tune](#fine-tune) | `/oh-my-mlip:finetune` |
-| 4 | [Distill](#distill) | `/oh-my-mlip:distill` |
+| 3 | [Fine-tuning](#fine-tuning) | `/oh-my-mlip:finetune` |
+| 4 | [Distillation](#distillation) | `/oh-my-mlip:distill` |
 
 ## Quickstart (Claude Code)
 
@@ -109,28 +109,32 @@ python <repo>/scripts/catbench_report.py --result ./result --out ./report
 
 Full procedure: [`recipes/catbench.md`](recipes/catbench.md).
 
-## Fine-tune
+## Fine-tuning
 
 ```bash
 python scripts/ft_run.py MACE --dataset my_frames.traj --out ft_mace
 python scripts/ft_verify.py ft_mace/<checkpoint> --model MACE --json
 ```
 
-Datasets are anything ASE reads; each framework's upstream trainer, config and
-checkpoint handling are in [`docs/finetune.md`](docs/finetune.md). Licenses of
-non-commercial checkpoints are shown before training.
+Every framework fine-tunes differently (CLI flags, YAML or JSON configs, its
+own dataset layout). One command converts an ASE-readable dataset, writes the
+framework's own config and command, and runs the upstream trainer. Per-framework
+details: [`docs/finetune.md`](docs/finetune.md); licenses of non-commercial
+checkpoints are shown before training.
 
-## Distill
+## Distillation
 
 ```bash
 python scripts/distill_bootstrap.py --teacher MACE-MPA-0 --structure slab.vasp --work ./distill
 cd distill && sh run_distill.sh
 ```
 
-A teacher MLIP labels structures for a small NN-MTP student that runs in
-LAMMPS on CPUs, in an active-learning loop driven by the separate GPL-2.0
-project [`onthefly-distill`](https://github.com/JinukMoon/onthefly-distill)
-(invoked, never copied in).
+Distill any hub model into an **NN-MTP** student: a compact potential with a
+ready LAMMPS pair style, so the student runs large MD on CPUs with no Python or
+LibTorch. Any installed model can be the teacher; the active-learning loop is
+the separate GPL-2.0 project
+[`onthefly-distill`](https://github.com/JinukMoon/onthefly-distill) (invoked,
+never copied in).
 
 ## Supported MLIPs
 

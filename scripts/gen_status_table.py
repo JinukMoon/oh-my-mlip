@@ -13,15 +13,16 @@ and keeps both byte-for-byte in sync (CI runs `--check`):
      in `README.md`. One row per framework, variant names comma-joined — just
      enough to see what is available, scannable and short.
 
-  2. The FULL detailed table (Model / Framework / Weights / Validation / Gated /
-     v1 tarball — one row per model+version) for `docs/model_status.md`, between
+  2. The FULL detailed table (Model / Framework / Weights / Gated / v1 tarball —
+     one row per model+version) for `docs/model_status.md`, between
 
          <!-- STATUS_TABLE_DETAILED_START -->
          <!-- STATUS_TABLE_DETAILED_END -->
 
-Both are derived ENTIRELY from the registry's per-version `validation` /
-`weights` / `gated` fields, so neither view can drift from `models.json`. This
-guards against an "all-validated" overclaim.
+Both are derived ENTIRELY from the registry (`weights` / `gated` per version,
+`dist_manifest.json` for tarballs), so neither view can drift from
+`models.json`. The per-version `validation` field stays in the registry (and in
+the MCP `model_status` tool) but is not rendered in the public docs.
 
 Modes:
   (default)   print both generated blocks to stdout (clearly delimited).
@@ -54,32 +55,16 @@ END_MARKER = "<!-- STATUS_TABLE_END -->"
 DETAILED_START_MARKER = "<!-- STATUS_TABLE_DETAILED_START -->"
 DETAILED_END_MARKER = "<!-- STATUS_TABLE_DETAILED_END -->"
 
-# Human-readable validation labels. The registry carries machine codes; the
-# table renders them so a reader sees ship state at a glance.
-_VALIDATION_LABEL = {
-    "validated_sm86": "validated (sm86)",
-    "validated_sm89": "validated (sm89)",
-    "gpu_pending": "gpu pending",
-    "cpu_only": "cpu only",
-    "tier1_cpu_driver_skew": "tier-1 CPU (driver skew)",
-}
-
-
-def _validation_label(code: str) -> str:
-    return _VALIDATION_LABEL.get(code, code)
-
-
-def _detailed_rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
-    """Build (Model, Framework, Weights, Validation, Gated, v1 tarball) rows in a
-    stable order: registry framework order, then version order within each
-    framework. The `v1 tarball` column is derived from dist_manifest.json via
+def _detailed_rows(models: dict) -> list[tuple[str, str, str, str, str]]:
+    """Build (Model, Framework, Weights, Gated, v1 tarball) rows in a stable
+    order: registry framework order, then version order within each framework.
+    The `v1 tarball` column is derived from dist_manifest.json via
     registry.published_envs() — `published (<rev>)` when the tarball is
     actually live on the Hub, `upload-pending` for v1-authored frameworks
-    (`_meta.shipped_v1`) not yet uploaded, `Phase 2` otherwise. This is kept
-    distinct from the per-model GPU `validation` state."""
+    (`_meta.shipped_v1`) not yet uploaded, `Phase 2` otherwise."""
     shipped = set(models.get("_meta", {}).get("shipped_v1", []))
     published = registry.published_envs()
-    rows: list[tuple[str, str, str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str, str]] = []
     for framework, info in models.items():
         if framework.startswith("_"):
             continue
@@ -89,7 +74,6 @@ def _detailed_rows(models: dict) -> list[tuple[str, str, str, str, str, str]]:
                     vinfo.get("mlip_name", version),
                     framework,
                     vinfo.get("weights", "bundled"),
-                    _validation_label(vinfo.get("validation", "unknown")),
                     "yes" if vinfo.get("gated", False) else "no",
                     f"published ({published[info['env']]})"
                     if info.get("env") in published
@@ -125,14 +109,11 @@ def render_simple_list(models: dict) -> str:
 
 def render_detailed_table(models: dict) -> str:
     """Render the full detailed markdown table (no trailing newline)."""
-    header = "| Model | Framework | Weights | Validation | Gated | v1 tarball |"
-    sep = "|---|---|---|---|---|---|"
+    header = "| Model | Framework | Weights | Gated | v1 tarball |"
+    sep = "|---|---|---|---|---|"
     lines = [header, sep]
-    for model, framework, weights, validation, gated, shipped in _detailed_rows(models):
-        lines.append(
-            f"| {model} | {framework} | {weights} | {validation} | "
-            f"{gated} | {shipped} |"
-        )
+    for model, framework, weights, gated, shipped in _detailed_rows(models):
+        lines.append(f"| {model} | {framework} | {weights} | {gated} | {shipped} |")
     return "\n".join(lines)
 
 

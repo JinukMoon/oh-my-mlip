@@ -19,6 +19,7 @@ exclude_docs: |
 theme:
   name: material
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.top
     - navigation.footer
@@ -45,24 +46,26 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - How-to:
+  - Getting started:
       - Install models: howto/install.md
       - Use a model: howto/use-a-model.md
+      - Use with Claude Code: claude_plugin.md
+  - Workflows:
       - Benchmark with CatBench: howto/catbench.md
-      - Convert VASP results for CatBench: howto/vasp-to-catbench.md
-      - Fine-tune: howto/finetune.md
-      - Distill: howto/distill.md
-  - Reference:
-      - Python API: reference/api.md
+      - VASP results to CatBench: howto/vasp-to-catbench.md
+      - Fine-tuning: howto/finetune.md
+      - Distillation: howto/distill.md
+  - Models:
       - Supported models: model_status.md
-      - Environment recipes: recipes.md
+      - Install recipes per framework: recipes.md
       - Fine-tuning per framework: finetune.md
+      - Licenses: model_licenses.md
       - Gated models: gated_models.md
       - Hugging Face token: hf_token.md
+  - Reference:
+      - Python API: reference/api.md
       - CatBench data format: catbench_data_format.md
       - GPU-architecture compilation: arch_first_run_compile.md
-      - Accelerator compile: compile.md
+      - Accelerators: compile.md
       - Weight integrity: weights_integrity.md
-      - Model licenses: model_licenses.md
       - Host requirements: host_requirements.md
-      - Claude Code plugin: claude_plugin.md

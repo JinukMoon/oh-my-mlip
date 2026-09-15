@@ -1,7 +1,14 @@
-# Fine-tune
+# Fine-tuning
 
-Fine-tuning dialects differ between frameworks — CLI flags, YAML keys, dataset
-formats. oh-my-mlip writes each framework's own training command for you.
+Every framework fine-tunes differently: MACE takes command-line flags, NequIP
+and SevenNet read YAML configs, DeePMD reads `input.json`, and each expects its
+own dataset layout. You give oh-my-mlip one command and one ASE-readable
+dataset; it converts the data to that framework's format, writes the
+framework's **own** training config and command, and runs the upstream
+trainer — nothing is reimplemented.
+
+Which models can be fine-tuned, with the exact upstream command, config and
+dataset format for each: [Fine-tuning per framework](../finetune.md).
 
 ## Train
 
