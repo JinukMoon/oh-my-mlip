@@ -58,7 +58,7 @@ from its upstream default, and the run records which one it was.
 
     | Option | Effect |
     |---|---|
-    | `--show-settings` | list native settings, their common knob, default, official fine-tuning value and whether they are required |
+    | `--show-settings` | list native settings, the flag that sets each (if any), default, official fine-tuning value and whether they are required |
     | `--epochs`, `--max-steps`, `--batch-size`, `--lr` | training length, batch size, learning rate |
     | `--energy-weight`, `--force-weight`, `--stress-weight` | loss weights |
     | `--include-stress`, `--no-stress` | train on stress or not |

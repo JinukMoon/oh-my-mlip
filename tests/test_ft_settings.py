@@ -175,6 +175,51 @@ class TestValidateKnobsExist:
             ft_settings.validate_knobs_exist("MACE", {"bad1", "bad2"})
 
 
+def test_a_flag_sets_only_the_settings_it_means():
+    # --lr is the start learning rate; it must not also become DPA4's stop_lr (a constant
+    # 1e-3 schedule diverged on the demo fine-tune)
+    settings, origins = ft_settings.resolve_settings("DPA4", user_knobs={"lr": 1e-3})
+    assert settings["start_lr"] == 1e-3 and origins["start_lr"] == "user"
+    assert origins.get("stop_lr") != "user"
+    # a weight knob sets the start and limit prefactors, never a boolean or another loss term
+    settings, origins = ft_settings.resolve_settings("DPA4", user_knobs={"energy_weight": 3.0})
+    assert settings["start_pref_e"] == 3.0 and settings["limit_pref_e"] == 3.0
+    assert origins.get("enable_atom_ener_coeff") != "user" and origins.get("start_pref_ae") != "user"
+
+
+def test_every_flag_knob_lands_on_a_setting_of_a_matching_type():
+    import json
+    from pathlib import Path
+    kinds = {"epochs": "int", "max_steps": "int", "batch_size": "int", "patience": "int", "lr": "float",
+             "energy_weight": "float", "force_weight": "float", "stress_weight": "float",
+             "scheduler": "str", "precision": "str", "include_stress": "bool", "ema": "bool"}
+    # settings a builder takes the flag's value for although upstream types them otherwise
+    builder_exceptions = {("TACE", "dataset.train_dataloader"), ("TACE", "loss.loss_property"),
+                          ("CHGNet", "targets"), ("GRACE", "loss.stress"), ("DPA4", "numb_epoch"),
+                          ("NequIP", "include stress (training_module.loss._target_: nequip.train.EnergyForceStressLoss)"),
+                          ("Allegro", "include stress (training_module.loss._target_: nequip.train.EnergyForceStressLoss)")}
+    tokens = {"int": {"int", "integer"}, "float": {"float"}, "str": {"str", "string"}, "bool": {"bool", "boolean"}}
+    import re
+    for path in sorted(Path(ft_settings.__file__).resolve().parents[1].glob("finetune/settings/*.json")):
+        data = json.loads(path.read_text())
+        for s in data["settings"]:
+            knob = s.get("knob")
+            if not knob:
+                continue
+            assert knob in kinds, f"{data['framework']}: {s['name']} has non-flag knob {knob}"
+            if (data["framework"], s["name"]) in builder_exceptions:
+                continue
+            words = set(re.findall(r"[a-z]+", str(s.get("type") or "").lower()))
+            assert words & tokens[kinds[knob]], f"{data['framework']}: --{knob} -> {s['name']} ({s.get('type')})"
+
+
+def test_type_mismatched_label_is_related_not_a_flag():
+    # GRACE's stop_at_min is a bool labelled "patience"; --patience must be refused, not set it
+    with pytest.raises(ft_settings.SettingsError):
+        ft_settings.validate_knobs_exist("GRACE", {"patience"})
+    assert "(related to patience; use --set)" in ft_settings.show_settings("GRACE")
+
+
 def test_numeric_text_defaults_resolve_to_numbers():
     settings, _ = ft_settings.resolve_settings("DeePMD", user_knobs={"max_steps": 10, "lr": 0.001})
     assert settings["learning_rate.stop_lr"] == 1e-8 and isinstance(settings["learning_rate.stop_lr"], float)

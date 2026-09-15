@@ -161,8 +161,14 @@ def show_settings(framework: str) -> str:
     for s in settings_list:
         native = s["name"]
         knob = s.get("knob")
-        # Show knob-to-native mapping if a knob exists
-        knob_mapping = f"{knob} → {native}" if knob else "—"
+        # Show knob-to-native mapping if a knob exists; a setting that is only related to a
+        # knob's topic is not set by that flag and is reachable with --set
+        if knob:
+            knob_mapping = f"{knob} → {native}"
+        elif s.get("related_knob"):
+            knob_mapping = f"(related to {s['related_knob']}; use --set)"
+        else:
+            knob_mapping = "—"
         default = s.get("default", "—")
         ft_val = s.get("ft_value") or "—"
         stype = s.get("type", "?")

@@ -175,7 +175,7 @@ command or config from memory.
 0. **Read the framework's settings before asking about hyperparameters.**
    `scripts/ft_run.py <model> --show-settings` prints the settings that framework
    really has (from `finetune/settings/<Framework>.json`, taken from its pinned
-   source): native name, the common knob it belongs to, upstream default, the
+   source): native name, the flag that sets it (if any), upstream default, the
    official fine-tuning value where upstream publishes one, and whether a value
    is required. Frameworks differ: DeePMD trains by steps, not epochs; MACE and
    SevenNet turn stress on through its weight; some have no EMA or early stopping.
@@ -186,8 +186,11 @@ command or config from memory.
    Common knobs are flags (`--epochs`, `--max-steps`, `--batch-size`, `--lr`,
    `--energy-weight`, `--force-weight`, `--stress-weight`, `--include-stress` /
    `--no-stress`, `--patience`, `--ema`, `--precision`); any other setting passes
-   as `--set <native name>=<value>`. A knob the framework does not have is refused
-   with its list of available knobs; never map it to something else. `ft_run.json`
+   as `--set <native name>=<value>`. A flag sets only the settings listed against it
+   (`--lr` is the start learning rate, not the final one); settings marked "related
+   to <flag>" are not touched by that flag and take `--set`. A knob the framework
+   does not have is refused with its list of available knobs; never map it to
+   something else. `ft_run.json`
    records every emitted value with its origin (user, official-finetune, default).
 1. **Convert the data.** `scripts/ft_dataset.py` reads anything `ase.io.read`
    reads and writes one extxyz with a `SinglePointCalculator` **and** the same
