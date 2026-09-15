@@ -856,8 +856,9 @@ def build_pet(ctx: Context) -> CommandSpec:
 # keyed total_energy_rmse/forces_rmse), data/datamodule/_ase_datamodule.py
 # (ASEDataModule seed/train_file_path/val_file_path/transforms +
 # train_dataloader/val_dataloader dicts), data/transforms
-# (ChemicalSpeciesToAtomTypeMapper(chemical_symbols=...) accepted by both
-# versions; NeighborListTransform(r_max=...)), model/saved_models/package.py
+# (ChemicalSpeciesToAtomTypeMapper(chemical_symbols=...) in 0.15.0; 0.17.1 raises on it and
+# takes model_type_names instead -- the prestage rewrites the key for the installed
+# version; NeighborListTransform(r_max=...) in both), model/saved_models/package.py
 # (ModelFromPackage(package_path) with the `.nequip.zip` extension enforced),
 # model/saved_models/load_utils.py (`_get_model_file_path` resolves a
 # `nequip.net:<group>/<model>:<version>` ID; 0.17.1 caches under
@@ -903,6 +904,15 @@ cfg = yaml.safe_load(TEMPLATE.read_text())
 cfg["model_type_names"] = type_names
 cfg["cutoff_radius"] = r_max
 cfg["training_module"]["model"]["package_path"] = str(PACKAGE)
+# ChemicalSpeciesToAtomTypeMapper takes chemical_symbols in nequip 0.15.0 but raises on it
+# in 0.17.1, which takes model_type_names (identity species map by default); follow the
+# installed signature.
+import inspect
+from nequip.data.transforms import ChemicalSpeciesToAtomTypeMapper
+if "model_type_names" in inspect.signature(ChemicalSpeciesToAtomTypeMapper.__init__).parameters:
+    for tr in cfg["data"]["transforms"]:
+        if tr.get("_target_", "").endswith("ChemicalSpeciesToAtomTypeMapper") and "chemical_symbols" in tr:
+            tr["model_type_names"] = tr.pop("chemical_symbols")
 CONFIG.write_text(yaml.safe_dump(cfg, sort_keys=False))
 (CONFIG.parent / "foundation.json").write_text(json.dumps(
     {{"model_id": MODEL_ID, "package_path": str(PACKAGE), "type_names": type_names, "r_max": r_max}}, indent=2))
