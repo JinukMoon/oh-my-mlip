@@ -459,6 +459,17 @@ from nequix.calculator import NequixCalculator
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 atoms.calc = NequixCalculator(model_path={ckpt}, backend="jax", use_kernel=False)
 ''',
+    # finetune.py saves the state_dict of pretrained.<base>; the same loader takes it as
+    # weights_path. compile=False keeps the forward visible to the torch witness.
+    "ORB": '''
+import json
+from ase.build import bulk
+from orb_models.forcefield import pretrained
+from orb_models.forcefield.calculator import ORBCalculator
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
+orbff = getattr(pretrained, {task!r})(weights_path={ckpt}, device="{device}", precision="float32-high", compile=False)
+atoms.calc = ORBCalculator(orbff, device="{device}")
+''',
 }
 _LOADER_TEMPLATE["DPA4"] = _LOADER_TEMPLATE["DeePMD"]
 _LOADER_TEMPLATE["Allegro"] = _LOADER_TEMPLATE["NequIP"]
@@ -515,6 +526,8 @@ def build_script(model: str, ckpt: str, device: str, modal: str | None = None,
         )
     if model == "UMA" and not task:
         raise SystemExit("[ft_verify] a UMA checkpoint needs the task it was fine-tuned for (task_name)")
+    if model == "ORB" and not task:
+        raise SystemExit("[ft_verify] an ORB checkpoint needs the pretrained loader it was fine-tuned from")
     modal_kwarg = f", modal={modal!r}" if modal else ""
     head = template.format(ckpt=repr(str(Path(ckpt).resolve())), device=device, modal_kwarg=modal_kwarg,
                            task=task)
@@ -597,6 +610,9 @@ def verify(model: str, ckpt: str, device: str = "cpu", version: str | None = Non
     family = resolved["model"]
     modal = _extract_modal(resolved.get("inference") or []) if family == "SevenNet" else None
     task = _extract_task(resolved.get("inference") or []) if family == "UMA" else None
+    if family == "ORB":   # the pretrained loader the checkpoint was fine-tuned from
+        task = next((m.group(1) for line in resolved.get("inference") or []
+                     if (m := re.search(r"pretrained\.(\w+)\(", line))), None)
     script = build_script(family, ckpt, device, modal, task)
     proc = subprocess.run(
         [resolved["python"], "-c", script],

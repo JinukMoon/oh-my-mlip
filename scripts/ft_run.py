@@ -108,7 +108,8 @@ FAMILY_DATASET_TARGET = {
     "GRACE": "grace", "MatterSim": "mattersim", "PET": "pet", "TACE": "tace",
     "DeePMD": "deepmd", "DPA4": "deepmd",
     "CHGNet": "chgnet",
-    "ORB": "orb",
+    # ORB: the prestage writes the ASE sqlite db finetune.py reads.
+    "ORB": "extxyz",
     # UMA: upstream's create_uma_finetune_dataset.py reads any ase.io.read file and writes
     # the aselmdb shards itself, so the builder hands it the canonical extxyz split.
     # Nequix: the prestage writes the ASE db files nequix's AseDBDataset reads.
@@ -167,6 +168,7 @@ SEED_CONTROL = {
     "fairchemv1": ("native", "fairchem --seed (fairchem-core 1.10.0 common/flags.py: seed for torch, cuda, numpy)"),
     "EquFlash": ("native", "python -m GGNN.main --seed (GGNN parses fairchem-core 1.10.0 common/flags.py: "
                            "seed for torch, cuda, numpy)"),
+    "ORB": ("native", "finetune.py --random_seed (orb-models finetune.py run(): utils.seed_everything(args.random_seed))"),
     "Nequix": ("none", "no config key reaches a seed in nequix 0.4.3: nequix/train.py fixes the model-init "
                        "key jax.random.key(0) (replaced by the fine-tuned weights), the data loaders take no "
                        "seed, and the valid_frac split seed is unused because a separate validation file is "
@@ -329,6 +331,8 @@ def live_recheck_blockers(family: str, blockers: list[str], python_bin: str) -> 
             continue  # build_equflash() runs python -m GGNN.main and takes the config from the checkpoint
         if family == "Nequix" and "configs/, data/" in b:
             continue  # build_nequix() takes the config from the .nqx header and writes the db files itself
+        if family == "ORB" and "finetune.py is not shipped" in b:
+            continue  # build_orb()'s prestage fetches finetune.py at the installed orb-models version
         remaining.append(b)
     return remaining
 
@@ -1605,18 +1609,32 @@ PATCH = pathlib.Path({patch!r})
 CONFIG = pathlib.Path({config!r})
 patch = json.loads(PATCH.read_text())
 
+# optim.load_balancing: atoms needs per-frame atom counts: fairchem's base_dataset reads
+# metadata.npz (natoms, integer) from the db file's folder, so each split gets its own folder
+import numpy as np
 dbs = {{}}
 for split, src in (("train", patch["train"]), ("val", patch["valid"])):
-    db = OUT / "esen_data" / (split + ".db")
-    db.parent.mkdir(parents=True, exist_ok=True)
+    folder = OUT / "esen_data" / split
+    folder.mkdir(parents=True, exist_ok=True)
+    db = folder / (split + ".db")
     if db.exists():
         db.unlink()   # this run's own output
+    frames = read(src, ":")
     with connect(db) as con:
-        for atoms in read(src, ":"):
+        for atoms in frames:
             con.write(atoms)
+    np.savez(folder / "metadata.npz", natoms=np.array([len(a) for a in frames], dtype=np.int64))
     dbs[split] = str(db)
 
 update = dict(patch["update"])
+# mlip_trainer turns warmup_epochs into int(warmup_epochs * iterations per epoch) and its
+# cosine lambda divides by that count; keep at least one warmup step for small data sets
+n_train = len(read(patch["train"], ":"))
+iters = max(1, -(-n_train // int(update.get("optim.batch_size") or 1)))
+warmup = update.get("optim.scheduler_params.warmup_epochs")
+if warmup is not None and int(warmup * iters) < 1:
+    update["optim.scheduler_params.warmup_epochs"] = (1.0 + 1e-9) / iters
+    print("[esen_prestage] warmup_epochs " + str(warmup) + " is < 1 step at " + str(iters) + " iterations/epoch; using one step")
 for split, key in (("train", "dataset.train"), ("val", "dataset.val")):
     update[key + ".format"] = "ase_db"
     update[key + ".src"] = dbs[split]
@@ -1802,7 +1820,10 @@ def build_equflash(ctx: Context) -> CommandSpec:
     patch = {
         "checkpoint": checkpoint, "train": str(ctx.dataset_paths["train"]), "valid": str(valid), "stress": stress,
         "reset_head": bool(s.get("task.finetune.reset_head", False)),
-        "strict_load": bool(s.get("task.strict_load", True)),
+        # the released checkpoints carry torch.compile constants
+        # (compiled_model._orig_mod._param_constant*) the model does not define; upstream's
+        # fine-tune template sets task.strict_load: false, which ignores them
+        "strict_load": bool(s["task.strict_load"]) if origins.get("task.strict_load") == "user" else False,
         "optim": {k: v for k, v in optim.items() if v is not None},
         "loss": {k: float(v) for k, v in loss.items() if v is not None},
     }
@@ -1853,16 +1874,20 @@ patch = json.loads(PATCH.read_text())
 with open(patch["checkpoint"], "rb") as fh:
     cfg = json.loads(fh.readline().decode())
 
+# nequix/data.py AseDBDataset opens every file with readonly=True, which only the aselmdb
+# backend (ase-db-backends) accepts, and globs *.aselmdb inside a directory
 paths = {{}}
 for split, src in (("train", patch["train"]), ("val", patch["valid"])):
-    db = OUT / "nequix_data" / (split + ".db")
-    db.parent.mkdir(parents=True, exist_ok=True)
-    if db.exists():
-        db.unlink()   # this run's own output
-    with connect(db) as con:
-        for atoms in read(src, ":"):
-            con.write(atoms)
-    paths[split] = str(db)
+    folder = OUT / "nequix_data" / split
+    folder.mkdir(parents=True, exist_ok=True)
+    for leftover in folder.glob("data.aselmdb*"):
+        leftover.unlink()   # this run's own output
+    db = connect(str(folder / "data.aselmdb"))
+    for atoms in read(src, ":"):
+        db.write(atoms)
+    if hasattr(db, "close"):
+        db.close()
+    paths[split] = str(folder)
 
 # the header is the authors' pretraining config: their data paths, a resume file, and
 # isolated-atom energies the JAX trainer refuses together with finetune_from
@@ -1929,7 +1954,96 @@ def build_nequix(ctx: Context) -> CommandSpec:
     )
 
 
+# ── ORB (orb-models, `python finetune.py`) ───────────────────────────────────
+# Source: orb-models finetune.py at the installed version's tag (not in the
+# wheel): run() loads pretrained.<base_model>(train=True), seeds with
+# --random_seed, trains on an ASE sqlite db (--data_path) with Adam + OneCycleLR
+# for --max_epochs x --num_steps steps, targets energy/forces and stress when
+# the model has a stress head, and saves ckpts/checkpoint_epoch<N>.ckpt (a
+# state_dict) every --save_every_x_epochs and at the last epoch; wandb is
+# imported unconditionally and --wandb cannot be turned off, so it runs offline.
+# dataset/ase_sqlite_dataset.py + forcefield/property_definitions.py read the
+# row's energy/forces/stress attributes. The base model follows the registry
+# variant's inference line unless --base_model is set.
+_ORB_PRESTAGE = '''\
+"""Fetch finetune.py at the installed orb-models version and write the ASE sqlite
+db. Generated by scripts/ft_run.py; runs inside the orb env."""
+import importlib.metadata
+import pathlib
+import shutil
+import urllib.request
+
+from ase.db import connect
+from ase.io import read
+
+OUT = pathlib.Path({out!r})
+TRAIN = {train!r}
+CACHE = pathlib.Path({cache!r})
+
+version = importlib.metadata.version("orb-models")
+ref = "v" + version
+cached = CACHE / ref / "finetune.py"
+if not cached.exists():
+    url = "https://raw.githubusercontent.com/orbital-materials/orb-models/" + ref + "/finetune.py"
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            cached.write_bytes(resp.read())
+    except Exception as exc:
+        raise SystemExit("[orb_prestage] could not fetch " + url + " for orb-models " + version + ": " + repr(exc))
+shutil.copyfile(cached, OUT / "finetune.py")
+
+db = OUT / "orb_data" / "train.db"
+db.parent.mkdir(parents=True, exist_ok=True)
+if db.exists():
+    db.unlink()   # this run's own output
+with connect(str(db), type="db") as con:
+    for atoms in read(TRAIN, ":"):
+        con.write(atoms)
+print("[orb_prestage] finetune.py for orb-models " + version + ", db " + str(db))
+'''
+_ORB_BASE_RE = re.compile(r"pretrained\.(\w+)\(")
+
+
+def build_orb(ctx: Context) -> CommandSpec:
+    s, origins = ctx.settings, ctx.settings_origins
+    base = s.get("--base_model") if origins.get("--base_model") == "user" else None
+    if base is None:
+        for line in ctx.resolved.get("inference") or []:
+            m = _ORB_BASE_RE.search(line)
+            if m:
+                base = m.group(1)
+                break
+    if not base:
+        raise ValueError("ORB: no base model in the registry inference line; pass --set --base_model=<loader>")
+    flags = {}
+    for name in ("--batch_size", "--max_epochs", "--num_steps", "--lr", "--gradient_clip_val",
+                 "--save_every_x_epochs", "--num_workers"):
+        value = s.get(name)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            flags[name] = value
+    argv = [ctx.resolved["python"], str(ctx.out / "finetune.py"),
+            "--base_model", base, "--data_path", str(ctx.out / "orb_data" / "train.db"),
+            "--dataset", "finetune", "--checkpoint_path", str(ctx.out / "ckpts"),
+            "--random_seed", str(int(ctx.seed)), "--device_id", "0"]
+    for name, value in flags.items():
+        argv += [name, str(value)]
+    extra_env = {"WANDB_MODE": "offline"}   # finetune.py imports wandb and cannot switch it off
+    if ctx.device == "cpu":
+        extra_env["CUDA_VISIBLE_DEVICES"] = ""
+    prestage_path = ctx.out / "orb_prestage.py"
+    prestage_text = _ORB_PRESTAGE.format(
+        out=str(ctx.out), train=str(ctx.dataset_paths["train"]),
+        cache=str(Path(reg.home()) / "models" / ctx.resolved["env"] / "finetune_script"),
+    )
+    return CommandSpec(
+        argv=argv, pre_steps=[[ctx.resolved["python"], str(prestage_path)]],
+        extra_files={prestage_path: prestage_text}, extra_env=extra_env,
+    )
+
+
 BUILDERS = {
+    "ORB": build_orb,
     "Nequix": build_nequix,
     "EquFlash": build_equflash,
     "fairchemv1": build_fairchemv1,
@@ -1994,6 +2108,8 @@ FAMILY_CHECKPOINT_GLOBS = {
     "EquFlash": ["runs/ft/checkpoints/checkpoint.pt"],
     # WANDB_DIR=<out>, WANDB_MODE=offline: wandb.run.dir is wandb/offline-run-<time>-<id>/files
     "Nequix": ["wandb/offline-run-*/files/checkpoint.nqx"],
+    # every --save_every_x_epochs and the last epoch; the newest file is the final state
+    "ORB": ["ckpts/checkpoint_epoch*.ckpt"],
 }
 
 

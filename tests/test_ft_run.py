@@ -79,15 +79,22 @@ def test_eqnorm_not_supported_exits_2(tmp_path, synthetic_traj):
 
 
 # ── refusal gate: runnable_as_installed-based exit 3 (AC5, C18) ──────────────
-def test_orb_not_runnable_exits_3(tmp_path, synthetic_traj):
-    out = tmp_path / "out"
-    proc = subprocess.run(
-        [sys.executable, str(FT_RUN), "ORB", "--dataset", str(synthetic_traj), "--out", str(out), "--emit-only"],
-        capture_output=True, text=True,
-    )
-    assert proc.returncode == 3
-    assert "wandb" in proc.stderr
-    assert "finetune.py" in proc.stderr
+def test_orb_builder_fetches_finetune_script_and_uses_registry_loader(tmp_path):
+    ctx = _ctx("ORB-v3", tmp_path)
+    spec = ft_run.build_orb(ctx)
+    argv = spec.argv
+    assert argv[:2] == [ctx.resolved["python"], str(ctx.out / "finetune.py")]
+    # the loader the registry variant runs for single points
+    assert argv[argv.index("--base_model") + 1] == "orb_v3_conservative_inf_omat"
+    assert argv[argv.index("--data_path") + 1] == str(ctx.out / "orb_data" / "train.db")
+    assert argv[argv.index("--checkpoint_path") + 1] == str(ctx.out / "ckpts")
+    assert spec.extra_env["WANDB_MODE"] == "offline"
+    prestage = spec.extra_files[ctx.out / "orb_prestage.py"]
+    compile(prestage, "orb_prestage.py", "exec")
+    assert "raw.githubusercontent.com/orbital-materials/orb-models/" in prestage
+    # the wandb blocker clears live once wandb imports; the finetune.py one is the builder's job
+    assert not ft_run.live_recheck_blockers("ORB", ["finetune.py is not shipped in the orb-models wheel"],
+                                            ctx.resolved["python"])
 
 
 def test_unknown_model_is_a_clean_usage_error(tmp_path, synthetic_traj):
@@ -464,6 +471,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         "fairchemv1": ["runs/checkpoints/ft/best_checkpoint.pt"],
         "EquFlash": ["runs/ft/checkpoints/best_checkpoint.pt", "runs/ft/logs/files/log.txt"],
         "Nequix": ["wandb/offline-run-20260915_120000-abc/files/state.pkl", "state.pkl"],
+        "ORB": ["finetune.py", "orb_data/train.db"],
     }
     for fam, globs in ft_run.FAMILY_CHECKPOINT_GLOBS.items():
         assert len(globs) == 1, (fam, globs)

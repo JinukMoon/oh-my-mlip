@@ -156,8 +156,35 @@ def normalize_frame(atoms: Atoms, energy_key: str, force_key: str) -> Atoms:
         cell=atoms.cell.copy(),
         pbc=atoms.pbc.copy(),
     )
-    out.calc = SinglePointCalculator(out, energy=float(energy), forces=np.asarray(forces, dtype=float))
+    stress = frame_stress(atoms)
+    results = {"energy": float(energy), "forces": np.asarray(forces, dtype=float)}
+    if stress is not None:
+        results["stress"] = stress
+    out.calc = SinglePointCalculator(out, **results)
     return out
+
+
+def frame_stress(atoms: Atoms) -> np.ndarray | None:
+    """The frame's stress as ASE Voigt-6 (xx, yy, zz, yz, xz, xy; eV/A^3, ASE sign),
+    from the calculator when it has one, else from ``info["REF_stress"]`` or
+    ``info["stress"]`` (6 or 9 components); None when the frame carries none."""
+    stress = None
+    if atoms.calc is not None and "stress" in (getattr(atoms.calc, "results", None) or {}):
+        stress = atoms.calc.results["stress"]
+    else:
+        for key in ("REF_stress", "stress"):
+            if key in atoms.info:
+                stress = atoms.info[key]
+                break
+    if stress is None:
+        return None
+    stress = np.asarray(stress, dtype=float).reshape(-1)
+    if stress.size == 9:
+        s = stress.reshape(3, 3)
+        stress = np.array([s[0, 0], s[1, 1], s[2, 2], s[1, 2], s[0, 2], s[0, 1]])
+    if stress.size != 6:
+        raise SystemExit(f"[ft_dataset] stress with {stress.size} components; expected 6 (Voigt) or 9 (3x3)")
+    return stress
 
 
 def deterministic_split(n: int, fraction: float, seed: int) -> tuple[list[int], list[int]]:
@@ -178,9 +205,15 @@ def write_extxyz_canonical(frames: list[Atoms], path: Path) -> None:
         a = atoms.copy()
         energy = atoms.get_potential_energy()
         forces = atoms.get_forces()
-        a.calc = SinglePointCalculator(a, energy=float(energy), forces=forces)
+        stress = frame_stress(atoms)
+        results = {"energy": float(energy), "forces": forces}
+        if stress is not None:
+            results["stress"] = stress
+        a.calc = SinglePointCalculator(a, **results)
         a.info["REF_energy"] = float(energy)
         a.new_array("REF_forces", np.asarray(forces, dtype=float))
+        if stress is not None:   # MACE reads REF_stress; the calculator serves the other readers
+            a.info["REF_stress"] = stress
         out_frames.append(a)
     write(path, out_frames, format="extxyz")
 
@@ -221,6 +254,15 @@ def _write_deepmd_system_numpy(frames: list[Atoms], type_map: list[str], sys_dir
     np.save(set_dir / "box.npy", box)
     np.save(set_dir / "energy.npy", energy)
     np.save(set_dir / "force.npy", force)
+    # virial = -volume * stress (3x3), as dpdata's ase plugin converts it; only when every
+    # frame of the system carries stress
+    stresses = [frame_stress(f) for f in frames]
+    if all(s is not None for s in stresses):
+        virial = []
+        for f, s in zip(frames, stresses):
+            s33 = np.array([[s[0], s[5], s[4]], [s[5], s[1], s[3]], [s[4], s[3], s[2]]])
+            virial.append((-f.get_volume() * s33).reshape(-1))
+        np.save(set_dir / "virial.npy", np.stack(virial).astype(np.float64))
 
 
 def _write_deepmd_system_dpdata(frames: list[Atoms], type_map: list[str], sys_dir: Path) -> bool:

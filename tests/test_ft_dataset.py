@@ -166,6 +166,37 @@ def test_chgnet_is_an_extxyz_alias_consumed_by_the_driver():
 
 
 # ── normalize_frame: calculator vs info/array fallback ───────────────────────
+def test_stress_is_kept_on_the_calculator_ref_key_and_deepmd_virial(tmp_path):
+    from ase.build import bulk
+    frames = []
+    for i in range(3):
+        a = bulk("Cu", "fcc", a=3.61 + 0.01 * i, cubic=True)
+        s = np.array([0.01, 0.02, 0.03, 0.004, 0.005, 0.006]) * (i + 1)
+        a.calc = SinglePointCalculator(a, energy=-10.0 - i, forces=np.zeros((4, 3)), stress=s)
+        frames.append(a)
+    normalized = [ft_dataset.normalize_frame(a, "REF_energy", "REF_forces") for a in frames]
+    assert np.allclose(normalized[1].get_stress(), frames[1].calc.results["stress"])
+    path = tmp_path / "out.xyz"
+    ft_dataset.write_extxyz_canonical(normalized, path)
+    back = read(path, ":")
+    assert np.allclose(back[2].get_stress(), frames[2].calc.results["stress"])
+    assert np.allclose(back[2].info["REF_stress"], frames[2].calc.results["stress"])
+    # the numpy deepmd writer stores virial = -volume * stress (3x3), as dpdata does
+    ft_dataset._write_deepmd_system_numpy(normalized, ["Cu"], tmp_path / "sys")
+    virial = np.load(tmp_path / "sys" / "set.000" / "virial.npy")
+    s = frames[0].calc.results["stress"]
+    s33 = np.array([[s[0], s[5], s[4]], [s[5], s[1], s[3]], [s[4], s[3], s[2]]])
+    assert np.allclose(virial[0], (-frames[0].get_volume() * s33).reshape(-1))
+
+
+def test_frame_stress_reads_info_and_full_tensors():
+    from ase.build import bulk
+    a = bulk("Cu", "fcc", a=3.61, cubic=True)
+    a.info["REF_stress"] = [[1, 6, 5], [6, 2, 4], [5, 4, 3]]
+    assert np.allclose(ft_dataset.frame_stress(a), [1, 2, 3, 4, 5, 6])
+    assert ft_dataset.frame_stress(bulk("Cu", "fcc", a=3.61)) is None
+
+
 def test_normalize_frame_from_info_arrays_fallback():
     atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
     atoms.info["energy"] = -14.0
