@@ -50,6 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _setup_common import resolve_home, utc_now  # noqa: E402
 
 DOCUMENTED_PREFIX = "documented"
+SOURCE_DERIVED = "source-derived (hub builder)"   # a hub builder for a path read from the installed source
 CANDIDATE_STATUSES = ("not-supported", "code-excavation-needed")
 ADOPTED_TAG = "adopted-regression"
 
@@ -103,7 +104,7 @@ def required_sets(models: dict, audit: dict) -> dict:
     finetune, excluded = [], []
     for v in variants:
         entry = audit.get(v["variant"]) or {}
-        if v["ft_status"].startswith(DOCUMENTED_PREFIX):
+        if v["ft_status"].startswith(DOCUMENTED_PREFIX) or v["ft_status"] == SOURCE_DERIVED:
             finetune.append(v["variant"])
         elif v["ft_status"] in CANDIDATE_STATUSES and entry.get("supported"):
             finetune.append(v["variant"])

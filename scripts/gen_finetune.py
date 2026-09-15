@@ -80,6 +80,8 @@ DOC = REPO / "docs" / "finetune.md"
 # config-level / generic-plus-excavation). Anything else (not-supported,
 # code-excavation-needed) is a refusal row in block C.
 _DOCUMENTED_PREFIX = "documented"
+# A hub builder for a path read from the installed source when upstream documents none.
+_SOURCE_DERIVED = "source-derived (hub builder)"
 
 
 def load_models() -> dict:
@@ -119,7 +121,7 @@ def render_command_block(fam: str, version: str, ft: dict) -> list[str]:
     status = ft.get("status") or ""
     out: list[str] = []
 
-    if not status.startswith(_DOCUMENTED_PREFIX):
+    if not (status.startswith(_DOCUMENTED_PREFIX) or status == _SOURCE_DERIVED):
         # not-supported / code-excavation-needed -- ft_run.py's refusal path
         # (exit 2). Render the reason; not-supported additionally cites
         # evidence for the ABSENCE it asserts.
@@ -133,6 +135,8 @@ def render_command_block(fam: str, version: str, ft: dict) -> list[str]:
                   f"--dataset <your-dataset> --out ft_{_slug(version)}")
     licence = ft.get("licence")
     lines: list[str] = []
+    if status == _SOURCE_DERIVED:
+        lines.append("# SOURCE-DERIVED: upstream documents no procedure; this builder follows the installed source")
     if licence:
         url = _LICENCE_URLS.get(licence, "")
         lines.append(f"# LICENCE: {licence}" + (f" -- {url}" if url else ""))

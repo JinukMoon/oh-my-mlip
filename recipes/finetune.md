@@ -87,10 +87,9 @@ records it as `failed(no_builder)` (an implementation gap of this hub,
 not an upstream limitation), a single run reports the exit code the same
 way, and the plan lists such a variant under `failed(no_builder)` in
 advance rather than as a run to attempt. As the registry stands, each
-family without a builder is turned away one step earlier: AlphaNet, EqV3,
-Eqnorm and MatRIS by exit 2 (`not-supported` / `code-excavation-needed`),
-UMA, ORB, Nequix, EquFlash and fairchemv1 by exit 3 (documented, not
-runnable as installed). Exit 4 therefore protects against a future
+family without a builder is turned away one step earlier: AlphaNet,
+Eqnorm and MatRIS by exit 2 (`not-supported` / `code-excavation-needed`).
+EquiformerV3 has a builder with status `source-derived (hub builder)`. Exit 4 therefore protects against a future
 registry edit rather than describing a current path. Of all these, only
 Eqnorm and MatRIS carry a cited upstream absence in `models.json`; every
 other stop is a blocker of this hub's installation — including

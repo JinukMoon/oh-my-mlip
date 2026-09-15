@@ -210,7 +210,7 @@ command or config from memory.
    - `--emit-only` stops after writing; `--slurm [--partition P]` also writes an
      SBATCH version without submitting it.
    - Exit codes are answers, not bugs. **2**: no documented training code for
-     this framework (for example Eqnorm, MatRIS, AlphaNet, EquiformerV3).
+     this framework (for example Eqnorm, MatRIS, AlphaNet).
      **3**: `runnable_as_installed: false`; the message lists each remaining
      blocker as the fix to apply. **4**: this hub has no command builder for the
      framework yet; nothing is written. **5**: an explicit `--seed` the framework
@@ -218,8 +218,10 @@ command or config from memory.
      `--allow-partial-seed` accepts that). **1**: usage error or unknown model.
      Pass the message to the user; do not retry with guessed flags.
    - Command builders exist for MACE, SevenNet, DeePMD, DPA4, GRACE, PET, NequIP,
-     Allegro, MatterSim, TACE, CHGNet and UMA (`BUILDERS` in `scripts/ft_run.py`).
-     ORB, Nequix, EquFlash and fairchemv1 currently stop at exit 3.
+     Allegro, MatterSim, TACE, CHGNet, UMA, fairchemv1 (eSEN), EquFlash, Nequix, ORB
+     and EquiformerV3 (`BUILDERS` in `scripts/ft_run.py`). EquiformerV3's status is
+     `source-derived (hub builder)`: upstream documents no user fine-tune, and its
+     builder follows the installed trainer source; say so when you offer it.
    - `<out>/ft_run.json` records inputs, seed scope, the checkpoint to use and
      the command to rebuild the run; per-framework seed behaviour is in
      `recipes/finetune.md`.

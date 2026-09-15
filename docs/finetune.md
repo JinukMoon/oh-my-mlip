@@ -518,13 +518,20 @@ torchrun --nproc_per_node=<N> my_main.py --num-gpus <N> --num-nodes 1 --mode tra
 
 ### C. The command this hub generates
 
-`EqV3-OMatMPtrjSalex` -- **code-excavation-needed**. `ft_run.py EqV3-OMatMPtrjSalex` refuses (exit 2): no documented procedure exists for fine-tuning the released HF checkpoint on user data -- the mechanism (optim.load_pretrained_weights) is an undocumented YAML key confirmed only by reading the installed trainer source
+`EqV3-OMatMPtrjSalex`:
+
+```bash
+# SOURCE-DERIVED: upstream documents no procedure; this builder follows the installed source
+# BLOCKED -- ft_run.py exits 3 until:
+#   - the installed equiformer_v3 env contains only fairchem/core/ and fairchem/experimental/{models,trainers} -- no configs/, scripts/, tasks/, datasets/, main.py, or my_main.py; every fine-tune command needs the git checkout
+python3 $OMM/scripts/ft_run.py EqV3-OMatMPtrjSalex --dataset <your-dataset> --out ft_eqv3-omatmptrjsalex
+```
 
 ### D. Per-variant support matrix
 
 | variant | status | runnable_as_installed | licence | demonstrated |
 |---|---|---|---|---|
-| `EqV3-OMatMPtrjSalex` | code-excavation-needed | False | — | — |
+| `EqV3-OMatMPtrjSalex` | source-derived (hub builder) | False | — | — |
 
 ---
 

@@ -79,6 +79,28 @@ def test_eqnorm_not_supported_exits_2(tmp_path, synthetic_traj):
 
 
 # ── refusal gate: runnable_as_installed-based exit 3 (AC5, C18) ──────────────
+def test_equiformerv3_builder_is_source_derived_weights_only_fine_tune(tmp_path):
+    import json
+    ctx = _ctx("EqV3-OMatMPtrjSalex", tmp_path)
+    assert ctx.finetune["status"] == "source-derived (hub builder)"
+    spec = ft_run.build_equiformerv3(ctx)
+    argv = spec.argv
+    assert argv[0] == ft_run.entrypoint_bin(ctx.resolved, "fairchem") and argv[1:3] == ["--mode", "train"]
+    # --checkpoint would resume the released checkpoint's own epoch/step; weights load via the config
+    assert "--checkpoint" not in argv
+    prestage = spec.extra_files[ctx.out / "eqv3_prestage.py"]
+    compile(prestage, "eqv3_prestage.py", "exec")
+    for key in ('cfg["trainer"] = "equiformer_v3_dens_trainer"', 'optim["load_pretrained_weights"] = patch["checkpoint"]',
+                'optim["use_denoising_pos"] = False', 'torch.save(ckpt["elementrefs"]["energy"], refs)'):
+        assert key in prestage, key
+    patch = json.loads(spec.config_text)
+    assert patch["checkpoint"].endswith("omat24-mptrj-salex_gradient.pt")
+    assert patch["loss"] == {} and patch["stress"] is False
+    ctx.settings.update({"forces_coefficient": 7.0})
+    ctx.settings_origins.update({"forces_coefficient": "user"})
+    assert json.loads(ft_run.build_equiformerv3(ctx).config_text)["loss"] == {"forces": 7.0}
+
+
 def test_orb_builder_fetches_finetune_script_and_uses_registry_loader(tmp_path):
     ctx = _ctx("ORB-v3", tmp_path)
     spec = ft_run.build_orb(ctx)
@@ -472,6 +494,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         "EquFlash": ["runs/ft/checkpoints/best_checkpoint.pt", "runs/ft/logs/files/log.txt"],
         "Nequix": ["wandb/offline-run-20260915_120000-abc/files/state.pkl", "state.pkl"],
         "ORB": ["finetune.py", "orb_data/train.db"],
+        "EquiformerV3": ["runs/checkpoints/ft/best_checkpoint.pt", "eqv3_data/element_references.pt"],
     }
     for fam, globs in ft_run.FAMILY_CHECKPOINT_GLOBS.items():
         assert len(globs) == 1, (fam, globs)

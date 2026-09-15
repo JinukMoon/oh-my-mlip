@@ -459,6 +459,14 @@ from nequix.calculator import NequixCalculator
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
 atoms.calc = NequixCalculator(model_path={ckpt}, backend="jax", use_kernel=False)
 ''',
+    # the fine-tuned checkpoint embeds its config, like the released one the registry loads
+    "EquiformerV3": '''
+import json
+from ase.build import bulk
+from fairchem.core import OCPCalculator
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True)
+atoms.calc = OCPCalculator(checkpoint_path={ckpt}, cpu={device!r} == "cpu")
+''',
     # finetune.py saves the state_dict of pretrained.<base>; the same loader takes it as
     # weights_path. compile=False keeps the forward visible to the torch witness.
     "ORB": '''

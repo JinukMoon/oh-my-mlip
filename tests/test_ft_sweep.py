@@ -258,6 +258,7 @@ EXPECTED_CKPT = {
     "EquFlash": "runs/ft/checkpoints/checkpoint.pt",
     "Nequix": "wandb/offline-run-20260915_120000-abc/files/checkpoint.nqx",
     "ORB": "ckpts/checkpoint_epoch49.ckpt",
+    "EquiformerV3": "runs/checkpoints/ft/checkpoint.pt",
 }
 # Files that ALSO exist in the same tree and must not be chosen
 DECOYS = {

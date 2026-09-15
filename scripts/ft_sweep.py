@@ -111,6 +111,7 @@ CKPT_GLOBS = {
     "EquFlash": ["runs/ft/checkpoints/checkpoint.pt"],
     "Nequix": ["wandb/offline-run-*/files/checkpoint.nqx"],
     "ORB": ["ckpts/checkpoint_epoch*.ckpt"],
+    "EquiformerV3": ["runs/checkpoints/ft/checkpoint.pt"],
 }
 GENERIC_CKPT_GLOBS = ["*.model", "*.pth", "*.pt", "*.ckpt"]
 # Family-specific glob prefixes kept IN FRONT of the shipped table (a more

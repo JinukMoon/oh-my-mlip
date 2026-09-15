@@ -590,8 +590,10 @@ UPSTREAM_FT: dict[str, dict] = {
              "from the installed package and the loaded checkpoint, not from a doc page.",
     ),
     "EquiformerV3": dict(
-        status="code-excavation-needed",
-        entrypoint="torchrun ... my_main.py --mode train --config-yml <cfg>",
+        # upstream documents no user fine-tune; the hub builder follows the installed source
+        # (equiformer_v3_dens_trainer optim.load_pretrained_weights, run by the installed CLI)
+        status="source-derived (hub builder)",
+        entrypoint="fairchem --mode train --config-yml <config.yml>",
         src="https://github.com/atomicarchitects/equiformer_v3",
         cmd=["git clone https://github.com/atomicarchitects/equiformer_v3.git      "
              "# the pip package ships only fairchem/experimental/{models,trainers} -- "

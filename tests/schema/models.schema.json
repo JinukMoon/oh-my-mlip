@@ -256,6 +256,7 @@
             "documented (config-level)",
             "documented (generic v1) + code-excavation for eSEN specifics",
             "code-excavation-needed",
+            "source-derived (hub builder)",
             "not-supported"
           ],
           "description": "doc-honesty state, NOT an execution claim -- see 'demonstrated' for that. 'documented' variants may carry a parenthetical qualifier (inherited-from-family, config-level-only, or v1-generic-plus-excavation) rather than a bare match against the enum root string; validated exactly against the values this registry actually uses."
