@@ -6,3 +6,37 @@
   font-size: 0.7rem;
   white-space: nowrap;
 }
+
+/* With navigation.tabs, Material "lifts" the sidebar to the active section only.
+   Show every top-level section on every page instead, as a bold heading with
+   its pages indented beneath it. */
+@media screen and (min-width: 76.25em) {
+  .md-nav--lifted > .md-nav__list > .md-nav__item {
+    display: block;
+  }
+  .md-nav--lifted > .md-nav__list > .md-nav__item > .md-nav__link {
+    color: var(--md-default-fg-color);
+    font-weight: 700;
+    pointer-events: auto;
+    position: static;
+    box-shadow: none;
+    margin-top: 0.625em;
+  }
+  [dir="ltr"] .md-nav--lifted > .md-nav__list > .md-nav__item > .md-nav:not(.md-nav--secondary) {
+    margin-left: 0;
+  }
+  [dir="rtl"] .md-nav--lifted > .md-nav__list > .md-nav__item > .md-nav:not(.md-nav--secondary) {
+    margin-right: 0;
+  }
+}
+
+/* "Ask your LLM" prompts are ```text blocks: wrap them instead of scrolling. */
+.md-typeset .language-text pre code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The site name in the header links home (see docs/javascripts/extra.js). */
+.md-header__title {
+  cursor: pointer;
+}

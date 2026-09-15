@@ -21,8 +21,10 @@ theme:
   logo: assets/icon.png
   favicon: assets/icon.png
   features:
-    # sidebar: every top-level section on every page, expanded, with its pages
-    # indented beneath it (no tabs, no section flattening)
+    # top tabs for the five sections on every page; the left sidebar also lists
+    # every section, expanded, with its pages indented (docs/stylesheets/extra.css
+    # undoes the tabs' "active section only" sidebar)
+    - navigation.tabs
     - navigation.expand
     - navigation.top
     - navigation.footer
@@ -40,6 +42,9 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
 
 markdown_extensions:
   - attr_list

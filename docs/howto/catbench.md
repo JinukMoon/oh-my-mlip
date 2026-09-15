@@ -1,50 +1,60 @@
 # Benchmark with CatBench
 
-Every env ships [catbench](https://github.com/JinukMoon/catbench) for
-adsorption-energy benchmarks. Results from all models land in one `result/`
-directory and are analysed together.
+Compare models on adsorption energies with
+[catbench](https://github.com/JinukMoon/catbench), which ships in every env.
 
-## Choose a dataset
+## Ask your LLM
 
-```bash
-python3 scripts/catbench_datasets.py --list                  # published benchmarks
-python3 scripts/catbench_datasets.py --target "CO2 reduction on Cu"
+```text
+Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu, with D3.
 ```
 
-Your own VASP calculations can be converted too — see
-[Convert VASP results](vasp-to-catbench.md).
+## What you prepare
 
-## Run models
+- **A dataset** — a published CatBench dataset name, an existing
+  `raw_data/<tag>_adsorption.json`, or your own VASP calculations
+  ([convert them first](vasp-to-catbench.md)). If you only describe the
+  chemistry, the agent recommends a published dataset.
+- **The models** — installed ones; gated models need a Hugging Face login.
 
-```bash
-mkdir my_benchmark && cd my_benchmark
-python <repo>/run_examples/catbench_quickstart.py <TAG> --only MACE,SevenNet
-```
+## What it asks you
 
-A `<TAG>` that is not in `raw_data/` yet is downloaded first (a Zenodo
-benchmark, otherwise CatHub). For each model the script writes
-`jobs/catbench_<MLIP>.py` and `jobs/run_catbench_<MLIP>.sh`, then runs the
-runner; rerunning the runner reproduces the job.
+- which dataset, if you described only the chemistry;
+- which models — or your own ASE calculator file;
+- D3 on or off;
+- a new benchmark or a rerun of an earlier one (a rerun keeps the catbench
+  version it used).
 
-| Option | Effect |
-|---|---|
-| `--only MACE,SevenNet` | frameworks to run |
-| `--all-versions` | every version of each framework (versions marked `"catbench": false` are skipped) |
-| `--d3` | add D3 dispersion (`_D3` is appended to the model name) |
-| `--slurm --emit-only --partition <p>` | write SLURM job scripts without running them |
-| `--arch sm86` | pick the NequIP/Allegro build for a different GPU |
-| `--catbench-version <v>` | refuse to run under any other catbench version |
+## What you get
 
-## Report
+- `jobs/` — one rerunnable job script per model;
+- `result/` — catbench's results for every model;
+- `report/` — the MAE table and plot, and catbench's analysis workbook with
+  threshold-sensitivity charts;
+- optionally, official leaderboard values side by side — fetched, never
+  recomputed.
 
-```bash
-python <repo>/scripts/catbench_report.py --result ./result --out ./report
-```
+??? note "Run it yourself"
 
-The report holds the MAE table and plot, and catbench's own analysis
-workbook with threshold-sensitivity charts. Official leaderboard values can be
-fetched for side-by-side comparison with `scripts/catbench_leaderboard.py`;
-they are never recomputed.
+    ```bash
+    python3 scripts/catbench_datasets.py --list          # published datasets
+    mkdir my_benchmark && cd my_benchmark
+    python <repo>/run_examples/catbench_quickstart.py <TAG> --only MACE,SevenNet
+    python <repo>/scripts/catbench_report.py --result ./result --out ./report
+    ```
 
-Full procedure: [`recipes/catbench.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/catbench.md) ·
-data format: [CatBench data format](../catbench_data_format.md).
+    A `<TAG>` not yet in `raw_data/` is downloaded first (a Zenodo benchmark,
+    otherwise CatHub).
+
+    | Option | Effect |
+    |---|---|
+    | `--only MACE,SevenNet` | frameworks to run |
+    | `--all-versions` | every version of each framework (versions marked `"catbench": false` are skipped) |
+    | `--d3` | add D3 dispersion (`_D3` is appended to the model name) |
+    | `--slurm --emit-only --partition <p>` | write SLURM job scripts without running them |
+    | `--arch sm86` | pick the NequIP/Allegro build for a different GPU |
+    | `--catbench-version <v>` | refuse to run under any other catbench version |
+
+    Leaderboard comparison: `scripts/catbench_leaderboard.py`. Full procedure:
+    [`recipes/catbench.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/catbench.md);
+    data format: [CatBench data format](../catbench_data_format.md).

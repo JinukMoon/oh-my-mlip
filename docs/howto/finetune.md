@@ -2,52 +2,58 @@
 
 Every framework fine-tunes differently: MACE takes command-line flags, NequIP
 and SevenNet read YAML configs, DeePMD reads `input.json`, and each expects its
-own dataset layout. You give oh-my-mlip one command and one ASE-readable
-dataset; it converts the data to that framework's format, writes the
-framework's **own** training config and command, and runs the upstream
+own dataset layout. oh-my-mlip converts your data to that framework's format,
+writes the framework's **own** config and command, and runs the upstream
 trainer — nothing is reimplemented.
 
-Which models can be fine-tuned, with the exact upstream command, config and
-dataset format for each: [Fine-tuning per framework](../finetune.md).
+## Ask your LLM
 
-## Train
-
-Your dataset is anything ASE reads (extxyz, `.traj`, OUTCAR, …) with energies
-and forces.
-
-```bash
-python scripts/ft_run.py MACE --dataset my_frames.traj --out ft_mace --epochs 50 --seed 0
+```text
+Fine-tune MACE on frames.traj — just a quick check that fine-tuning works.
 ```
 
-| Option | Effect |
-|---|---|
-| `--version MACE-MH-1-OMAT` | start from a specific checkpoint |
-| `--emit-only` | write the dataset, config and command without running |
-| `--slurm --partition <p>` | also write a SLURM script (nothing is submitted) |
-| `--allow-partial-seed` | NequIP/Allegro only: their trainers fix part of the seed internally |
-
-The output directory holds the converted dataset, the exact training script
-and `ft_run.json` with what was run.
-
-To convert a dataset without training:
-
-```bash
-python scripts/ft_dataset.py --input my_frames.traj --to mace --out ft_data
+```text
+Fine-tune SevenNet-MF-OMPA on my DFT frames for 100 epochs.
 ```
 
-## Check the result
+## What you prepare
 
-```bash
-python scripts/ft_verify.py ft_mace/<checkpoint> --model MACE --json
-```
+- **A dataset** that ASE reads (extxyz, `.traj`, OUTCAR, …) with energies and
+  forces;
+- **the model** to start from; which models can be fine-tuned is listed in
+  [Fine-tuning per framework](../finetune.md).
 
-The fine-tuned checkpoint must load and compute energy and forces.
+## What it asks you
 
-## Licenses
+- the exact variant, e.g. `MACE-MH-1-OMAT`;
+- where energies and forces are stored, if they are not on a calculator;
+- a real fine-tune (epochs, batch size, split, seed) or a quick check on small
+  data;
+- the output directory.
 
-Some checkpoints carry non-commercial terms. The license is printed before
-training starts; a model fine-tuned from such a checkpoint inherits its terms.
+## What you get
 
-Per-framework commands, configs and dataset formats:
-[Fine-tuning per framework](../finetune.md) ·
-full procedure: [`recipes/finetune.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/finetune.md).
+- the converted dataset, the framework's config and training script, and
+  `ft_run.json` recording what was run;
+- the fine-tuned checkpoint, checked to reload and compute energy and forces;
+- the license of the starting checkpoint — a model fine-tuned from a
+  non-commercial checkpoint inherits its terms.
+
+??? note "Run it yourself"
+
+    ```bash
+    python scripts/ft_run.py MACE --dataset frames.traj --out ft_mace --epochs 50 --seed 0
+    python scripts/ft_verify.py ft_mace/<checkpoint> --model MACE --json
+    ```
+
+    | Option | Effect |
+    |---|---|
+    | `--version MACE-MH-1-OMAT` | start from a specific checkpoint |
+    | `--emit-only` | write the dataset, config and command without running |
+    | `--slurm --partition <p>` | also write a SLURM script (nothing is submitted) |
+    | `--allow-partial-seed` | NequIP/Allegro only: their trainers fix part of the seed internally |
+
+    Convert a dataset without training:
+    `python scripts/ft_dataset.py --input frames.traj --to mace --out ft_data`.
+    Full procedure:
+    [`recipes/finetune.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/finetune.md).

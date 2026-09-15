@@ -16,7 +16,44 @@ ORB, UMA, … — and lets you:
 
 It drives the real upstream frameworks and never reimplements a model.
 
-## Get started
+## Ask your LLM
+
+oh-my-mlip is built to be driven by your coding agent. Set it up once, then ask.
+
+**Claude Code** — add the plugin:
+
+```
+/plugin marketplace add JinukMoon/oh-my-mlip
+```
+
+```
+/plugin install oh-my-mlip@oh-my-mlip
+```
+
+**Codex or any other coding agent** — tell it:
+
+```text
+Clone https://github.com/JinukMoon/oh-my-mlip, read its AGENTS.md and the
+documentation at https://jinukmoon.github.io/oh-my-mlip/, and use it for the
+MLIP work I ask for.
+```
+
+Then ask in plain language, for example:
+
+| You say | Guide |
+|---|---|
+| "Install MACE and SevenNet and check they run on my GPU." | [Install models](howto/install.md) |
+| "Relax this POSCAR with UMA and give me the relaxed structure." | [Use a model](howto/use-a-model.md) |
+| "Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu." | [Benchmark with CatBench](howto/catbench.md) |
+| "Turn my VASP calculations in ./dft into a CatBench dataset." | [VASP results to CatBench](howto/vasp-to-catbench.md) |
+| "Fine-tune MACE on frames.traj." | [Fine-tuning](howto/finetune.md) |
+| "Distill MACE into an NN-MTP student for 300 K MD of this slab." | [Distillation](howto/distill.md) |
+
+Your agent asks for what only you can decide — models, data, D3, reference
+coefficients, how long the MD must be stable — and shows its plan before
+running anything long. Every step it takes is written to a file you can rerun.
+
+## Without an agent
 
 ```bash
 git clone https://github.com/JinukMoon/oh-my-mlip.git && cd oh-my-mlip
@@ -26,24 +63,7 @@ python scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on your GPU
 python run_examples/single_point.py MACE           # a first calculation
 ```
 
-With Claude Code, install the plugin once and ask in plain language
-("install MACE", "benchmark my adsorption set"):
-
-```
-/plugin marketplace add JinukMoon/oh-my-mlip
-/plugin install oh-my-mlip@oh-my-mlip
-```
-
-## What you can do
-
-| Task | Guide |
-|---|---|
-| Install one, several or all models | [Install models](howto/install.md) |
-| Use a model in your own script | [Use a model](howto/use-a-model.md) |
-| Benchmark adsorption energies | [Benchmark with CatBench](howto/catbench.md) |
-| Turn your VASP calculations into a benchmark | [Convert VASP results](howto/vasp-to-catbench.md) |
-| Fine-tune a foundation model on your data | [Fine-tuning](howto/finetune.md) |
-| Distill any hub model into an NN-MTP student for LAMMPS | [Distillation](howto/distill.md) |
+Each guide ends with the commands to run a workflow yourself.
 
 ## How it works
 
@@ -55,4 +75,4 @@ With Claude Code, install the plugin once and ask in plain language
 - **Every procedure is a file.** Job scripts, training commands and reports
   are written to disk before they run, so you can rerun them without an agent.
 - **Weights are never hosted here.** They come from each framework's official
-  channel; gated models use your own Hugging Face token.
+  channel; gated models use your own Hugging Face login.

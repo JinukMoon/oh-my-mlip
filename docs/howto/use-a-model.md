@@ -1,7 +1,20 @@
 # Use a model
 
 Every framework lives in its own env, so a model always runs under that env's
-interpreter. There are two ways to use one.
+interpreter.
+
+## Ask your LLM
+
+```text
+Relax POSCAR with MACE-MPA-0 and give me the relaxed structure.
+```
+
+```text
+Write an MD script for this slab that uses SevenNet.
+```
+
+The agent takes the calculator lines from the registry and runs your script
+with the right interpreter. To do it yourself, there are two ways.
 
 ## In your own script
 

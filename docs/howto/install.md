@@ -3,6 +3,15 @@
 Each framework is installed into its own conda env under `envs/<env>/`.
 Conda (or mamba) must be on `PATH`.
 
+## Ask your LLM
+
+```text
+Install MACE and SevenNet and check they run on my GPU.
+```
+
+The agent installs each env, compiles what your GPU needs, and reports a model
+only once it has computed energy and forces there.
+
 ## One or several models
 
 ```bash
@@ -38,6 +47,12 @@ dependency resolution:
 ```bash
 OMM_USE_LOCK=1 ./install.sh MACE
 ```
+
+## Prebuilt envs
+
+MACE and SevenNet are also published as prebuilt, relocatable envs on the
+Hugging Face Hub (pinned revision and sha256). `oh_my_mlip.fetch.fetch_env("MACE")`
+downloads, checks and unpacks one instead of building from the recipe.
 
 ## Use an env you already have
 
