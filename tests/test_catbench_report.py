@@ -53,6 +53,29 @@ def test_run_report_sh_carries_the_guards_and_cd_contract(tmp_path: Path):
     assert "--expect-models" not in plain and "--catbench-version" not in plain
 
 
+def test_capture_excel_wrapper_forwards_every_upstream_argument():
+    """The wrapper must pass catbench's own call through untouched. catbench 1.1.4 calls
+    _create_excel_output with the gas-shift-corrected twins as keywords; a wrapper with a
+    fixed argument list raises TypeError there (killing the whole report), and one that
+    swallowed them would silently drop those workbook sheets."""
+    seen = {}
+
+    def orig(self, main_data, anomaly_data, mlips, adsorbates, main_data_shifted=None, anomaly_data_shifted=None):
+        seen.update(self=self, main_data=main_data, anomaly_data=anomaly_data, mlips=mlips,
+                    adsorbates=adsorbates, shifted=main_data_shifted, anomaly_shifted=anomaly_data_shifted)
+        return "delegated"
+
+    captured: dict = {}
+    wrapper = cr._capture_excel_wrapper(orig, captured)
+    analysis = object()
+    out = wrapper(analysis, [{"MLIP": "A"}], ["anom"], ["mlips"], ["CO"],
+                  main_data_shifted=[{"MLIP": "A-shifted"}], anomaly_data_shifted=["anom-shifted"])
+    assert out == "delegated"
+    assert captured["main_data"] == [{"MLIP": "A"}]          # rows the table/plot are built from
+    assert seen["self"] is analysis and seen["shifted"] == [{"MLIP": "A-shifted"}]
+    assert seen["anomaly_shifted"] == ["anom-shifted"] and seen["adsorbates"] == ["CO"]
+
+
 def test_argparse_accepts_the_recipe_flags():
     a = cr._parse_args(["--result", "r", "--out", "o", "--expect-models", "A,B", "--catbench-version", "1.1.4", "--python", "/p"])
     assert a.expect_models == "A,B" and a.catbench_version == "1.1.4" and a.python == "/p"

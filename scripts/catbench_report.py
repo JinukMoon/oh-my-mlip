@@ -97,6 +97,22 @@ def _resolve_interpreter(result_dir: Path) -> str:
     return spec["python"]
 
 
+def _capture_excel_wrapper(orig_create_excel, captured: dict):
+    """Wrap `AdsorptionAnalysis._create_excel_output` so this script reads the SAME
+    per-model rows catbench renders, without reimplementing the metric.
+
+    `*args`/`**kwargs`, never a fixed argument list: catbench 1.1.4 calls the hook with
+    the gas-shift-corrected twins (`main_data_shifted`, `anomaly_data_shifted`) as
+    keywords, and a wrapper with a fixed tail raises TypeError there — which kills the
+    whole report. Everything is forwarded untouched, so the workbook keeps every sheet.
+    """
+    def _capture_and_delegate(self, main_data, *args, **kwargs):
+        captured["main_data"] = main_data
+        return orig_create_excel(self, main_data, *args, **kwargs)
+
+    return _capture_and_delegate
+
+
 def _reexec_before_catbench_import(args: argparse.Namespace, result_dir: Path) -> None:
     """E1: resolve + re-exec BEFORE `import catbench`.
 
@@ -233,11 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     captured: dict = {}
     orig_create_excel = AdsorptionAnalysis._create_excel_output
 
-    def _capture_and_delegate(self, main_data, anomaly_data, mlip_datas, analysis_adsorbates):
-        captured["main_data"] = main_data
-        return orig_create_excel(self, main_data, anomaly_data, mlip_datas, analysis_adsorbates)
-
-    AdsorptionAnalysis._create_excel_output = _capture_and_delegate
+    AdsorptionAnalysis._create_excel_output = _capture_excel_wrapper(orig_create_excel, captured)
     cwd_before = Path.cwd()
     try:
         os.chdir(out_dir)  # catbench writes its own xlsx/plot outputs relative to cwd
