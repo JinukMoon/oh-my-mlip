@@ -19,8 +19,8 @@ Field guide (one row per family; per-variant divergences live in
 `models.json`'s `finetune.variant_args`, not here — see AGENTS.md §3C):
 
   status                  'documented' | 'code-excavation-needed' | 'not-supported'
-                           (doc-honesty state; NOT an execution claim — see
-                           `demonstrated` in models.json for that)
+                           (what upstream documents; NOT a claim that a run on
+                           your data or host will succeed)
   entrypoint               the console command or API this hub shells out to
   src                       doc URL the `cmd`/`config` were read from
   cmd                       exact FT command(s), verbatim from upstream, with any

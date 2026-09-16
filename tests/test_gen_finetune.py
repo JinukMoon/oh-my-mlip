@@ -21,8 +21,8 @@ Mirrors tests/test_gen_recipes.py's discipline for the fine-tuning doc
      -- it must classify explicitly as blocked;
   7. the rendered doc is host-independent (no absolute clone path, no
      baked-in host GPU arch);
-  8. `demonstrated` is populated for exactly the three P3-verified variants
-     (MACE-MPA-0, SevenNet-MF-OMPA, DPA-3.1-3M-FT) and null everywhere else.
+  8. the doc ships the recipe only -- it never claims a fine-tune was run and
+     verified here (no `demonstrated` field, no such wording in the output).
 """
 from __future__ import annotations
 
@@ -161,7 +161,10 @@ def test_rendered_doc_is_host_independent(models: dict):
     )
 
 
-def test_demonstrated_appears_for_exactly_the_three_p3_variants(models: dict, families: list[str]):
-    expected = {"MACE-MPA-0", "SevenNet-MF-OMPA", "DPA-3.1-3M-FT"}
-    demonstrated = {v for _, v, ft in _all_variant_finetunes(models, families) if ft.get("demonstrated")}
-    assert demonstrated == expected, f"expected {expected}, got {demonstrated}"
+def test_the_doc_makes_no_execution_claim_about_this_hub_s_own_runs(models: dict, families: list[str]):
+    """The doc ships the recipe, never a verdict on runs done here: no variant carries a
+    `demonstrated` field, and the rendered doc never claims a fine-tune was verified."""
+    assert not [v for _, v, ft in _all_variant_finetunes(models, families) if "demonstrated" in ft]
+    text = gen_finetune.render(models)
+    for claim in ("demonstrated", "ft_verify reload verified", "demo fine-tune"):
+        assert claim not in text, f"the generated doc still claims {claim!r}"

@@ -32,8 +32,8 @@ Per family the doc carries four blocks:
                                             for not-supported (that status
                                             asserts an ABSENCE and needs a
                                             citation).
-  D. per-variant support matrix   status / runnable_as_installed / demonstrated
-                                    / licence, one row per variant.
+  D. per-variant support matrix   status / runnable_as_installed / licence,
+                                    one row per variant.
 
 Two guards, mirroring gen_recipes.py:
 
@@ -162,13 +162,13 @@ def render_command_block(fam: str, version: str, ft: dict) -> list[str]:
 
 
 def render_matrix(models: dict, fam: str) -> list[str]:
-    out = ["| variant | status | runnable_as_installed | licence | demonstrated |",
-           "|---|---|---|---|---|"]
+    out = ["| variant | status | runnable_as_installed | licence |",
+           "|---|---|---|---|"]
     for v in variants(models, fam):
         ft = variant_finetune(models, fam, v)
         out.append(
             f"| `{v}` | {ft.get('status')} | {ft.get('runnable_as_installed')} | "
-            f"{ft.get('licence') or '—'} | {ft.get('demonstrated') or '—'} |"
+            f"{ft.get('licence') or '—'} |"
         )
     return out
 
@@ -188,7 +188,7 @@ def render(models: dict) -> str:
     w("`scripts/ft_run.py` resolves the variant's `finetune` block in `models.json`,")
     w("converts the dataset, writes the patched config/command, and (when runnable)")
     w("executes it; **D** is the per-variant support matrix. `status` reflects")
-    w("documented fine-tuning support, not an execution guarantee — see `demonstrated` for that.")
+    w("what upstream documents for that variant, not a promise about your own data or host.")
     w("")
     w("```bash")
     w("export OMM=$(pwd)          # this clone")
@@ -250,14 +250,12 @@ def render(models: dict) -> str:
 
 
 def coverage_line(models: dict) -> str:
-    total = demonstrated = 0
+    total = 0
     for fam in families(models):
         for v in variants(models, fam):
-            ft = variant_finetune(models, fam, v)
+            variant_finetune(models, fam, v)      # every variant must carry a classification
             total += 1
-            if ft.get("demonstrated"):
-                demonstrated += 1
-    return f"{total}/{total} classified · {demonstrated}/{total} demonstrated"
+    return f"{total}/{total} classified"
 
 
 def check_orphans(models: dict) -> None:

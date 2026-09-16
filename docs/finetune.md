@@ -9,7 +9,7 @@ actually reads; **C** is the single command this hub generates per variant —
 `scripts/ft_run.py` resolves the variant's `finetune` block in `models.json`,
 converts the dataset, writes the patched config/command, and (when runnable)
 executes it; **D** is the per-variant support matrix. `status` reflects
-documented fine-tuning support, not an execution guarantee — see `demonstrated` for that.
+what upstream documents for that variant, not a promise about your own data or host.
 
 ```bash
 export OMM=$(pwd)          # this clone
@@ -59,10 +59,10 @@ python3 $OMM/scripts/ft_run.py SevenNet-Omni --dataset <your-dataset> --out ft_s
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `SevenNet-MF-OMPA` | documented | True | — | 2-epoch demo fine-tune verified |
-| `SevenNet-Omni` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `SevenNet-MF-OMPA` | documented | True | — |
+| `SevenNet-Omni` | documented | True | — |
 
 ---
 
@@ -116,11 +116,11 @@ python3 $OMM/scripts/ft_run.py MACE-MH-1-OC20 --dataset <your-dataset> --out ft_
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `MACE-MPA-0` | documented | True | — | 2-epoch demo fine-tune verified |
-| `MACE-MH-1-OMAT` | documented | True | ASL | — |
-| `MACE-MH-1-OC20` | documented | True | ASL | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `MACE-MPA-0` | documented | True | — |
+| `MACE-MH-1-OMAT` | documented | True | ASL |
+| `MACE-MH-1-OC20` | documented | True | ASL |
 
 ---
 
@@ -156,10 +156,10 @@ python3 $OMM/scripts/ft_run.py NequIP-OAM-L --dataset <your-dataset> --out ft_ne
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `NequIP-OAM-XL` | documented | True | — | — |
-| `NequIP-OAM-L` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `NequIP-OAM-XL` | documented | True | — |
+| `NequIP-OAM-L` | documented | True | — |
 
 ---
 
@@ -189,9 +189,9 @@ python3 $OMM/scripts/ft_run.py Allegro-OAM-L --dataset <your-dataset> --out ft_a
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `Allegro-OAM-L` | documented (inherited from NequIP) | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `Allegro-OAM-L` | documented (inherited from NequIP) | True | — |
 
 ---
 
@@ -224,9 +224,9 @@ python3 $OMM/scripts/ft_run.py Nequix-MP-1 --dataset <your-dataset> --out ft_neq
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `Nequix-MP-1` | documented | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `Nequix-MP-1` | documented | False | — |
 
 ---
 
@@ -261,9 +261,9 @@ python3 $OMM/scripts/ft_run.py DPA-3.1-3M-FT --dataset <your-dataset> --out ft_d
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `DPA-3.1-3M-FT` | documented | True | — | ft_verify: 2-epoch demo fine-tune completed successfully |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `DPA-3.1-3M-FT` | documented | True | — |
 
 ---
 
@@ -295,9 +295,9 @@ python3 $OMM/scripts/ft_run.py ORB-v3 --dataset <your-dataset> --out ft_orb-v3
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `ORB-v3` | documented | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `ORB-v3` | documented | False | — |
 
 ---
 
@@ -329,9 +329,9 @@ python3 $OMM/scripts/ft_run.py GRACE-2L-OAM --dataset <your-dataset> --out ft_gr
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `GRACE-2L-OAM` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `GRACE-2L-OAM` | documented | True | — |
 
 ---
 
@@ -361,9 +361,9 @@ python3 $OMM/scripts/ft_run.py MatterSim-v1-5M --dataset <your-dataset> --out ft
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `MatterSim-v1-5M` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `MatterSim-v1-5M` | documented | True | — |
 
 ---
 
@@ -397,9 +397,9 @@ python3 $OMM/scripts/ft_run.py CHGNet-v0.3.0 --dataset <your-dataset> --out ft_c
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `CHGNet-v0.3.0` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `CHGNet-v0.3.0` | documented | True | — |
 
 ---
 
@@ -425,9 +425,9 @@ Pickled dict {'E','F','R','z','cell','natoms','stress'} under dataset/<name>/raw
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `AlphaNet-v1-OMA` | code-excavation-needed | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `AlphaNet-v1-OMA` | code-excavation-needed | False | — |
 
 ---
 
@@ -453,9 +453,9 @@ n/a.
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `Eqnorm-MPtrj` | not-supported | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `Eqnorm-MPtrj` | not-supported | False | — |
 
 ---
 
@@ -487,9 +487,9 @@ python3 $OMM/scripts/ft_run.py eSEN-30M-OAM --dataset <your-dataset> --out ft_es
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `eSEN-30M-OAM` | documented (generic v1) + code-excavation for eSEN specifics | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `eSEN-30M-OAM` | documented (generic v1) + code-excavation for eSEN specifics | False | — |
 
 ---
 
@@ -522,9 +522,9 @@ python3 $OMM/scripts/ft_run.py EqV3-OMatMPtrjSalex --dataset <your-dataset> --ou
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `EqV3-OMatMPtrjSalex` | source-derived (hub builder) | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `EqV3-OMatMPtrjSalex` | source-derived (hub builder) | False | — |
 
 ---
 
@@ -602,16 +602,16 @@ python3 $OMM/scripts/ft_run.py UMA-s-1p2-OMAT --dataset <your-dataset> --out ft_
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `UMA-m-1p1-OC20` | documented | False | — | — |
-| `UMA-m-1p1-OMAT` | documented | False | — | — |
-| `UMA-s-1p1-OC20` | documented | False | — | — |
-| `UMA-s-1p1-OMAT` | documented | False | — | — |
-| `UMA-s-1p2-OC20` | documented | False | — | — |
-| `UMA-s-1p2-OC22` | documented | False | — | — |
-| `UMA-s-1p2-OC25` | documented | False | — | — |
-| `UMA-s-1p2-OMAT` | documented | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `UMA-m-1p1-OC20` | documented | False | — |
+| `UMA-m-1p1-OMAT` | documented | False | — |
+| `UMA-s-1p1-OC20` | documented | False | — |
+| `UMA-s-1p1-OMAT` | documented | False | — |
+| `UMA-s-1p2-OC20` | documented | False | — |
+| `UMA-s-1p2-OC22` | documented | False | — |
+| `UMA-s-1p2-OC25` | documented | False | — |
+| `UMA-s-1p2-OMAT` | documented | False | — |
 
 ---
 
@@ -642,9 +642,9 @@ python3 $OMM/scripts/ft_run.py PET-OAM-XL --dataset <your-dataset> --out ft_pet-
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `PET-OAM-XL` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `PET-OAM-XL` | documented | True | — |
 
 ---
 
@@ -684,10 +684,10 @@ python3 $OMM/scripts/ft_run.py EquFlash-v1 --dataset <your-dataset> --out ft_equ
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `EquFlashV2` | documented (config-level) | False | CC-BY-NC-SA-4.0 | — |
-| `EquFlash-v1` | documented (config-level) | False | CC-BY-NC-SA-4.0 | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `EquFlashV2` | documented (config-level) | False | CC-BY-NC-SA-4.0 |
+| `EquFlash-v1` | documented (config-level) | False | CC-BY-NC-SA-4.0 |
 
 ---
 
@@ -713,9 +713,9 @@ n/a.
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `MatRIS-10M-OAM` | not-supported | False | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `MatRIS-10M-OAM` | not-supported | False | — |
 
 ---
 
@@ -745,9 +745,9 @@ python3 $OMM/scripts/ft_run.py DPA-4.0.1-pro-MPtrj --dataset <your-dataset> --ou
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `DPA-4.0.1-pro-MPtrj` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `DPA-4.0.1-pro-MPtrj` | documented | True | — |
 
 ---
 
@@ -780,8 +780,8 @@ python3 $OMM/scripts/ft_run.py TACE-OAM-L --dataset <your-dataset> --out ft_tace
 
 ### D. Per-variant support matrix
 
-| variant | status | runnable_as_installed | licence | demonstrated |
-|---|---|---|---|---|
-| `TACE-OAM-L` | documented | True | — | — |
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `TACE-OAM-L` | documented | True | — |
 
 ---

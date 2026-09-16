@@ -240,7 +240,7 @@
     },
     "finetune_entry": {
       "type": "object",
-      "description": "Per-variant fine-tuning classification (oh-my-mlip 4-feature expansion, P2a). Now REQUIRED on every version_entry (P2b: the AC3 gate is live -- all 32 variants carry a classification, 3 of them a 'demonstrated' verdict from P3's ft_verify runs). A variant inherits its family's fine-tuning facts unless it carries an explicit override here (variant_args, or a fully-restated block for a divergence like UMA-s-1p2-OC22 or DPA-3.1-3M-FT).",
+      "description": "Per-variant fine-tuning classification (oh-my-mlip 4-feature expansion, P2a). Now REQUIRED on every version_entry (P2b: the AC3 gate is live -- all 32 variants carry a classification). A variant inherits its family's fine-tuning facts unless it carries an explicit override here (variant_args, or a fully-restated block for a divergence like UMA-s-1p2-OC22 or DPA-3.1-3M-FT).",
       "additionalProperties": true,
       "required": [
         "status",
@@ -259,7 +259,7 @@
             "source-derived (hub builder)",
             "not-supported"
           ],
-          "description": "doc-honesty state, NOT an execution claim -- see 'demonstrated' for that. 'documented' variants may carry a parenthetical qualifier (inherited-from-family, config-level-only, or v1-generic-plus-excavation) rather than a bare match against the enum root string; validated exactly against the values this registry actually uses."
+          "description": "doc-honesty state: what upstream documents for this variant, NOT a claim that a run on your data or host will succeed. 'documented' variants may carry a parenthetical qualifier (inherited-from-family, config-level-only, or v1-generic-plus-excavation) rather than a bare match against the enum root string; validated exactly against the values this registry actually uses."
         },
         "entrypoint": {
           "type": [
@@ -329,13 +329,6 @@
             "type": "string"
           },
           "description": "URLs backing a 'not-supported' status, which asserts an ABSENCE and needs a citation"
-        },
-        "demonstrated": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "null until P3 records a passing ft_verify.py run for this variant; a 'demonstrated' doc-honesty state is a stronger claim than 'documented' and must never be inferred, only recorded from an oracle"
         }
       },
       "allOf": [
