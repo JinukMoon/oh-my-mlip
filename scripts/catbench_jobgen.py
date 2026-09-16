@@ -113,6 +113,11 @@ def _render_body(spec: dict, jobfile: Path, workdir: Path) -> str:
         "set -eu",
         f'cd "{Path(workdir).resolve()}"',  # N4: catbench writes into cwd/result/
     ]
+    # The env's own bin goes first on PATH, as oh_my_mlip/provider.py does when it
+    # dispatches inference: openequivariance (NequIP/Allegro) JIT-compiles its CUDA
+    # extension at first use and shells out to `ninja`, which is installed only in the
+    # env. env_run is exported after this, so its overrides still win.
+    lines.append(f'export PATH="{Path(spec["python"]).resolve().parent}${{PATH:+:$PATH}}"')
     for key, value in spec.get("env_run", {}).items():
         lines.append(f'export {key}="{value}"')
     lines.append(f'exec "{spec["python"]}" "{Path(jobfile).resolve()}"')

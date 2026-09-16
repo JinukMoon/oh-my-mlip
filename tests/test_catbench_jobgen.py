@@ -106,7 +106,9 @@ def test_runner_sh_no_export_for_mace(tmp_path):
     jobfile = tmp_path / "jobs" / "catbench_MACE-MPA-0.py"
     text = catbench_jobgen.render_runner_sh(spec, jobfile, tmp_path)
     assert spec["env_run"] == {}
-    assert "export " not in text
+    # the env's bin on PATH is not an env_run export; it is always written
+    exports = [ln for ln in text.splitlines() if ln.startswith("export ")]
+    assert exports == [_path_export(spec)]
 
 
 def test_runner_sh_export_count_matches_env_run(tmp_path):
@@ -114,7 +116,24 @@ def test_runner_sh_export_count_matches_env_run(tmp_path):
     jobfile = tmp_path / "jobs" / f"catbench_{spec['version']}.py"
     text = catbench_jobgen.render_runner_sh(spec, jobfile, tmp_path)
     export_lines = [ln for ln in text.splitlines() if ln.startswith("export ")]
-    assert len(export_lines) == len(spec["env_run"])
+    assert len(export_lines) == len(spec["env_run"]) + 1          # + the PATH line
+
+
+def _path_export(spec: dict) -> str:
+    env_bin = catbench_jobgen.Path(spec["python"]).resolve().parent
+    return f'export PATH="{env_bin}${{PATH:+:$PATH}}"'
+
+
+def test_runner_sh_puts_the_env_bin_first_on_path_before_env_run(tmp_path):
+    # openequivariance (NequIP/Allegro) shells out to `ninja` from the env's bin at
+    # first use; without it the job dies with "Ninja is required to load C++ extensions".
+    spec = _spec("NequIP")
+    jobfile = tmp_path / "jobs" / f"catbench_{spec['version']}.py"
+    lines = catbench_jobgen.render_runner_sh(spec, jobfile, tmp_path).splitlines()
+    assert _path_export(spec) in lines
+    # PATH is written before env_run, so an env_run key of the same name still wins
+    assert lines.index(_path_export(spec)) < lines.index('export MAX_JOBS="4"')
+    assert lines.index(_path_export(spec)) < next(i for i, ln in enumerate(lines) if ln.startswith("exec "))
 
 
 # ── cd to the absolute workdir before exec (N4) ──────────────────────────────
