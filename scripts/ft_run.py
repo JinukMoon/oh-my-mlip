@@ -2351,7 +2351,7 @@ FAMILY_CHECKPOINT_GLOBS = {
     "UMA": ["runs/ft/checkpoints/final/inference_ckpt.pt"],
     # checkpoint.pt is written every epoch; best_checkpoint.pt only at an evaluation
     "fairchemv1": ["runs/checkpoints/ft/checkpoint.pt"],
-    "EquFlash": ["runs/ft/checkpoints/checkpoint.pt"],
+    "EquFlash": ["runs/checkpoints/checkpoint_last.pt"],
     # WANDB_DIR=<out>, WANDB_MODE=offline: wandb.run.dir is wandb/offline-run-<time>-<id>/files
     "Nequix": ["wandb/offline-run-*/files/checkpoint.nqx"],
     # every --save_every_x_epochs and the last epoch; the newest file is the final state

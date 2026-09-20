@@ -255,7 +255,7 @@ EXPECTED_CKPT = {
     "CHGNet": "chgnet_ft/bestE_epoch10_e1_f1.pth.tar",
     "UMA": "runs/ft/checkpoints/final/inference_ckpt.pt",
     "fairchemv1": "runs/checkpoints/ft/checkpoint.pt",
-    "EquFlash": "runs/ft/checkpoints/checkpoint.pt",
+    "EquFlash": "runs/checkpoints/checkpoint_last.pt",
     "Nequix": "wandb/offline-run-20260915_120000-abc/files/checkpoint.nqx",
     "ORB": "ckpts/checkpoint_epoch49.ckpt",
     "EquiformerV3": "runs/checkpoints/ft/checkpoint.pt",

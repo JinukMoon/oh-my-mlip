@@ -108,7 +108,7 @@ CKPT_GLOBS = {
     "CHGNet": ["chgnet_ft/bestE_*.pth.tar"],
     "UMA": ["runs/ft/checkpoints/final/inference_ckpt.pt"],
     "fairchemv1": ["runs/checkpoints/ft/checkpoint.pt"],
-    "EquFlash": ["runs/ft/checkpoints/checkpoint.pt"],
+    "EquFlash": ["runs/checkpoints/checkpoint_last.pt"],
     "Nequix": ["wandb/offline-run-*/files/checkpoint.nqx"],
     "ORB": ["ckpts/checkpoint_epoch*.ckpt"],
     "EquiformerV3": ["runs/checkpoints/ft/checkpoint.pt"],

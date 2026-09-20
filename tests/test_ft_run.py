@@ -513,7 +513,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         # fairchem also keeps per-step checkpoints and a resume.yaml next to final/
         "UMA": ["runs/ft/checkpoints/step_1000/inference_ckpt.pt", "runs/ft/checkpoints/final/resume.yaml"],
         "fairchemv1": ["runs/checkpoints/ft/best_checkpoint.pt"],
-        "EquFlash": ["runs/ft/checkpoints/best_checkpoint.pt", "runs/ft/logs/files/log.txt"],
+        "EquFlash": ["runs/checkpoints/best_checkpoint.pt", "runs/logs/files/log.txt"],
         "Nequix": ["wandb/offline-run-20260915_120000-abc/files/state.pkl", "state.pkl"],
         "ORB": ["finetune.py", "orb_data/train.db"],
         "EquiformerV3": ["runs/checkpoints/ft/best_checkpoint.pt", "eqv3_data/element_references.pt"],
