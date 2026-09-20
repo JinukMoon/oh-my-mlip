@@ -15,7 +15,10 @@ D3/CUDA environment).
 source env.sh
 python run_examples/single_point.py MACE          # or SevenNet, ...
 python run_examples/single_point.py MACE --d3     # with D3 dispersion
-python run_examples/relax.py SevenNet --fmax 0.05
+# relax.py runs the ASE optimizer in the LAUNCHER, so use a python that has ase --
+# every model env ships one:
+INTERP=$(python3 -c 'import oh_my_mlip; print(oh_my_mlip.resolve("SevenNet")["python"])')
+"$INTERP" run_examples/relax.py SevenNet --fmax 0.05
 ```
 
 ## Bring your own data (catbench)

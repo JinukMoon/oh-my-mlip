@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -50,6 +51,35 @@ def find_family(model: str, registry: dict) -> tuple[str, dict] | None:
             if version.lower() == want:
                 return family, spec
     return None
+
+
+def prepare_weights(home: Path, env_name: str, python: Path) -> None:
+    """Run the weight preparation install.sh runs after it builds an env.
+
+    Adoption skipped this entirely, so a model whose inference names a PATH
+    (GRACE's SavedModel, DeePMD's frozen .pth) resolved to a file nobody had
+    created: pasting the resolve() lines then failed with a missing file, while
+    the same model worked from an install.sh-built env. Mirrors install.sh:
+    prestage_* is pure stdlib and runs on any python, prepare_* needs the env's
+    own CLI. Failure leaves the adoption standing -- the weights can be fetched
+    later -- but it is reported, never swallowed."""
+    steps = [
+        (home / "scripts" / f"prestage_{env_name}_weights.py", sys.executable),
+        (home / "scripts" / f"prepare_{env_name}_weights.py", str(python)),
+    ]
+    child_env = dict(os.environ, OH_MY_MLIP_HOME=str(home))
+    for script, interpreter in steps:
+        if not script.exists():
+            continue
+        print(f"preparing weights: {script.name} ...")
+        proc = subprocess.run([interpreter, str(script)], capture_output=True, text=True,
+                              timeout=3600, env=child_env)
+        if proc.returncode != 0:
+            tail = (proc.stderr.strip().splitlines() or ["<no stderr>"])[-1]
+            print(f"  {script.name} FAILED: {tail}\n"
+                  f"  the adoption stands, but this model's weights are not staged yet -- "
+                  f"rerun it, or run `python3 scripts/setup_verify.py {env_name}` to fetch on demand.",
+                  file=sys.stderr)
 
 
 def main() -> int:
@@ -110,6 +140,7 @@ def main() -> int:
     data[env_name] = str(prefix)
     save_map(home, data)
     print(f"adopted: {env_name} -> {prefix}  (imports verified)")
+    prepare_weights(home, env_name, python)
     return 0
 
 

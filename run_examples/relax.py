@@ -38,10 +38,21 @@ from pathlib import Path
 _HOME = os.environ.get("OH_MY_MLIP_HOME") or str(Path(__file__).resolve().parent.parent)
 sys.path.insert(0, _HOME)
 
-from ase.build import bulk  # noqa: E402
-from ase.calculators.calculator import Calculator, all_changes  # noqa: E402
-from ase.io import read  # noqa: E402
-from ase.optimize import BFGS  # noqa: E402
+try:
+    from ase.build import bulk  # noqa: E402
+    from ase.calculators.calculator import Calculator, all_changes  # noqa: E402
+    from ase.io import read  # noqa: E402
+    from ase.optimize import BFGS  # noqa: E402
+except ImportError as _exc:  # the optimizer runs HERE, so this interpreter needs ase
+    print(
+        f"relax.py needs ase in the interpreter that runs it ({sys.executable}): {_exc}.\n"
+        "  The ASE optimizer drives the worker step by step, so it lives in the launcher.\n"
+        "  Use the model's own interpreter, which ships ase:\n"
+        "    python3 -c 'import oh_my_mlip; print(oh_my_mlip.resolve(\"<MODEL>\")[\"python\"])'\n"
+        "  then rerun this file with that interpreter.",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
 from oh_my_mlip import Worker  # noqa: E402
 from oh_my_mlip.provider import WorkerError  # noqa: E402
 

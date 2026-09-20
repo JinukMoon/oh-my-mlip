@@ -127,3 +127,55 @@ def test_survey_counts_adopted_as_ready(tmp_path):
     assert row["state"] == "ready" and row["adopted"] is True
     assert result["to_build"] == []
     assert result["disk"]["budget_gb"] == 0
+
+
+def _passthrough_env(tmp_path: Path, name: str) -> Path:
+    """A fake env whose bin/python really runs python -- prepare_* scripts are
+    executed BY the adopted interpreter, so a stub that ignores its arguments
+    would make the test pass without running anything."""
+    prefix = tmp_path / name
+    (prefix / "bin").mkdir(parents=True)
+    py = prefix / "bin" / "python"
+    # `-c` is adopt_env's registry-import check (it must pass for a fake env);
+    # a script path is a real weight-preparation run and must really execute.
+    py.write_text(f'#!/bin/sh\ncase "$1" in -c) exit 0 ;; esac\nexec {sys.executable} "$@"\n')
+    py.chmod(py.stat().st_mode | stat.S_IEXEC)
+    return prefix
+
+
+def test_adoption_prepares_weights_like_install_sh(tmp_path: Path):
+    """install.sh runs scripts/{prestage,prepare}_<env>_weights.py after building
+    an env; adoption skipped them, so a path-based model (GRACE, DeePMD) resolved
+    to a checkpoint nobody had created and failed at load with a missing file."""
+    home = _home(tmp_path)
+    scripts = home / "scripts"
+    scripts.mkdir(exist_ok=True)
+    marker = tmp_path / "prepared.txt"
+    (scripts / "prepare_alpha_weights.py").write_text(
+        f"open({str(marker)!r}, 'w').write('done')\n"
+    )
+    prefix = _passthrough_env(tmp_path, "alpha_env")
+
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "adopt_env.py"), "Alpha", str(prefix)],
+        capture_output=True, text=True, env={"OH_MY_MLIP_HOME": str(home), "PATH": "/usr/bin:/bin"},
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "preparing weights: prepare_alpha_weights.py" in proc.stdout
+    assert marker.read_text() == "done"
+
+
+def test_a_failing_weight_preparation_is_reported_but_keeps_the_adoption(tmp_path: Path):
+    home = _home(tmp_path)
+    scripts = home / "scripts"
+    scripts.mkdir(exist_ok=True)
+    (scripts / "prepare_alpha_weights.py").write_text("raise SystemExit('no network')\n")
+    prefix = _passthrough_env(tmp_path, "alpha_env")
+
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "adopt_env.py"), "Alpha", str(prefix)],
+        capture_output=True, text=True, env={"OH_MY_MLIP_HOME": str(home), "PATH": "/usr/bin:/bin"},
+    )
+    assert proc.returncode == 0
+    assert "FAILED" in proc.stderr and "no network" in proc.stderr
+    assert json.loads((home / "env_map.local.json").read_text())["alpha"] == str(prefix)
