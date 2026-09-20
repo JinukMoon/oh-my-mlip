@@ -218,6 +218,51 @@ _FOUNDATION_OVERRIDE = {
 }
 
 
+class TrackedSettings(dict):
+    """A settings mapping that remembers which names the builder actually read.
+
+    A setting the builder never reads never reaches the trainer. Recording the
+    reads catches that for all seventeen builders at once instead of auditing
+    each by hand -- and it catches the next builder too. Iteration marks every
+    key as read: a builder that walks the whole mapping really does see them,
+    and guessing otherwise would refuse honest runs."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reads: set[str] = set()
+
+    def __getitem__(self, key):
+        self.reads.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self.reads.add(key)
+        return super().get(key, default)
+
+    def __contains__(self, key):
+        self.reads.add(key)
+        return super().__contains__(key)
+
+    def _read_all(self):
+        self.reads.update(super().keys())
+
+    def keys(self):
+        self._read_all()
+        return super().keys()
+
+    def items(self):
+        self._read_all()
+        return super().items()
+
+    def values(self):
+        self._read_all()
+        return super().values()
+
+    def __iter__(self):
+        self._read_all()
+        return super().__iter__()
+
+
 @dataclass
 class Context:
     family: str
@@ -2524,6 +2569,7 @@ def main() -> int:
 
     # Validate that all requested knobs are supported by this framework (defect 3)
     try:
+        ft_settings.validate_setting_names(family, set(user_values.keys()))
         ft_settings.validate_knobs_exist(family, set(user_knobs.keys()))
     except ft_settings.SettingsError as e:
         print(f"[ft_run] {e}", file=sys.stderr)
@@ -2623,12 +2669,27 @@ def main() -> int:
         epochs=int(epochs_value) if isinstance(epochs_value, (int, float)) else None,
         batch_size=int(batch_value) if isinstance(batch_value, (int, float)) else None,
         device=args.device, dataset_paths=conv["outputs"], elements=conv["elements"], seed=seed,
-        settings=resolved_settings, settings_origins=settings_origins, n_train=conv.get("n_train"),
+        settings=TrackedSettings(resolved_settings), settings_origins=settings_origins,
+        n_train=conv.get("n_train"),
     )
     try:
         spec = builder(ctx)
     except ValueError as exc:
         print(f"[ft_run] {version}: {exc}", file=sys.stderr)
+        return 1
+
+    # A value you set that the builder never read would not reach the trainer.
+    # Silently dropping it is the worst outcome: the run looks like it honoured
+    # the request (--freeze, --scheduler, a --set name) and did not.
+    dropped = sorted(
+        name for name, origin in settings_origins.items()
+        if origin == "user" and name not in ctx.settings.reads
+    )
+    if dropped:
+        print(f"[ft_run] {family}/{version}: this builder does not pass these settings to the "
+              f"trainer: {', '.join(dropped)}\n"
+              f"  Refusing rather than running as if they had been applied. Remove them to run "
+              f"with what this builder does support.", file=sys.stderr)
         return 1
 
     if spec.config_path is not None:
@@ -2649,7 +2710,8 @@ def main() -> int:
         slurm_path.chmod(0o755)
         print(f"[ft_run] wrote {slurm_path}")
 
-    record = run_record(args, version=version, family=family, resolved=resolved, out=out, dataset=dataset,
+    record = run_record(args, applied_settings=set(ctx.settings.reads),
+                        version=version, family=family, resolved=resolved, out=out, dataset=dataset,
                         seed=seed, seed_requested=seed_requested, seed_scope=seed_scope, seed_basis=seed_basis,
                         spec=spec, sh_path=sh_path, slurm_path=slurm_path, conversion=conv,
                         resolved_settings=resolved_settings, settings_origins=settings_origins,
@@ -2671,6 +2733,7 @@ def run_record(args, *, version: str, family: str, resolved: dict, out: Path, da
                seed: int, seed_requested: bool, seed_scope: str, seed_basis: str,
                spec: CommandSpec, sh_path: Path, slurm_path: Path | None, conversion: dict,
                resolved_settings: dict | None = None, settings_origins: dict | None = None,
+               applied_settings: set | None = None,
                final_epochs: int | None = None, final_batch_size: int | None = None) -> dict:
     """<out>/ft_run.json -- the provenance the emitted artifacts alone do not
     carry: what was asked (the exact ft_run.py argv to re-materialize this
@@ -2721,8 +2784,14 @@ def run_record(args, *, version: str, family: str, resolved: dict, out: Path, da
     }
     # Record all resolved settings with their origins
     if resolved_settings:
-        result["settings"] = {name: {"value": val, "origin": settings_origins.get(name, "unknown")}
-                             for name, val in resolved_settings.items()}
+        result["settings"] = {}
+        for name, val in resolved_settings.items():
+            entry = {"value": val, "origin": settings_origins.get(name, "unknown")}
+            if applied_settings is not None:
+                # whether the builder actually read it -- a setting recorded with
+                # origin "user" but applied false never reached the trainer
+                entry["applied"] = name in applied_settings
+            result["settings"][name] = entry
     return result
 
 

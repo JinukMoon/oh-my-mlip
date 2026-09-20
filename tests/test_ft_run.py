@@ -985,3 +985,58 @@ def test_defect3_validate_knobs_exist_in_ft_settings():
     except ft_settings.SettingsError as e:
         # Expected: MACE doesn't expose patience knob
         assert "patience" in str(e).lower() or "does not expose" in str(e)
+
+
+# ── settings must reach the trainer, or the run is refused ───────────────────
+def test_unknown_set_name_is_refused_and_suggests_the_real_one(tmp_path, monkeypatch, synthetic_traj, capsys):
+    """`--set bogus=1` used to vanish: resolve_settings only walks declared
+    settings, so an undeclared name (or a typo) never reached the trainer and
+    never said so, while docs/howto/finetune.md advertises --set for any
+    native setting."""
+    out = tmp_path / "out"
+    rc, calls = _run_main(monkeypatch, ["MACE-MPA-0", "--dataset", str(synthetic_traj), "--out", str(out),
+                                        "--emit-only", "--set=batch_sizee=4"])
+    assert rc == 1 and calls == [] and not out.exists()
+    err = capsys.readouterr().err
+    assert "does not declare these settings" in err and "batch_sizee" in err
+    assert "--batch_size" in err            # the near-miss suggestion
+
+
+def test_a_setting_the_builder_never_reads_is_refused(tmp_path, monkeypatch, synthetic_traj, capsys):
+    """MACE declares --freeze (ft_settings COMMON_KNOBS territory) but the
+    builder never emits it: a user asking to freeze layers would otherwise get
+    a full fine-tune reported as success."""
+    out = tmp_path / "out"
+    rc, calls = _run_main(monkeypatch, ["MACE-MPA-0", "--dataset", str(synthetic_traj), "--out", str(out),
+                                        "--emit-only", "--epochs", "2", "--batch-size", "4",
+                                        "--set=--freeze=2"])
+    # the refusal lands after dataset conversion (the builder runs on the converted set),
+    # so a convert call is expected -- nothing is executed and no command is emitted
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "does not pass these settings to the trainer" in err and "--freeze" in err
+
+
+def test_tracked_settings_records_reads_and_iteration_counts_as_reading_all():
+    s = ft_run.TrackedSettings({"a": 1, "b": 2, "c": 3})
+    assert s.get("a") == 1 and s["b"] == 2 and ("c" in s)
+    assert s.reads == {"a", "b", "c"}
+    s2 = ft_run.TrackedSettings({"x": 1, "y": 2})
+    assert s2.reads == set()
+    dict(s2)                                  # a builder that walks the mapping sees everything
+    assert s2.reads == {"x", "y"}
+
+
+def test_ft_run_json_marks_whether_each_setting_reached_the_builder(tmp_path, monkeypatch, synthetic_traj):
+    import json
+    out = tmp_path / "out"
+    rc, _ = _run_main(monkeypatch, ["MACE-MPA-0", "--dataset", str(synthetic_traj), "--out", str(out),
+                                    "--emit-only", "--epochs", "2", "--batch-size", "4"])
+    assert rc == 0
+    settings = json.loads((out / "ft_run.json").read_text())["settings"]
+    applied_user = [n for n, e in settings.items() if e["origin"] == "user" and e["applied"]]
+    assert applied_user, "the values the user set are not marked as reaching the builder"
+    unapplied = [n for n, e in settings.items() if e["applied"] is False]
+    assert unapplied, "every declared setting looked applied -- the read tracking is not wired"
+    # a run only survives when nothing the USER set went unread (see the refusal above)
+    assert all(settings[n]["origin"] != "user" for n in unapplied)

@@ -180,6 +180,33 @@ def show_settings(framework: str) -> str:
     return "\n".join(lines)
 
 
+def validate_setting_names(framework: str, names: set[str]) -> None:
+    """Raise SettingsError for a --set NAME the framework does not declare.
+
+    An unknown name used to be dropped in silence: resolve_settings only walks
+    the declared settings, so `--set bogus=1` (or a typo in a real name) never
+    reached the trainer and never said so. docs/howto/finetune.md advertises
+    --set NAME=VALUE for any native setting, which makes silence the worst
+    answer -- the user believes the value was applied."""
+    settings_file = load_settings_file(framework)
+    declared = {s["name"] for s in settings_file.get("settings", []) if s.get("name")}
+    unknown = {n for n in names if n not in declared}
+    if not unknown:
+        return
+    import difflib
+
+    lines = []
+    for name in sorted(unknown):
+        close = difflib.get_close_matches(name, sorted(declared), n=3, cutoff=0.6)
+        hint = f" -- did you mean {', '.join(close)}?" if close else ""
+        lines.append(f"  {name}{hint}")
+    raise SettingsError(
+        f"[ft_settings] {framework} does not declare these settings:\n"
+        + "\n".join(lines)
+        + f"\n  Run `python3 scripts/ft_run.py {framework} --show-settings` for the list."
+    )
+
+
 def validate_knobs_exist(framework: str, knob_names: set[str]) -> None:
     """Raise SettingsError if any knob is not exposed by the framework."""
     settings_file = load_settings_file(framework)
