@@ -14,6 +14,7 @@ JSONL protocol — NEVER an in-process import across conda envs.
 """
 from __future__ import annotations
 
+import collections
 import glob
 import json
 import os
@@ -132,6 +133,9 @@ class Worker:
         self._proc = None
         self._counter = 0
         self._lock = threading.Lock()
+        # stderr is drained continuously into this bounded buffer; see _start_stderr_drain
+        self._stderr_lines: collections.deque = collections.deque(maxlen=400)
+        self._stderr_thread: threading.Thread | None = None
         self._python_exe = python_exe or self.spec["python"]
         self._env_override = env
 
@@ -237,6 +241,7 @@ class Worker:
             raise WorkerError(
                 _env_not_installed_msg(self.model, self.spec["env"], self._python_exe)
             ) from exc
+        self._start_stderr_drain()
         line = self._proc.stdout.readline()
         if not line:
             err = self._read_stderr()
@@ -254,7 +259,42 @@ class Worker:
             )
         return self
 
+    def _start_stderr_drain(self) -> None:
+        """Keep the worker's stderr pipe empty for the life of the process.
+
+        Nobody read this pipe while requests were in flight, and _worker.py
+        routes the backend's own stdout into it as well. On a talkative model
+        the pipe buffer fills, the child blocks in write(), the supervisor
+        blocks in readline(), and neither ever wakes -- a deadlock invisible to
+        the mocked tests because a mock never writes enough to fill a pipe. The
+        drain keeps only the last lines, which is all an error message needs.
+        """
+        stream = self._proc.stderr if self._proc is not None else None
+        if stream is None:
+            return
+
+        def _drain() -> None:
+            try:
+                for line in stream:
+                    self._stderr_lines.append(line.rstrip("\n"))
+            except Exception:  # the pipe closes when the worker exits
+                pass
+
+        self._stderr_thread = threading.Thread(
+            target=_drain, daemon=True, name=f"omm-stderr-{self.model}"
+        )
+        self._stderr_thread.start()
+
     def _read_stderr(self) -> str:
+        # Give the drain a moment to collect a dying worker's last words, then
+        # report what it buffered. The direct read is the fallback for a stream
+        # the drain could not iterate (test doubles).
+        thread = self._stderr_thread
+        if thread is not None:
+            thread.join(timeout=0.5)
+        buffered = "\n".join(self._stderr_lines)
+        if buffered:
+            return buffered
         if self._proc is None or self._proc.stderr is None:
             return ""
         try:

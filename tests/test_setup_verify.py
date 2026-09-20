@@ -201,3 +201,23 @@ def test_exit_code_contract_unknown_model():
     verdict = json.loads(proc.stdout.strip().splitlines()[-1])
     assert verdict["pass"] is False
     assert "unknown model" in verdict["reason"]
+
+
+def test_verdict_non_finite_energy_is_fail():
+    """A model that returns NaN/Inf must never pass: the oracle is what the
+    agent renders, so a non-finite number here becomes a false 'works'."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        got = oracle.decide_verdict(NO_SKEW, 0, True, dict(WITNESS, energy_ev=bad), "")
+        assert got["pass"] is False and got["reason"] == "non_finite_result", bad
+
+
+def test_verdict_non_finite_force_fails_on_the_cpu_fallback_path_too():
+    # the skew branch returns a pass without GPU proof -- it must still check the numbers
+    got = oracle.decide_verdict(SKEW, 0, False, dict(WITNESS, fmax_ev_a=float("nan")), "")
+    assert got["pass"] is False and got["reason"] == "non_finite_result"
+    assert got["degraded"] is True
+
+
+def test_verdict_witness_without_both_numbers_is_fail():
+    got = oracle.decide_verdict(NO_SKEW, 0, True, {"energy_ev": -1.0, "forces_shape": [4, 3]}, "")
+    assert got["pass"] is False and got["reason"] == "non_finite_result"

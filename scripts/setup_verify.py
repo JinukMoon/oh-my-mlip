@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -131,6 +132,17 @@ def decide_verdict(
         return verdict
     if witness is None:
         verdict["reason"] = "witness_json_missing"
+        return verdict
+    # A NaN/Inf energy or force is not a pass. This sits above BOTH remaining
+    # branches on purpose: the CPU-fallback (skew) branch returns a pass without
+    # any GPU proof, so it would otherwise wave a non-finite result through.
+    # run_examples/single_point.py always emits both numbers, so a missing one is
+    # a broken witness rather than an optional field.
+    if not all(
+        isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+        for x in (verdict["energy_ev"], verdict["fmax_ev_a"])
+    ):
+        verdict["reason"] = "non_finite_result"
         return verdict
     if skew["skew"]:
         verdict["pass"] = True

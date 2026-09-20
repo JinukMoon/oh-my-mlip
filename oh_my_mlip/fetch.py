@@ -93,7 +93,10 @@ def ensure_weights(
     targets = _inference_weight_targets(resolved)
     if not targets:
         return []
-    if all(_target_ready(path) for path in targets):
+    # size/sha in the registry describe THE weight file; with several targets
+    # there is nothing to attribute them to, so they are only used for one.
+    expected_size = resolved.get("weights_size") if len(targets) == 1 else None
+    if all(_target_ready(path, expected_size) for path in targets):
         return [str(path) for path in targets]
 
     fetch_mode = resolved.get("weights_fetch")
@@ -109,12 +112,18 @@ def ensure_weights(
             f"weights_fetch={fetch_mode!r}"
         )
 
-    missing = [str(path) for path in targets if not _target_ready(path)]
+    missing = [str(path) for path in targets if not _target_ready(path, expected_size)]
     if missing:
         raise FetchError(
             f"{resolved['model']}/{resolved['version']}: weight materialization "
             f"did not create expected path(s): {missing}"
         )
+    # Hash once, here, rather than on every readiness probe: this runs after a
+    # real download, and rehashing a multi-GB checkpoint on each resolve() would
+    # make every call pay for it (AGENTS.md ground rule 5).
+    expected_sha = resolved.get("weights_sha256") if len(targets) == 1 else None
+    if expected_sha and not _looks_like_dir_target(targets[0]):
+        _verify_sha256(str(targets[0]), expected_sha)
     return [str(path) for path in targets]
 
 
@@ -146,10 +155,19 @@ def _looks_like_dir_target(path: Path) -> bool:
     return path.suffix == ""
 
 
-def _target_ready(path: Path) -> bool:
+def _target_ready(path: Path, expected_size: int | None = None) -> bool:
+    """A weight is ready only if it is also the SIZE the registry recorded.
+
+    Size alone was the whole check, so a truncated or 1-byte leftover from an
+    interrupted download counted as ready and shadowed the real weight
+    (models.json records weights_size for the variants that have it)."""
     if _looks_like_dir_target(path):
         return path.is_dir() and any(path.iterdir())
-    return path.is_file() and path.stat().st_size > 0
+    if not (path.is_file() and path.stat().st_size > 0):
+        return False
+    if isinstance(expected_size, int) and expected_size > 0:
+        return path.stat().st_size == expected_size
+    return True
 
 
 def _target_root(targets: list[Path]) -> Path:
