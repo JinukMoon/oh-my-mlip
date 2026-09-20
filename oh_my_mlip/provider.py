@@ -17,6 +17,7 @@ from __future__ import annotations
 import collections
 import glob
 import json
+import re
 import os
 import subprocess
 import threading
@@ -76,6 +77,7 @@ def get_calculator(
     # exposed so inference lines that reference a `device` variable resolve; the
     # registry lines themselves carry device='cuda' literally today, so this is
     # belt-and-suspenders and lets future rows parameterize on it.
+    _check_device_honoured(model, spec["version"], spec["inference"], device)
     ns: dict[str, Any] = {"device": device}
     code = "\n".join(list(spec["imports"]) + list(spec["inference"]))
     exec(compile(code, f"<inference:{model}/{spec['version']}>", "exec"), ns)  # noqa: S102
@@ -94,6 +96,61 @@ def get_calculator(
 
 
 # ── Layer 4: persistent Worker (one process per env, id-routed) ──────────────
+class DeviceUnavailableError(RuntimeError):
+    """Raised when the caller's device cannot be honoured by a registry line."""
+
+
+_DEVICE_VAR_RE = re.compile(r"device\s*=\s*device\b")
+_DEVICE_LITERAL_RE = re.compile(r"""device\s*=\s*['"](cuda|cpu)['"]""")
+_CPU_KWARG_RE = re.compile(r"cpu\s*=\s*(True|False)")
+
+
+def _device_pin(inference_lines) -> str | None:
+    """The device a variant's inference lines fix, or None when the caller's
+    `device` reaches the calculator (the line references the variable)."""
+    text = "\n".join(inference_lines)
+    if _DEVICE_VAR_RE.search(text):
+        return None
+    match = _DEVICE_LITERAL_RE.search(text)
+    if match:
+        return match.group(1)
+    match = _CPU_KWARG_RE.search(text)
+    if match:
+        return "cpu" if match.group(1) == "True" else "cuda"
+    return "unspecified"
+
+
+def _check_device_honoured(model: str, version: str, inference_lines, device: str) -> None:
+    """Refuse a device the registry line cannot deliver.
+
+    The inference lines are used VERBATIM (that is what makes them trustworthy),
+    and today's lines pin the device: `device='cuda'` in most, `cpu=False` in a
+    few, nothing at all in others. `device` only entered the exec namespace, so
+    asking for cpu ran on the GPU and reported cpu -- the CPU fallback promised
+    for old-driver hosts did not exist. Saying so is the honest answer; silently
+    running elsewhere is not."""
+    pin = _device_pin(inference_lines)
+    if pin is None or pin == device:
+        return
+    # No device argument at all (e.g. SevenNetCalculator('7net-mf-ompa')): the
+    # framework picks, and on a working host that is the GPU -- the default path
+    # every variant uses today. Only a non-default request is unanswerable here.
+    if pin == "unspecified" and device == "cuda":
+        return
+    if pin == "unspecified":
+        detail = ("its inference line carries no device argument, so the framework "
+                  "chooses the device itself")
+    else:
+        detail = f"its inference line pins device {pin!r}"
+    raise DeviceUnavailableError(
+        f"{model}/{version}: cannot run on {device!r} -- {detail}.\n"
+        f"  The hub runs registry inference lines verbatim, so it refuses rather than "
+        f"reporting a {device!r} run it did not perform.\n"
+        f"  For an old driver, install a matching CUDA build or use a host whose driver "
+        f"supports the env's build (docs/host_requirements.md)."
+    )
+
+
 class WorkerError(RuntimeError):
     """Raised when a worker fails to start or dies unexpectedly."""
 

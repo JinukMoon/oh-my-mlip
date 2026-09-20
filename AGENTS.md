@@ -40,12 +40,16 @@ to submit themselves.
    fetch again. Frameworks whose own downloader accepts an empty file are
    pre-fetched by `scripts/{prestage,prepare}_<env>_weights.py`, which
    `install.sh` runs with the env's interpreter.
-6. **Driver too old for an env's CUDA build: run on CPU, and say so.** Before a
-   build, `install.sh` compares the torch `+cuNNN` build with the CUDA version the
-   NVIDIA driver supports. If the driver is older (for example CUDA 12.x against a
-   `+cu130` build), the env still installs and runs on the CPU; `setup_verify.py`
-   then reports `degraded: true` with `device: cpu`. Tell the user a newer driver
-   fixes it; never report that as GPU verification.
+6. **Driver too old for an env's CUDA build: say so, do not pretend to fall back.**
+   Before a build, `install.sh` compares the torch `+cuNNN` build with the CUDA
+   version the NVIDIA driver supports. If the driver is older (for example CUDA
+   12.x against a `+cu130` build), the env still installs, but a CPU run is only
+   available where the variant's own inference line takes a device: the lines run
+   verbatim and most pin `device='cuda'`. For those, `get_calculator` refuses the
+   CPU request instead of building a CUDA calculator and calling it CPU, and
+   `setup_verify.py` reports that failure. Tell the user a newer driver (or a host
+   whose driver matches the build) is the fix; never report a GPU run as CPU, and
+   never report a degraded run as GPU verification.
 
 ## 0. Read these first
 

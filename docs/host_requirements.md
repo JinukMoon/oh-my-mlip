@@ -45,8 +45,10 @@ approximate Linux minimums for each CUDA build.
 ## Common problems
 
 - **Driver too old for a CUDA 13.0 env** (dpa4, matris, tace):
-  `torch.cuda.is_available()` is `False`. Upgrade the driver, or run those models
-  on the CPU (slower).
+  `torch.cuda.is_available()` is `False`. Upgrade the driver, or use a host whose
+  driver matches the build. A CPU run is not a general fallback here: these
+  models' inference lines pin the GPU, and the hub refuses a CPU request rather
+  than running on the GPU and reporting CPU.
 - **A different GPU than the one you installed on:** NequIP and Allegro load a
   model compiled for a specific GPU architecture. See
   [GPU-architecture compilation](arch_first_run_compile.md).
