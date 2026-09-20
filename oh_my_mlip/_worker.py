@@ -68,6 +68,14 @@ def _json_default(obj):
             return obj.tolist()
         if isinstance(obj, np.generic):
             return obj.item()
+    # ase constraints (FixAtoms and friends) ride as their own todict() form:
+    # {"name": ..., "kwargs": {...}}. Atoms.fromdict() feeds exactly that shape to
+    # dict2constraint, so the decoder needs no special case. Without this, sending
+    # a slab with fixed bottom layers -- the field's most ordinary structure --
+    # died with "not JSON serializable: FixAtoms".
+    todict = getattr(obj, "todict", None)
+    if callable(todict):
+        return todict()
     raise TypeError(f"not JSON serializable: {type(obj).__name__}")
 
 
@@ -119,8 +127,11 @@ def decode_atoms(payload: dict):
 
     d = {}
     for key, value in payload.items():
+        # constraints stay a list of dicts -- Atoms.fromdict rebuilds them itself
+        if key == "constraints":
+            d[key] = value
         # Atoms.fromdict expects numpy arrays for array-like fields.
-        if isinstance(value, list):
+        elif isinstance(value, list):
             d[key] = np.array(value)
         else:
             d[key] = value

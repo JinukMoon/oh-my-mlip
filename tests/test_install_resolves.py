@@ -91,3 +91,24 @@ def test_dry_run_resolves_model_versions(model_name: str):
     assert versions, f"{model_name}: expected at least one version"
     # The model name resolves to a recipe (versions share the env).
     _assert_resolves(_dry_run([model_name]), model_name)
+
+
+def _version_names() -> list[str]:
+    import json
+
+    data = json.loads((REPO_ROOT / "models.json").read_text())
+    return [
+        version
+        for family, info in data.items()
+        if not family.startswith("_") and isinstance(info, dict)
+        for version in (info.get("versions") or {})
+    ]
+
+
+@pytest.mark.parametrize("version", _version_names())
+def test_install_resolves_every_registered_version_name(version: str) -> None:
+    """README.md:47 and docs/start.md:53 tell the reader to verify with the
+    VERSION name, and provider.py builds its own "not installed" message as
+    `./install.sh <version>`. install.sh resolved only family names, so the
+    command the hub itself printed came back as `SKIP ... no recipe`."""
+    _assert_resolves(_dry_run([version]), version)

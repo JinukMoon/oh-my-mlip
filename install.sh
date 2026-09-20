@@ -134,8 +134,17 @@ want = os.environ["ARG"].lower()
 for name, info in data.items():
     if name.startswith("_") or not isinstance(info, dict):
         continue
-    if name.lower() == want and isinstance(info.get("env"), str):
-        print(info["env"])
+    env = info.get("env")
+    if not isinstance(env, str):
+        continue
+    # family name (MACE) OR any of its version keys (MACE-MPA-0): the hub's own
+    # "not installed" message and README/docs/start.md tell users the version
+    # form, so accepting only the family silently SKIPped a correct command.
+    versions = info.get("versions")
+    if name.lower() == want or (
+        isinstance(versions, dict) and any(v.lower() == want for v in versions)
+    ):
+        print(env)
         break
 PYEOF
 )"

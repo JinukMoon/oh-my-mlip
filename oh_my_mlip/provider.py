@@ -198,6 +198,17 @@ class Worker:
             )
         # env_run is already parsed + allowlisted by registry.resolve().
         child_env.update(self.spec["env_run"])
+        # The child runs `<env>/bin/python -m oh_my_mlip._worker`, and oh_my_mlip
+        # lives in this clone -- which the model env does not have installed. The
+        # parent's own sys.path.insert does not reach a subprocess, so without this
+        # run()/Worker only worked with the clone as cwd and died with
+        # ModuleNotFoundError from any other directory.
+        hub_root = registry.home()
+        if hub_root:
+            existing_pp = child_env.get("PYTHONPATH", "")
+            child_env["PYTHONPATH"] = str(hub_root) + (
+                os.pathsep + existing_pp if existing_pp else ""
+            )
         child_env.setdefault("OH_MY_MLIP_HOME", registry.home())
         if self._env_override:
             child_env.update(self._env_override)

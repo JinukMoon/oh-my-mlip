@@ -52,3 +52,16 @@ def test_sha256_mismatch_raises(tmp_path: Path):
     import hashlib
     fetch._verify_sha256(str(weight), hashlib.sha256(b"hello").hexdigest())
     fetch._verify_sha256(str(weight), None)
+
+
+def test_directory_holding_only_a_partial_download_is_not_ready(tmp_path: Path):
+    """Reported from a real run: a slow GRACE fetch timed out partway, left its
+    partial file inside the target directory, and every later run called the
+    weights ready while TensorFlow failed to find the SavedModel."""
+    target = tmp_path / "GRACE-2L-OAM"
+    target.mkdir()
+    (target / "tmp.tar.gz").write_bytes(b"x" * 1024)
+    (target / ".grace.tar.gz.download").write_bytes(b"x" * 1024)
+    assert fetch._target_ready(target) is False
+    (target / "saved_model.pb").write_bytes(b"x")
+    assert fetch._target_ready(target) is True

@@ -155,6 +155,20 @@ def _looks_like_dir_target(path: Path) -> bool:
     return path.suffix == ""
 
 
+_PARTIAL_NAMES = (".download", ".part", ".tmp", ".crdownload")
+
+
+def _dir_payload(path: Path) -> list[Path]:
+    """Entries of a directory target that are real payload -- never the
+    artifacts an interrupted download leaves behind."""
+    return [
+        entry for entry in path.iterdir()
+        if not entry.name.endswith(_PARTIAL_NAMES)
+        and not entry.name.startswith("tmp.")
+        and not entry.name.startswith(".")
+    ]
+
+
 def _target_ready(path: Path, expected_size: int | None = None) -> bool:
     """A weight is ready only if it is also the SIZE the registry recorded.
 
@@ -162,7 +176,9 @@ def _target_ready(path: Path, expected_size: int | None = None) -> bool:
     interrupted download counted as ready and shadowed the real weight
     (models.json records weights_size for the variants that have it)."""
     if _looks_like_dir_target(path):
-        return path.is_dir() and any(path.iterdir())
+        # "non-empty" is not enough: a leftover partial download inside the
+        # directory counted as payload and pinned the target as ready.
+        return path.is_dir() and any(_dir_payload(path))
     if not (path.is_file() and path.stat().st_size > 0):
         return False
     if isinstance(expected_size, int) and expected_size > 0:
@@ -184,11 +200,19 @@ def _materialize_url_weights(spec: dict, targets: list[Path]) -> None:
         )
     root = _target_root(targets)
     root.mkdir(parents=True, exist_ok=True)
-    local = _download_to_temp(url, root)
+    # Stage the download OUTSIDE the target: for a directory target `root` IS the
+    # target, so a partial download used to land inside it and make the directory
+    # look ready forever (reported: a slow GRACE fetch timed out at 9 MB of 102 MB,
+    # and every later run reported the weights ready while TensorFlow failed to
+    # find the SavedModel).
+    staging = root.parent / f".{root.name}.staging"
+    staging.mkdir(parents=True, exist_ok=True)
+    local = _download_to_temp(url, staging)
     try:
         _install_downloaded_artifact(local, targets, root)
     finally:
         local.unlink(missing_ok=True)
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def _materialize_gated_hf_weights(spec: dict, targets: list[Path]) -> None:
