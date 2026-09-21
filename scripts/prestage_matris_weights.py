@@ -90,12 +90,18 @@ def prestage(model: str) -> int:
     tmp = Path(tmp_name)
     try:
         with urllib.request.urlopen(url, timeout=180) as resp, tmp.open("wb") as out:
+            declared = resp.headers.get("Content-Length")
             while True:
                 chunk = resp.read(1 << 20)
                 if not chunk:
                     break
                 out.write(chunk)
         size = tmp.stat().st_size
+        if declared and declared.isdigit() and size != int(declared):
+            # A connection closed early ends the read loop quietly; never stage the stump.
+            tmp.unlink(missing_ok=True)
+            print(f"prestage_matris: download cut off ({size} of {declared} B); leaving cache empty.", file=sys.stderr)
+            return 1
         if size < MIN_BYTES:
             tmp.unlink(missing_ok=True)
             print(f"prestage_matris: downloaded body too small ({size} B); likely a 202 block, leaving cache empty.", file=sys.stderr)

@@ -21,10 +21,15 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _weight_download import download, is_complete  # noqa: E402
+
 CHECKPOINT_URL = "https://huggingface.co/deepmodelingcommunity/DPA-3.1-3M/resolve/main/DPA-3.1-3M.pt"
+# The checkpoint as Hugging Face stores it (LFS size and sha256).
+CKPT_SIZE = 47176032
+CKPT_SHA256 = "86dd3a804d78ca5d203ebf98747e8f16dff9713ba8950097ceb760b161e19907"
 DEFAULT_HEAD = "Omat24"  # OMat24-trained head: general materials, consistent with the OAM roster
 
 
@@ -34,16 +39,6 @@ def _dp_cmd() -> str:
     # to sys.executable (env bin) and fall back to PATH only if absent.
     sibling = Path(sys.executable).resolve().parent / "dp"
     return str(sibling) if sibling.is_file() else "dp"
-
-
-def _download(url: str, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url, headers={"User-Agent": "oh-my-mlip/0.1"})
-    with urllib.request.urlopen(req) as resp, open(dest, "wb") as fh:
-        fh.write(resp.read())
-    if dest.stat().st_size == 0:
-        dest.unlink(missing_ok=True)
-        raise SystemExit(f"downloaded empty checkpoint from {url}")
 
 
 def main() -> int:
@@ -60,9 +55,9 @@ def main() -> int:
         print(f"[prepare_deepmd] frozen model already present: {frozen}")
         return 0
 
-    if not (checkpoint.is_file() and checkpoint.stat().st_size > 0):
+    if not is_complete(checkpoint, CKPT_SIZE):
         print(f"[prepare_deepmd] downloading checkpoint -> {checkpoint}")
-        _download(CHECKPOINT_URL, checkpoint)
+        download(CHECKPOINT_URL, checkpoint, size=CKPT_SIZE, sha256=CKPT_SHA256, label="prepare_deepmd")
 
     print(f"[prepare_deepmd] freezing head={args.head} -> {frozen}")
     proc = subprocess.run(

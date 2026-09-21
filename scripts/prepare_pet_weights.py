@@ -19,33 +19,24 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _weight_download import download, is_complete  # noqa: E402
 
 CHECKPOINT_URL = (
     "https://huggingface.co/lab-cosmo/upet/resolve/main/models/pet-oam-xl-v1.0.0.ckpt"
 )
 CKPT_NAME = "pet-oam-xl-v1.0.0.ckpt"
 PT_NAME = "pet-oam-xl-v1.0.0.pt"
+# The checkpoint as Hugging Face stores it (LFS size and sha256).
+CKPT_SIZE = 2920687712
+CKPT_SHA256 = "c3a67cd019969dfd4dcabe9574682fe035f861d3f1c10190989b36c983699409"
 
 
 def _mtt_cmd() -> str:
     sibling = Path(sys.executable).resolve().parent / "mtt"
     return str(sibling) if sibling.is_file() else "mtt"
-
-
-def _download(url: str, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url, headers={"User-Agent": "oh-my-mlip/0.1"})
-    with urllib.request.urlopen(req) as resp, open(dest, "wb") as fh:
-        while True:
-            chunk = resp.read(1 << 20)
-            if not chunk:
-                break
-            fh.write(chunk)
-    if dest.stat().st_size == 0:
-        dest.unlink(missing_ok=True)
-        raise SystemExit(f"downloaded empty checkpoint from {url}")
 
 
 def main() -> int:
@@ -61,9 +52,9 @@ def main() -> int:
         print(f"[prepare_pet] exported model already present: {exported}")
         return 0
 
-    if not (checkpoint.is_file() and checkpoint.stat().st_size > 0):
+    if not is_complete(checkpoint, CKPT_SIZE):
         print(f"[prepare_pet] downloading checkpoint -> {checkpoint}")
-        _download(CHECKPOINT_URL, checkpoint)
+        download(CHECKPOINT_URL, checkpoint, size=CKPT_SIZE, sha256=CKPT_SHA256, label="prepare_pet")
 
     print(f"[prepare_pet] exporting {checkpoint} -> {exported}")
     proc = subprocess.run(

@@ -24,7 +24,9 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -255,7 +257,8 @@ def _materialize_url_weights(spec: dict, targets: list[Path]) -> None:
             f"  If this host has no outbound network (a compute node usually does not),\n"
             f"  fetch once on a networked host with:\n"
             f"    python3 scripts/setup_verify.py {spec.get('version') or spec['model']}\n"
-            f"  or copy the file to the target path above, then rerun."
+            f"  or copy the file to the target path above, then rerun. A rerun resumes\n"
+            f"  whatever part of the file already arrived."
         ) from exc
     try:
         _install_downloaded_artifact(local, targets, root)
@@ -382,13 +385,52 @@ def _normalise_download_url(url: str) -> str:
 
 
 def _download_to_temp(url: str, directory: Path) -> Path:
+    """Download `url` into `directory`, resuming what an earlier attempt left.
+
+    Some weight hosts serve a few KiB/s, so a large artifact can take longer than
+    a job or a shell session lives. The partial file stays in the staging
+    directory and the next call continues it with an HTTP Range request (a
+    server that ignores Range gets a fresh download). Progress goes to stderr:
+    stdout may be a JSON-RPC channel."""
     directory.mkdir(parents=True, exist_ok=True)
     parsed_name = Path(urlparse(url).path).name or "weights"
     tmp = directory / f".{parsed_name}.download"
-    request = Request(url, headers={"User-Agent": "oh-my-mlip/0.1"})
-    with urlopen(request) as response, open(tmp, "wb") as fh:
-        shutil.copyfileobj(response, fh)
-    if tmp.stat().st_size == 0:
+    have = tmp.stat().st_size if tmp.exists() else 0
+    headers = {"User-Agent": "oh-my-mlip/0.1"}
+    if have:
+        headers["Range"] = f"bytes={have}-"
+    try:
+        response = urlopen(Request(url, headers=headers))
+    except HTTPError as exc:
+        if exc.code != 416 or not have:
+            raise
+        tmp.unlink()  # the partial file no longer fits what the server holds
+        return _download_to_temp(url, directory)
+    with response:
+        if have and getattr(response, "status", None) != 206:
+            have = 0
+        declared = response.headers.get("Content-Length")
+        total = have + int(declared) if declared and declared.isdigit() else None
+        if have:
+            print(f"[oh-my-mlip] resuming {url} at {have / 1e6:.1f} MB", file=sys.stderr, flush=True)
+        done, last = have, time.monotonic()
+        with open(tmp, "ab" if have else "wb") as fh:
+            while chunk := response.read(1 << 20):
+                fh.write(chunk)
+                done += len(chunk)
+                if time.monotonic() - last > 10:
+                    shown = f" / {total / 1e6:.1f}" if total else ""
+                    print(f"[oh-my-mlip] {parsed_name}: {done / 1e6:.1f}{shown} MB",
+                          file=sys.stderr, flush=True)
+                    last = time.monotonic()
+    got = tmp.stat().st_size
+    if total is not None and got != total:
+        # A connection closed early ends the read loop without an error.
+        raise FetchError(
+            f"download of {url} stopped at {got} of {total} bytes; the partial file "
+            f"is kept at {tmp} and the next attempt resumes it"
+        )
+    if got == 0:
         tmp.unlink(missing_ok=True)
         raise FetchError(f"downloaded empty weight artifact from {url}")
     return tmp
