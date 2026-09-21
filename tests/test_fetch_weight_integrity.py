@@ -112,3 +112,24 @@ def test_only_targets_that_are_the_download_are_size_checked():
                 checked.add(version)
     assert checked == {"Nequix-MP-1", "eSEN-30M-OAM", "EqV3-OMatMPtrjSalex",
                        "EquFlashV2", "EquFlash-v1", "DPA-4.0.1-pro-MPtrj"}
+
+
+def test_a_missing_compiled_model_names_the_arch_and_the_compile_command(tmp_path: Path, monkeypatch):
+    """NequIP/Allegro load a .pt2 compiled for one GPU architecture. Without it,
+    torch's zip loader said only "failed to initialize zip archive: file open
+    failed" -- what a user sees after moving to a GPU of another architecture."""
+    home = tmp_path / "hub"
+    pt2 = home / "models" / "compiled" / "sm86" / "NequIP-OAM-L_sm86.nequip.pt2"
+    spec = {"model": "NequIP", "version": "NequIP-OAM-L", "env": "nequip", "arch": "sm86",
+            "arch_pinned": True, "python": "/envs/nequip/bin/python"}
+    monkeypatch.setattr(fetch.registry, "home", lambda: str(home))
+    monkeypatch.setattr(fetch, "_inference_weight_targets", lambda s: [pt2])
+    with pytest.raises(fetch.FetchError) as excinfo:
+        fetch.ensure_weights("NequIP", version="NequIP-OAM-L", spec=spec)
+    message = str(excinfo.value)
+    assert "sm86" in message and str(pt2) in message
+    assert f"prepare_nequip_weights.py --target-root {home}/models/nequip" in message
+    # once compiled, nothing is fetched and nothing is raised
+    pt2.parent.mkdir(parents=True)
+    pt2.write_bytes(b"compiled")
+    assert fetch.ensure_weights("NequIP", version="NequIP-OAM-L", spec=spec) == []

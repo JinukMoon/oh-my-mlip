@@ -13,6 +13,15 @@ teacher variant, structure path, work dir) renders `omm_teacher.py` +
 Then `cd <work> && bash run_distill.sh` seeds the initial teacher-MD dataset
 and hands off to `onthefly-distill`'s own active-learning loop.
 
+**Default to the acceptance path** for any student whose result will be used:
+bootstrap with `--acceptance`, stating every target the way `recipes/distill.md`
+§2 lists them, then judge the finished run with `scripts/distill_verify.py`.
+That path renders an independent held-out set and gates the student's accuracy
+on it. Without `--acceptance` there is no held-out set and no accuracy gate:
+the engine's `SUCCESS` only means the student's MD survived the target length,
+which says nothing about whether it reproduces the teacher. Use the bare form
+only as a quick demo, and tell the user that is what it is.
+
 Interview first if missing: **which teacher** (any oh-my-mlip model/version),
 **which structure** (<=4 distinct elements — `pair_nnmtp` v1's bound), and
 **how long** (`--target-ps`; keep it small for a first try).

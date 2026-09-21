@@ -86,8 +86,27 @@ def ensure_weights(
     resolved = spec if spec is not None else registry.resolve(model, version=version)
 
     # NequIP/Allegro inference points at per-GPU compiled .pt2 outputs, not the
-    # downloadable source checkpoint zip. Those are produced by the compile path.
+    # downloadable source checkpoint zip. Those are produced by the compile path
+    # -- nothing here can download one, but a missing one must be named: torch's
+    # own loader only says "failed to initialize zip archive: file open failed",
+    # which is exactly what a user sees after moving to a GPU of another
+    # architecture (common on mixed clusters) with no compile for it yet.
     if resolved.get("arch_pinned"):
+        missing = [p for p in _inference_weight_targets(resolved) if not p.is_file()]
+        if missing:
+            env = resolved.get("env", "")
+            home = registry.home()
+            arch = resolved.get("arch") or "this GPU's architecture"
+            raise FetchError(
+                f"{resolved.get('model', model)}/{resolved.get('version') or version}: "
+                f"no model compiled for {arch} on this machine.\n"
+                f"  expected: {missing[0]}\n"
+                f"  NequIP and Allegro load a model compiled for one GPU architecture. "
+                f"Compile it here (it uses this machine's GPU):\n"
+                f"    {resolved.get('python', '<env python>')} {home}/scripts/prepare_{env}_weights.py "
+                f"--target-root {home}/models/{env}\n"
+                f"  See docs/arch_first_run_compile.md."
+            )
         return []
 
     targets = _inference_weight_targets(resolved)
