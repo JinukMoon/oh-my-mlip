@@ -133,3 +133,44 @@ def test_a_missing_compiled_model_names_the_arch_and_the_compile_command(tmp_pat
     pt2.parent.mkdir(parents=True)
     pt2.write_bytes(b"compiled")
     assert fetch.ensure_weights("NequIP", version="NequIP-OAM-L", spec=spec) == []
+
+
+# ── envs whose prestage step stages files the single download does not ──────
+def _alphanet_like(tmp_path: Path, monkeypatch, prestage_body: str):
+    home = tmp_path / "hub"
+    (home / "scripts").mkdir(parents=True)
+    (home / "scripts" / "prestage_alpha_weights.py").write_text(prestage_body)
+    root = home / "models" / "alpha"
+    targets = [root / "alpha.ckpt", root / "config.json"]
+    spec = {"model": "Alpha", "version": "Alpha-1", "env": "alpha", "weights_fetch": "url",
+            "weights_source": "https://example.invalid/files/1"}
+    monkeypatch.setattr(fetch.registry, "home", lambda: str(home))
+    monkeypatch.setattr(fetch, "_inference_weight_targets", lambda s: targets)
+    monkeypatch.setattr(fetch, "_materialize_url_weights",
+                        lambda s, t: pytest.fail("the prestage step already staged everything"))
+    return spec, targets
+
+
+def test_a_skipped_prestage_step_is_run_on_first_use(tmp_path: Path, monkeypatch):
+    """AlphaNet's inference needs the checkpoint AND oma.json; the registry
+    download provides only the checkpoint and prestage_alphanet_weights.py stages
+    both. When install/adoption skipped or failed that step, first use failed
+    with 'did not create expected path(s)'."""
+    body = ("import os, pathlib\n"
+            "root = pathlib.Path(os.environ['OH_MY_MLIP_HOME']) / 'models' / 'alpha'\n"
+            "root.mkdir(parents=True, exist_ok=True)\n"
+            "(root / 'alpha.ckpt').write_bytes(b'w')\n(root / 'config.json').write_text('{}')\n"
+            "print('staged')\n")
+    spec, targets = _alphanet_like(tmp_path, monkeypatch, body)
+    assert fetch.ensure_weights("Alpha", version="Alpha-1", spec=spec) == [str(t) for t in targets]
+
+
+def test_a_failing_prestage_step_is_named_in_the_error(tmp_path: Path, monkeypatch, capsys):
+    spec, _targets = _alphanet_like(tmp_path, monkeypatch, "raise SystemExit('github unreachable')\n")
+    monkeypatch.setattr(fetch, "_materialize_url_weights", lambda s, t: None)
+    with pytest.raises(fetch.FetchError) as info:
+        fetch.ensure_weights("Alpha", version="Alpha-1", spec=spec)
+    message = str(info.value)
+    assert "config.json" in message
+    assert "prestage_alpha_weights.py" in message and "python3 " in message
+    assert "github unreachable" in capsys.readouterr().err

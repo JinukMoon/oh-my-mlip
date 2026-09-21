@@ -124,6 +124,11 @@ def ensure_weights(
     if all(_target_ready(path, expected_size) for path in targets):
         return [str(path) for path in targets]
 
+    if _prestage_script(resolved) is not None:
+        _run_prestage(resolved)
+        if all(_target_ready(path, expected_size) for path in targets):
+            return [str(path) for path in targets]
+
     fetch_mode = resolved.get("weights_fetch")
     if fetch_mode == "url":
         _materialize_url_weights(resolved, targets)
@@ -139,9 +144,15 @@ def ensure_weights(
 
     missing = [str(path) for path in targets if not _target_ready(path, expected_size)]
     if missing:
+        hint = ""
+        script = _prestage_script(resolved)
+        if script is not None:
+            hint = (f"\n  These files are staged by {script.name}; its output is above. "
+                    f"Fix what it reports (usually network access), then rerun it:\n"
+                    f"    python3 {script}")
         raise FetchError(
             f"{resolved['model']}/{resolved['version']}: weight materialization "
-            f"did not create expected path(s): {missing}"
+            f"did not create expected path(s): {missing}{hint}"
         )
     # Hash once, here, rather than on every readiness probe: this runs after a
     # real download, and rehashing a multi-GB checkpoint on each resolve() would
@@ -338,6 +349,17 @@ def _materialize_by_name_weights(spec: dict, targets: list[Path]) -> None:
     # Stream the command's output to stderr as it runs: preparing a large
     # checkpoint can take many minutes, and captured output left the user
     # looking at nothing. stdout stays clean (it may be a JSON-RPC channel).
+    returncode, detail = _run_streaming(cmd, env)
+    if returncode != 0:
+        raise FetchError(
+            f"{spec['model']}/{spec['version']}: weight fetch command failed "
+            f"with exit code {returncode}: {' '.join(cmd)}\n{detail}"
+        )
+
+
+def _run_streaming(cmd: list[str], env: dict | None = None) -> tuple[int, str]:
+    """Run `cmd`, echoing its output to stderr line by line with the hub prefix.
+    Returns (exit code, the last lines of output)."""
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, env=env)
     tail: collections.deque = collections.deque(maxlen=40)
@@ -345,13 +367,27 @@ def _materialize_by_name_weights(spec: dict, targets: list[Path]) -> None:
         line = line.rstrip("\n")
         tail.append(line)
         print(f"[oh-my-mlip] {line}", file=sys.stderr, flush=True)
-    returncode = proc.wait()
-    if returncode != 0:
-        detail = "\n".join(tail).strip()
-        raise FetchError(
-            f"{spec['model']}/{spec['version']}: weight fetch command failed "
-            f"with exit code {returncode}: {' '.join(cmd)}\n{detail}"
-        )
+    return proc.wait(), "\n".join(tail).strip()
+
+
+def _prestage_script(spec: dict) -> Path | None:
+    env = spec.get("env")
+    script = Path(registry.home()) / "scripts" / f"prestage_{env}_weights.py"
+    return script if env and script.exists() else None
+
+
+def _run_prestage(spec: dict) -> None:
+    """Run the env's prestage script, the step install.sh and adopt_env.py run
+    after building an env. Some envs need files the registry's single download
+    does not provide (AlphaNet's oma.json config next to its checkpoint); when
+    that step was skipped or failed, running it here completes the model on
+    first use instead of failing with a missing path. Pure stdlib, so this
+    interpreter is fine; a failure is left for the missing-path check to report."""
+    script = _prestage_script(spec)
+    if script is None:
+        return
+    env = dict(os.environ, OH_MY_MLIP_HOME=registry.home())
+    _run_streaming([sys.executable, str(script)], env)
 
 
 def _select_download_url(spec: dict) -> str | None:
