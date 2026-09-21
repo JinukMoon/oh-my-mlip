@@ -234,7 +234,7 @@ python3 $OMM/scripts/ft_run.py Nequix-MP-1 --dataset <your-dataset> --out ft_neq
 
 ### A. What upstream documents
 
-Upstream ([source](https://docs.deepmodeling.com/projects/deepmd/en/master/train/finetuning.html)):
+Upstream ([source](https://docs.deepmodeling.com/projects/deepmd/en/v3.1.2/train/finetuning.html)):
 
 ```bash
 dp --pt train input.json --finetune pretrained.pt                             # single-task, load fitting net from checkpoint
@@ -532,7 +532,7 @@ python3 $OMM/scripts/ft_run.py EqV3-OMatMPtrjSalex --dataset <your-dataset> --ou
 
 ### A. What upstream documents
 
-Upstream ([source](https://fair-chem.github.io/core/common_tasks/fine_tuning.html)):
+Upstream ([source](https://facebookresearch.github.io/fairchem/fine-tuning)):
 
 ```bash
 git clone git@github.com:facebookresearch/fairchem.git
@@ -723,7 +723,7 @@ n/a.
 
 ### A. What upstream documents
 
-Upstream ([source](https://docs.deepmodeling.com/projects/deepmd/en/master/train/finetuning.html)):
+Upstream ([source](https://docs.deepmodeling.com/projects/deepmd/en/v3.2.0b0/train/finetuning.html)):
 
 ```bash
 dp --pt train input.json --finetune "$OH_MY_MLIP_HOME/models/dpa4/dpa-4.0.1-pro-mptrj.pt" --use-pretrain-script

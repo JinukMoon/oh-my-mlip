@@ -361,7 +361,7 @@ UPSTREAM_FT: dict[str, dict] = {
     "DeePMD": dict(
         status="documented",
         entrypoint="dp --pt train input.json --finetune <ckpt>",
-        src="https://docs.deepmodeling.com/projects/deepmd/en/master/train/finetuning.html",
+        src="https://docs.deepmodeling.com/projects/deepmd/en/v3.1.2/train/finetuning.html",
         cmd=["dp --pt train input.json --finetune pretrained.pt                             "
              "# single-task, load fitting net from checkpoint",
              "dp --pt train input.json --finetune pretrained.pt --model-branch RANDOM       "
@@ -430,7 +430,7 @@ UPSTREAM_FT: dict[str, dict] = {
     "DPA4": dict(
         status="documented",
         entrypoint="dp --pt train input.json --finetune <ckpt>",
-        src="https://docs.deepmodeling.com/projects/deepmd/en/master/train/finetuning.html",
+        src="https://docs.deepmodeling.com/projects/deepmd/en/v3.2.0b0/train/finetuning.html",
         cmd=["dp --pt train input.json --finetune "
              "\"$OH_MY_MLIP_HOME/models/dpa4/dpa-4.0.1-pro-mptrj.pt\" --use-pretrain-script"],
         config=["{",
@@ -476,7 +476,7 @@ UPSTREAM_FT: dict[str, dict] = {
     "UMA": dict(
         status="documented",
         entrypoint="fairchem -c <template>.yaml",
-        src="https://fair-chem.github.io/core/common_tasks/fine_tuning.html",
+        src="https://facebookresearch.github.io/fairchem/fine-tuning",
         cmd=["git clone git@github.com:facebookresearch/fairchem.git",
              "pip install -e fairchem/src/packages/fairchem-core[dev]",
              "python src/fairchem/core/scripts/create_uma_finetune_dataset.py "

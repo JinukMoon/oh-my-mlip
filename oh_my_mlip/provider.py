@@ -317,19 +317,43 @@ class Worker:
         line = self._proc.stdout.readline()
         if not line:
             err = self._read_stderr()
+            self._terminate_child()
             raise WorkerError(
                 f"worker for {self.model} produced no handshake; stderr:\n{err}"
             )
         try:
             handshake = json.loads(line)
         except json.JSONDecodeError as exc:
+            self._terminate_child()
             raise WorkerError(f"bad handshake from worker: {line!r}") from exc
         if not handshake.get("ready"):
+            self._terminate_child()
             raise WorkerError(
                 f"worker for {self.model} failed to start: "
                 f"{handshake.get('error')}"
             )
         return self
+
+    def _terminate_child(self) -> None:
+        """Stop a child that never became a worker.
+
+        A failed start used to raise and walk away, leaving the child running --
+        often after it had already loaded a model onto the GPU -- with nobody
+        holding a handle to reap it. Tolerant of test doubles that implement
+        only part of Popen."""
+        proc = self._proc
+        if proc is None:
+            return
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=5)
+        except Exception:  # pragma: no cover - partial doubles, already-reaped children
+            pass
 
     def _start_stderr_drain(self) -> None:
         """Keep the worker's stderr pipe empty for the life of the process.
@@ -412,10 +436,16 @@ class Worker:
                 "atoms": encode_atoms(atoms),
                 "properties": list(properties),
             }
-            self._proc.stdin.write(json.dumps(req) + "\n")
-            self._proc.stdin.flush()
-
-            line = self._proc.stdout.readline()
+            try:
+                self._proc.stdin.write(json.dumps(req) + "\n")
+                self._proc.stdin.flush()
+                line = self._proc.stdout.readline()
+            except (BrokenPipeError, OSError, ValueError):
+                # The child died between the alive check and the write. Same
+                # crash semantics as an empty read: WorkerPool respawns only on
+                # the crash dict, so an escaping BrokenPipeError skipped the
+                # respawn it exists to provide.
+                return {"id": request_id, "ok": False, "error": "worker crashed"}
             if not line:
                 # Worker died mid-request -> crash semantics.
                 return {"id": request_id, "ok": False, "error": "worker crashed"}
