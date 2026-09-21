@@ -17,8 +17,8 @@ How to read the columns:
 <!-- STATUS_TABLE_DETAILED_START -->
 | Model | Framework | Weights | Gated | Code |
 |---|---|---|---|---|
-| SevenNet-MF-OMPA | SevenNet | bundled | no | [GitHub](https://github.com/MDIL-SNU/SevenNet){ .md-button .omm-repo } |
-| SevenNet-Omni | SevenNet | bundled | no | [GitHub](https://github.com/MDIL-SNU/SevenNet){ .md-button .omm-repo } |
+| SevenNet-MF-OMPA | SevenNet | auto-download | no | [GitHub](https://github.com/MDIL-SNU/SevenNet){ .md-button .omm-repo } |
+| SevenNet-Omni | SevenNet | auto-download | no | [GitHub](https://github.com/MDIL-SNU/SevenNet){ .md-button .omm-repo } |
 | MACE-MPA-0 | MACE | auto-download | no | [GitHub](https://github.com/ACEsuit/mace){ .md-button .omm-repo } |
 | MACE-MH-1-OMAT | MACE | auto-download | no | [GitHub](https://github.com/ACEsuit/mace){ .md-button .omm-repo } |
 | MACE-MH-1-OC20 | MACE | auto-download | no | [GitHub](https://github.com/ACEsuit/mace){ .md-button .omm-repo } |
@@ -29,7 +29,7 @@ How to read the columns:
 | DPA-3.1-3M-FT | DeePMD | on-demand-hf | no | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
 | ORB-v3 | ORB | auto-download | no | [GitHub](https://github.com/orbital-materials/orb-models){ .md-button .omm-repo } |
 | GRACE-2L-OAM | GRACE | on-demand-hf | no | [GitHub](https://github.com/ICAMS/grace-tensorpotential){ .md-button .omm-repo } |
-| MatterSim-v1-5M | MatterSim | bundled | no | [GitHub](https://github.com/microsoft/mattersim){ .md-button .omm-repo } |
+| MatterSim-v1-5M | MatterSim | auto-download | no | [GitHub](https://github.com/microsoft/mattersim){ .md-button .omm-repo } |
 | CHGNet-v0.3.0 | CHGNet | bundled | no | [GitHub](https://github.com/CederGroupHub/chgnet){ .md-button .omm-repo } |
 | AlphaNet-v1-OMA | AlphaNet | on-demand-hf | no | [GitHub](https://github.com/zmyybc/AlphaNet){ .md-button .omm-repo } |
 | Eqnorm-MPtrj | Eqnorm | auto-download | no | [GitHub](https://github.com/yzchen08/eqnorm){ .md-button .omm-repo } |

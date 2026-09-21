@@ -2635,7 +2635,7 @@ def main() -> int:
     licence = finetune.get("licence")
     if licence:
         url = resolved.get("license_url") or _LICENCE_URLS.get(licence, "")
-        note = f"[ft_run] NOTE: {version}'s checkpoint carries a non-permissive licence: {licence}"
+        note = f"[ft_run] NOTE: {version} is flagged with a non-permissive licence: {licence}"
         if url:
             note += f" ({url})"
         print(note + " -- oh-my-mlip does not redistribute this checkpoint; "

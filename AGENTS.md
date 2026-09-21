@@ -236,9 +236,10 @@ command or config from memory.
    disk is not a verified fine-tune.
 4. **Weights with restrictive licences are flagged, not refused.** When a
    version has `finetune.licence` set (MACE-MH-1: `ASL`; EquFlash:
-   `CC-BY-NC-SA-4.0`), `ft_run.py` prints the licence and its URL before starting.
-   Tell the user: a fine-tuned model derived from those weights inherits their
-   terms.
+   `CC-BY-NC-SA-4.0`, the project's licence -- the record hosting the EquFlash
+   weights says CC BY 4.0, see docs/model_licenses.md), `ft_run.py` prints the
+   licence and its URL before starting. Tell the user: a fine-tuned model
+   derived from those weights inherits their terms.
 
 ### (D) Distill a teacher into an NN-MTP student for LAMMPS — `distill_bootstrap.py`
 

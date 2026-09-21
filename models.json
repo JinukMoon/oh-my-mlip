@@ -53,7 +53,7 @@
     "repo": "https://github.com/MDIL-SNU/SevenNet",
     "python": "${OH_MY_MLIP_HOME}/envs/sevennet/bin/python",
     "default_version": "SevenNet-MF-OMPA",
-    "model_source": "bundled in package (sevenn/pretrained_potentials)",
+    "model_source": "downloaded by sevenn on first use (GitHub release asset)",
     "accel": {
       "tool": "openequivariance",
       "install": "pip install sevenn[oeq]  (openequivariance; or sevenn[cueq12]/sevenn[cueq13] for cuEquivariance by CUDA major)",
@@ -68,10 +68,10 @@
     "import": ["from sevenn.calculator import SevenNetCalculator"],
     "versions": {
       "SevenNet-MF-OMPA": {"mlip_name": "SevenNet-MF-OMPA", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-mf-ompa", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89", "note": "GPU-validated on sm89. Enable enable_oeq=True for optimized inference; uses the cuequivariance wheels pinned in envs/sevennet.yml.",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "7net-mf-ompa", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89", "note": "GPU-validated on sm89. Enable enable_oeq=True for optimized inference; uses the cuequivariance wheels pinned in envs/sevennet.yml.",
         "inference": ["calc = SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=True)"], "finetune": {"status": "documented", "entrypoint": "sevenn train input.yaml", "selector_kind": "config_key", "selector_path": "train.continue.checkpoint", "semantics": "finetune: continue.checkpoint + reset_optimizer/reset_scheduler/reset_epoch: True loads weights only; leaving those resets False/absent instead resumes training state from the same checkpoint key.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}},
       "SevenNet-Omni": {"mlip_name": "SevenNet-Omni", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "7net-omni", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "7net-omni", "weights_source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html", "validation": "validated_sm89",
         "note": "GPU-validated on sm89. Omni variant trained on broader materials datasets.", "inference": ["calc = SevenNetCalculator('7net-omni', modal='mpa', enable_oeq=True)"], "finetune": {"status": "documented", "entrypoint": "sevenn train input.yaml", "selector_kind": "config_key", "selector_path": "train.continue.checkpoint", "semantics": "finetune: continue.checkpoint + reset_optimizer/reset_scheduler/reset_epoch: True loads weights only; leaving those resets False/absent instead resumes training state from the same checkpoint key.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
   },
@@ -226,11 +226,11 @@
     "env": "mattersim",
     "repo": "https://github.com/microsoft/mattersim",
     "python": "${OH_MY_MLIP_HOME}/envs/mattersim/bin/python",
-    "model_source": "bundled in package",
+    "model_source": "downloaded by mattersim on first use (GitHub raw, microsoft/mattersim)",
     "import": ["from mattersim.forcefield import MatterSimCalculator"],
     "versions": {
       "MatterSim-v1-5M": {"mlip_name": "MatterSim-v1-5M", "training_set": ["MatterSim"],
-        "gated": false, "license_url": null, "weights": "bundled", "weights_fetch": "by-name", "weights_source": "MatterSim-v1.0.0-5M.pth", "weights_source_url": "https://github.com/microsoft/mattersim", "validation": "validated_sm89", "note": "GPU-validated on sm89. Inference runs on GPU via device='cuda'.",
+        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "MatterSim-v1.0.0-5M.pth", "weights_source_url": "https://github.com/microsoft/mattersim", "validation": "validated_sm89", "note": "GPU-validated on sm89. Inference runs on GPU via device='cuda'.",
         "inference": ["calc = MatterSimCalculator(load_path='MatterSim-v1.0.0-5M.pth', device='cuda')"], "finetune": {"status": "documented", "entrypoint": "torchrun ... finetune_mattersim.py", "selector_kind": "cli_flag", "selector_path": "--load_model_path", "semantics": "finetune: Potential.from_checkpoint(..., load_training_state=False) loads weights only; load_training_state=True is the separate resume mechanism on the same entry point.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
   },
