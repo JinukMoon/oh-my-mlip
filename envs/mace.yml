@@ -34,10 +34,15 @@ dependencies:
   # single-point verified; a bare `- ase` rode each new release into the
   # build (the mattersim/eqnorm breakage class) and verify_determinism
   # was pip-only, so nothing caught it.
+  # This conda pin does not decide the env's ase, though: mace-torch requires
+  # an unbounded `ase`, so the pip step below installs its own and replaces
+  # this one. The fresh-root build that passed verification (2026-09-14,
+  # envs/locks/mace.pip.txt) ended with 3.29.0, so the pip block pins that.
   - ase=3.25.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu126
       - torch==2.7.1+cu126
+      - ase==3.29.0
       - mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363
       - cuequivariance==0.5.1
       - cuequivariance-torch==0.5.1

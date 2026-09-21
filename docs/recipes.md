@@ -126,7 +126,7 @@ Pinned combination:
 conda env create -f $OMM/envs/mace.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* ase=3.25.0
-#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363 cuequivariance==0.5.1 cuequivariance-torch==0.5.1 e3nn==0.4.4
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 ase==3.29.0 mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363 cuequivariance==0.5.1 cuequivariance-torch==0.5.1 e3nn==0.4.4
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
