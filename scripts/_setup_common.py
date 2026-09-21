@@ -222,6 +222,11 @@ def stream_process(
                 if not quiet:
                     sys.stdout.write(line)
                     sys.stdout.flush()
+                elif is_stderr and line.startswith("[oh-my-mlip]"):
+                    # the hub's own progress (a weight download can take many
+                    # minutes) still reaches the user; stdout stays machine output
+                    sys.stderr.write(line)
+                    sys.stderr.flush()
                 if is_stderr:
                     stderr_file.write(line)
                     stderr_file.flush()

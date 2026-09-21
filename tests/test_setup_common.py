@@ -183,6 +183,25 @@ def test_stream_process_quiet_keeps_stdout_clean(tmp_path, capsys):
     assert capsys.readouterr().out == ""              # but OUR stdout stays clean
 
 
+def test_stream_process_quiet_still_shows_hub_progress_on_stderr(tmp_path, capsys):
+    # `setup_verify.py --json` runs quiet; a first-use weight download inside it
+    # used to show nothing for minutes while its progress went only to the log
+    script = ("echo witness; echo '[oh-my-mlip] w.ckpt: 12.0 / 80.0 MB' >&2; "
+              "echo 'backend chatter' >&2")
+    rc, *_ = common.stream_process(
+        ["/bin/sh", "-c", script],
+        env=dict(os.environ),
+        log_path=tmp_path / "log.txt",
+        stderr_path=tmp_path / "err.txt",
+        collect=True,
+        quiet=True,
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "[oh-my-mlip] w.ckpt: 12.0 / 80.0 MB\n"
+
+
 def test_verify_output_ok_parses_witness_lines():
     stdout = "energy (eV) : -16.386652\nmax|force| : 0.031245\n"
     assert common.verify_output_ok(stdout, "") == (True, True)
