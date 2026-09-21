@@ -96,6 +96,24 @@ def get_calculator(
 
 
 # ── Layer 4: persistent Worker (one process per env, id-routed) ──────────────
+def _killed_hint(model: str, returncode: int | None) -> str:
+    """Name the usual cause when a worker died from SIGKILL before it was ready.
+
+    Nothing in the child gets to print anything then, so the stderr above ends
+    mid-load and reads like a hang. On Linux the sender is almost always the
+    kernel's out-of-memory killer, reached while the checkpoint is loaded into
+    host RAM."""
+    if returncode not in (-9, 137):
+        return ""
+    return (
+        f"\nThe worker was killed by SIGKILL (exit {returncode}) while loading {model}. "
+        "On Linux that is almost always the out-of-memory killer: loading the "
+        "checkpoint needed more host RAM than was free (check `dmesg` or "
+        "`journalctl -k` for 'Out of memory'). Free memory, run on a machine with "
+        "more RAM, or choose a smaller variant of the same family."
+    )
+
+
 class DeviceUnavailableError(RuntimeError):
     """Raised when the caller's device cannot be honoured by a registry line."""
 
@@ -317,9 +335,11 @@ class Worker:
         line = self._proc.stdout.readline()
         if not line:
             err = self._read_stderr()
+            code = self._exit_code()
             self._terminate_child()
             raise WorkerError(
                 f"worker for {self.model} produced no handshake; stderr:\n{err}"
+                + _killed_hint(self.model, code)
             )
         try:
             handshake = json.loads(line)
@@ -333,6 +353,14 @@ class Worker:
                 f"{handshake.get('error')}"
             )
         return self
+
+    def _exit_code(self) -> int | None:
+        """The child's exit status once its stdout has closed, or None if it is
+        still running (or the Popen double cannot say)."""
+        try:
+            return self._proc.wait(timeout=5)
+        except Exception:
+            return None
 
     def _terminate_child(self) -> None:
         """Stop a child that never became a worker.

@@ -63,3 +63,21 @@ def test_stderr_of_a_failed_start_is_reported_from_the_drain(monkeypatch):
     worker = _fake_worker(monkeypatch, "import sys\nsys.stderr.write('boom: cuda missing\\n')\n")
     with pytest.raises(provider.WorkerError, match="boom: cuda missing"):
         worker.start()
+
+
+def test_a_worker_killed_before_the_handshake_names_the_oom_killer(monkeypatch):
+    # what the kernel's OOM killer does to a large checkpoint mid-load: SIGKILL, no last words
+    script = "import os, signal, sys\nsys.stderr.write('loading checkpoint\\n')\nsys.stderr.flush()\nos.kill(os.getpid(), signal.SIGKILL)\n"
+    worker = _fake_worker(monkeypatch, script)
+    with pytest.raises(provider.WorkerError) as info:
+        worker.start()
+    message = str(info.value)
+    assert "loading checkpoint" in message
+    assert "SIGKILL" in message and "out-of-memory killer" in message
+
+
+def test_an_ordinary_failed_start_carries_no_oom_hint(monkeypatch):
+    worker = _fake_worker(monkeypatch, "import sys\nsys.stderr.write('boom\\n')\nsys.exit(1)\n")
+    with pytest.raises(provider.WorkerError) as info:
+        worker.start()
+    assert "out-of-memory" not in str(info.value)
