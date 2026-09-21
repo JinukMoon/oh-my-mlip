@@ -24,9 +24,10 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import time
 from pathlib import Path
-from urllib.request import Request, urlopen
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _weight_download import download_resumable  # noqa: E402
 
 # Upstream's own Hugging Face copy. The SavedModel inside GRACE-2L-OAM-model.tar.gz
 # is byte-identical, file by file, to the one grace_models fetches from the ICAMS
@@ -90,27 +91,9 @@ def _sha256(path: Path) -> str:
 
 
 def _download_resumable(url: str, dest: Path, total: int) -> None:
-    """Continue a partial download instead of starting over, and say how far it got."""
-    have = dest.stat().st_size if dest.exists() else 0
-    if have > total:
-        dest.unlink()
-        have = 0
-    if have == total:
-        return
-    headers = {"User-Agent": "oh-my-mlip/0.1"}
-    if have:
-        headers["Range"] = f"bytes={have}-"
-    with urlopen(Request(url, headers=headers), timeout=60) as resp:
-        if have and getattr(resp, "status", None) != 206:   # the server ignored Range
-            have = 0
-        done, last = have, time.time()
-        with open(dest, "ab" if have else "wb") as fh:
-            while chunk := resp.read1(1 << 16):
-                fh.write(chunk)
-                done += len(chunk)
-                if time.time() - last > 5:
-                    print(f"[prepare_grace] {done / 1e6:.1f} / {total / 1e6:.1f} MB", flush=True)
-                    last = time.time()
+    """Continue a partial download instead of starting over (shared loop: timeout,
+    in-call retries, Range resume, progress on stderr)."""
+    download_resumable(url, dest, label="prepare_grace", size=total)
 
 
 def _fetch_from_hf(name: str, target: Path) -> bool:

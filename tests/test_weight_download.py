@@ -74,6 +74,25 @@ def server():
 SHA = hashlib.sha256(PAYLOAD).hexdigest()
 
 
+@pytest.fixture(autouse=True)
+def _no_backoff(monkeypatch):
+    # the retry backoff lives in oh_my_mlip/_download.py; the scripts' helper
+    # loads its own copy of that file, so both need the sleep removed
+    sys.path.insert(0, str(REPO_ROOT))
+    from oh_my_mlip import _download
+
+    monkeypatch.setattr(_download.time, "sleep", lambda s: None)
+    monkeypatch.setattr(wd._download.time, "sleep", lambda s: None)
+
+
+def _cut_everything(handler):
+    handler.send_response(200)
+    handler.send_header("Content-Length", str(len(PAYLOAD)))
+    handler.end_headers()
+    handler.wfile.write(PAYLOAD[:1000])
+    handler.close_connection = True
+
+
 def test_whole_download_lands_verified(tmp_path, server):
     dest = tmp_path / "m" / "model.ckpt"
     wd.download(server.url, dest, size=len(PAYLOAD), sha256=SHA)
@@ -81,26 +100,39 @@ def test_whole_download_lands_verified(tmp_path, server):
     assert not (dest.parent / ".model.ckpt.download").exists()
 
 
-def test_cut_off_download_is_kept_aside_then_resumed(tmp_path, server):
+def test_cut_off_download_is_resumed_in_the_same_call(tmp_path, server):
+    # long connections get dropped (seen after ~10 minutes on Hugging Face);
+    # the transfer continues with a Range request instead of failing the run
     dest = tmp_path / "model.ckpt"
     server.cut_at = 300_000
-    with pytest.raises(Exception):
-        wd.download(server.url, dest, size=len(PAYLOAD), sha256=SHA)
-    assert not dest.exists(), "a cut-off download must never reach the final path"
-    part = tmp_path / ".model.ckpt.download"
-    assert 0 < part.stat().st_size < len(PAYLOAD)
-
     wd.download(server.url, dest, size=len(PAYLOAD), sha256=SHA)
     assert dest.read_bytes() == PAYLOAD
-    assert server.ranges[-1] == "bytes=300000-"
+    assert server.ranges == [None, "bytes=300000-"]
+
+
+def test_a_partial_file_from_an_earlier_run_is_resumed(tmp_path, server):
+    dest = tmp_path / "model.ckpt"
+    (tmp_path / ".model.ckpt.download").write_bytes(PAYLOAD[:300_000])
+    wd.download(server.url, dest, size=len(PAYLOAD), sha256=SHA)
+    assert dest.read_bytes() == PAYLOAD
+    assert server.ranges == ["bytes=300000-"]
 
 
 def test_cut_off_without_recorded_size_uses_content_length(tmp_path, server):
     dest = tmp_path / "model.ckpt"
     server.cut_at = 1000
-    with pytest.raises(Exception):
-        wd.download(server.url, dest)
+    wd.download(server.url, dest)
+    assert dest.read_bytes() == PAYLOAD
+    assert server.ranges == [None, "bytes=1000-"]
+
+
+def test_when_every_attempt_fails_the_part_is_kept_and_nothing_is_installed(tmp_path, server, monkeypatch):
+    monkeypatch.setattr(server.httpd.RequestHandlerClass, "do_GET", _cut_everything)
+    dest = tmp_path / "model.ckpt"
+    with pytest.raises(wd.DownloadError, match="next attempt resumes"):
+        wd.download(server.url, dest, size=len(PAYLOAD), sha256=SHA)
     assert not dest.exists()
+    assert (tmp_path / ".model.ckpt.download").stat().st_size > 0
 
 
 def test_hash_mismatch_discards_the_file(tmp_path, server):
@@ -167,7 +199,6 @@ def test_fetch_url_download_resumes_after_a_cut(tmp_path, server, capsys, monkey
     sys.path.insert(0, str(REPO_ROOT))
     from oh_my_mlip import fetch
 
-    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
     server.cut_at = 400_000
     local = fetch._download_to_temp(server.url, tmp_path)
     assert local.read_bytes() == PAYLOAD
@@ -233,7 +264,6 @@ def test_fetch_download_gives_up_on_a_stalled_connection_and_resumes(tmp_path, s
     sys.path.insert(0, str(REPO_ROOT))
     from oh_my_mlip import fetch
 
-    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
     release = threading.Event()
     original = server.httpd.RequestHandlerClass.do_GET
 
@@ -259,6 +289,7 @@ def test_fetch_download_keeps_the_partial_file_when_every_attempt_fails(tmp_path
     sys.path.insert(0, str(REPO_ROOT))
     from oh_my_mlip import fetch
 
-    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
-    original = server.httpd.RequestHandlerClass.do_GET
-
+    monkeypatch.setattr(server.httpd.RequestHandlerClass, "do_GET", _cut_everything)
+    with pytest.raises(fetch.FetchError, match="next attempt resumes"):
+        fetch._download_to_temp(server.url, tmp_path, attempts=2)
+    assert (tmp_path / ".ckpt.download").stat().st_size > 0

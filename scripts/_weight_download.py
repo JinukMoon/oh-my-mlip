@@ -8,16 +8,31 @@ Why one helper: each script used to write straight to the final path and treat
 a connection closes early inside a sized read, so a cut-off download looked
 complete and every rerun reused it -- a 900 MB stump of a 2.9 GB PET checkpoint
 then failed at export forever. Here a file only becomes the final path after its
-size (and sha256, when the caller pins one) matches, and a partial file is
-kept beside it so the next run resumes instead of starting over.
+size (and hash, when the caller pins one) matches, and a partial file is kept
+beside it so the transfer resumes instead of starting over.
 """
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import os
-import time
 from pathlib import Path
-from urllib.request import Request, urlopen
+
+
+def _load_download_core():
+    # The hub package is not installed in a model env, so load the shared download
+    # loop from its file rather than through `import oh_my_mlip` (whose __init__
+    # would pull in the rest of the hub).
+    path = Path(__file__).resolve().parent.parent / "oh_my_mlip" / "_download.py"
+    spec = importlib.util.spec_from_file_location("_omm_download", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_download = _load_download_core()
+DownloadError = _download.DownloadError
+download_resumable = _download.download_resumable
 
 
 def sha256_of(path: Path, algorithm: str = "sha256") -> str:
@@ -40,43 +55,14 @@ def download(url: str, dest: Path, *, size: int | None = None, sha256: str | Non
              md5: str | None = None, label: str = "weights") -> None:
     """Download `url` to `dest` only if it arrives whole.
 
-    The bytes land in `.<name>.download` beside `dest`; a rerun continues it with
-    an HTTP Range request. The file is renamed onto `dest` only when its size
+    The bytes land in `.<name>.download` beside `dest` and are continued with an
+    HTTP Range request -- retried within this call and resumed by the next run
+    (oh_my_mlip/_download.py). The file is renamed onto `dest` only when its size
     matches `size` (or the server's declared length) and its sha256 / md5 match
-    when given; a file that fails the hash is deleted, never resumed."""
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    when given; a file that fails a hash is deleted, never resumed."""
     part = dest.parent / f".{dest.name}.download"
-    have = part.stat().st_size if part.exists() else 0
-    if size and have > size:
-        part.unlink()
-        have = 0
-    total = size
-    if not (size and have == size):
-        headers = {"User-Agent": "oh-my-mlip/0.1"}
-        if have:
-            headers["Range"] = f"bytes={have}-"
-        with urlopen(Request(url, headers=headers), timeout=60) as resp:
-            status = getattr(resp, "status", None)
-            if have and status != 206:                     # the server ignored Range: start over
-                have = 0
-            if total is None:
-                declared = resp.headers.get("Content-Length") if hasattr(resp, "headers") else None
-                if declared and declared.isdigit():
-                    total = have + int(declared)
-            done, last = have, time.time()
-            with open(part, "ab" if have else "wb") as fh:
-                while chunk := resp.read1(1 << 16):
-                    fh.write(chunk)
-                    done += len(chunk)
-                    if time.time() - last > 5:
-                        shown = f" / {total / 1e6:.1f}" if total else ""
-                        print(f"[{label}] {done / 1e6:.1f}{shown} MB", flush=True)
-                        last = time.time()
-    got = part.stat().st_size
-    if total and got != total:
-        raise RuntimeError(f"{url}: received {got} of {total} bytes; the partial file is kept "
-                           f"at {part} and the next run resumes it")
-    if got == 0:
+    _download.download_resumable(url, part, label=label, size=size)
+    if part.stat().st_size == 0:
         part.unlink()
         raise RuntimeError(f"{url}: downloaded nothing")
     for algorithm, expected in (("sha256", sha256), ("md5", md5)):

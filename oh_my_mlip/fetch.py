@@ -25,14 +25,11 @@ import re
 import shutil
 import subprocess
 import sys
-import time
-from http.client import HTTPException
 from pathlib import Path
-from urllib.error import HTTPError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 from oh_my_mlip import registry
+from oh_my_mlip._download import DownloadError, download_resumable
 
 __all__ = [
     "FetchError",
@@ -400,71 +397,18 @@ def _download_to_temp(url: str, directory: Path, *, timeout: float = 60,
                       attempts: int = 5) -> Path:
     """Download `url` into `directory`, resuming what an earlier attempt left.
 
-    Some weight hosts serve a few KiB/s and drop or stall connections, so a
-    large artifact can outlive a job or a shell session. Every read has a
-    `timeout`; a stalled, reset or cut-off connection is retried with an HTTP
-    Range request up to `attempts` times in this call, and the partial file stays
-    in the staging directory so the next call continues it (a server that
-    ignores Range gets a fresh download). Progress goes to stderr: stdout may be
-    a JSON-RPC channel."""
-    directory.mkdir(parents=True, exist_ok=True)
+    The partial file stays in the staging directory between calls; see
+    oh_my_mlip/_download.py for the timeout, in-call retries and Range resume."""
     parsed_name = Path(urlparse(url).path).name or "weights"
     tmp = directory / f".{parsed_name}.download"
-    cause = ""
-    for attempt in range(1, attempts + 1):
-        try:
-            if _download_once(url, tmp, parsed_name, timeout):
-                break
-            cause = "the connection closed before the declared length"
-        except HTTPError as exc:
-            if exc.code != 416 or not tmp.exists():
-                raise
-            tmp.unlink()  # the partial file no longer fits what the server holds
-            cause = "the server rejected the resume offset"
-            continue
-        except (OSError, HTTPException) as exc:  # timeouts, resets, IncompleteRead
-            cause = f"{exc.__class__.__name__}: {exc}"
-        have = tmp.stat().st_size if tmp.exists() else 0
-        if attempt < attempts:
-            print(f"[oh-my-mlip] {parsed_name}: interrupted at {have / 1e6:.1f} MB ({cause}); "
-                  f"resuming (attempt {attempt + 1} of {attempts})", file=sys.stderr, flush=True)
-            time.sleep(min(30, 2 * attempt))
-    else:
-        have = tmp.stat().st_size if tmp.exists() else 0
-        raise FetchError(
-            f"download of {url} did not finish after {attempts} attempts ({cause}); "
-            f"{have} bytes are kept at {tmp} and the next attempt resumes them"
-        )
+    try:
+        download_resumable(url, tmp, label=parsed_name, timeout=timeout, attempts=attempts)
+    except DownloadError as exc:
+        raise FetchError(str(exc)) from exc
     if tmp.stat().st_size == 0:
         tmp.unlink(missing_ok=True)
         raise FetchError(f"downloaded empty weight artifact from {url}")
     return tmp
-
-
-def _download_once(url: str, tmp: Path, label: str, timeout: float) -> bool:
-    """One request, appended to `tmp`. True when the file is now complete (its
-    size equals the declared length, or no length was declared)."""
-    have = tmp.stat().st_size if tmp.exists() else 0
-    headers = {"User-Agent": "oh-my-mlip/0.1"}
-    if have:
-        headers["Range"] = f"bytes={have}-"
-    with urlopen(Request(url, headers=headers), timeout=timeout) as response:
-        if have and getattr(response, "status", None) != 206:
-            have = 0
-        declared = response.headers.get("Content-Length")
-        total = have + int(declared) if declared and declared.isdigit() else None
-        if have:
-            print(f"[oh-my-mlip] {label}: resuming at {have / 1e6:.1f} MB", file=sys.stderr, flush=True)
-        done, last = have, time.monotonic()
-        with open(tmp, "ab" if have else "wb") as fh:
-            while chunk := response.read1(1 << 16):
-                fh.write(chunk)
-                done += len(chunk)
-                if time.monotonic() - last > 10:
-                    shown = f" / {total / 1e6:.1f}" if total else ""
-                    print(f"[oh-my-mlip] {label}: {done / 1e6:.1f}{shown} MB", file=sys.stderr, flush=True)
-                    last = time.monotonic()
-    return total is None or tmp.stat().st_size == total
 
 
 def _install_downloaded_artifact(local: Path, targets: list[Path], root: Path) -> None:
