@@ -16,7 +16,7 @@ venv/
 env/
 ENV/
 
-# --- conda-pack tarballs / packaged envs (never commit multi-GB artifacts) ---
+# --- tarballs / built envs (never commit multi-GB artifacts) ---
 *.tar.gz
 *.tar
 *.tgz

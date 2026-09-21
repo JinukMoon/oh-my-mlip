@@ -9,18 +9,18 @@
     "shared_env_file": "${OH_MY_MLIP_HOME}/env.sh",
     "source_policy": "Each framework's env+model is unified to the fastest validated setup. Same checkpoint = same accuracy; only speed differs across contributors.",
     "field_guide": {
-      "env": "conda env name; the relocatable env unpacks to ${OH_MY_MLIP_HOME}/envs/<env>",
+      "env": "conda env name; install.sh builds it from envs/<env>.yml into ${OH_MY_MLIP_HOME}/envs/<env>",
       "default_version": "optional; for a multi-version framework, the version key resolve() selects when version=None. Must be one of the framework's version keys.",
       "python": "interpreter path of that framework's env, ${OH_MY_MLIP_HOME}-relative (do NOT use conda activate)",
       "import": "import lines for the top of a generated run script",
       "inference": "calculator construction code (intra-env)",
-      "arch_pinned": "if true, pick the inference_<arch> variant matching the host GPU (sm86=A5000/A6000, sm89=L40S, ...; auto-detected via registry.detect_host_arch). A generic 'inference' block may carry the ${OMM_ARCH} placeholder, which resolve() expands to the arch in use — so ANY host arch resolves and the per-arch .pt2 is compiled on the user GPU on first run, never baked into a distributed tarball",
+      "arch_pinned": "if true, pick the inference_<arch> variant matching the host GPU (sm86=A5000/A6000, sm89=L40S, ...; auto-detected via registry.detect_host_arch). A generic 'inference' block may carry the ${OMM_ARCH} placeholder, which resolve() expands to the arch in use — so ANY host arch resolves and the per-arch .pt2 is compiled on the user GPU on first run, never distributed",
       "note": "free-form caveats agents must respect",
       "status": "free-form provenance/validation provenance string carried verbatim from the internal registry",
       "env_run": "optional env-var prefix that MUST wrap the interpreter invocation (key=value allowlist only; e.g. LD_LIBRARY_PATH=\"\")",
       "gated": "bool. if true, weights require accepting an upstream license and using the user's own HF_TOKEN; gated weights are NEVER redistributed by this repo",
       "license_url": "string|null. URL of the upstream weights license to accept before download (set for gated models)",
-      "weights": "how weights are obtained: 'bundled' (inside the conda-pack tarball) | 'auto-download' (fetched by name to a shared cache on first run) | 'on-demand-hf' (fetched from Hugging Face Hub, may be gated)",
+      "weights": "how weights are obtained: 'bundled' (inside the framework's own pip package) | 'auto-download' (fetched by name to a shared cache on first run) | 'on-demand-hf' (fetched from Hugging Face Hub, may be gated)",
       "weights_fetch": "fetch mechanism: 'by-name' (resolved by model name/cache) | 'url' (explicit download URL) | 'gated-hf' (gated HF repo requiring license acceptance + HF_TOKEN)",
       "weights_source": "the source value matching weights_fetch: an HF repo id (owner/name) for gated-hf, an http(s) URL (or the 'TODO-owner-review' placeholder while no official link is recorded) for url, a resolver name/placeholder for by-name",
       "weights_fetch_command": "optional argv template for by-name weights that still need an explicit local models/<env>/ path; {weights_source} and {target_root} are available",
@@ -42,10 +42,6 @@
       }
     },
     "catbench": "All environments include catbench. D3 dispersion correction: from catbench.dispersion import DispersionCorrection; calc = DispersionCorrection().apply(calc). The architecture-specific pair_d3.so is recompiled on the user's GPU on first run; requires nvcc (see env.sh).",
-    "shipped_v1": [
-      "MACE",
-      "SevenNet"
-    ],
     "note": "All models are at their actual validation state. Rows marked validation='gpu_pending' have loaded successfully but GPU computation is not yet verified."
   },
   "SevenNet": {

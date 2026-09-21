@@ -3,7 +3,7 @@
 #
 # These are the ONLY packages needed to run the GPU-free CI suite locally:
 #   pytest         — test runner
-#   jsonschema     — JSON-Schema validation of models.json + dist_manifest.json
+#   jsonschema     — JSON-Schema validation of models.json
 #   numpy, ase     — structure I/O in the distill and relax-input tests
 #                    (no model is loaded)
 #

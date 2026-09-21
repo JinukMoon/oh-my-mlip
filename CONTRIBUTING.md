@@ -81,8 +81,8 @@ Rules:
 - the light `| Framework | Models |` list in the README `## Supported MLIPs`
   section, between the `<!-- STATUS_TABLE_START -->` /
   `<!-- STATUS_TABLE_END -->` markers in `README.md`; and
-- the full detailed table (Model / Framework / Weights / Validation / Gated /
-  v1 tarball) in `docs/model_status.md`, between the
+- the full detailed table (Model / Framework / Weights / Gated / Code) in
+  `docs/model_status.md`, between the
   `<!-- STATUS_TABLE_DETAILED_START -->` /
   `<!-- STATUS_TABLE_DETAILED_END -->` markers.
 
@@ -111,7 +111,7 @@ pip install -r requirements-dev.txt
 Then run all four checks:
 
 ```bash
-# 1. JSON-schema validation (models.json + dist_manifest.json) and all tests
+# 1. JSON-schema validation (models.json) and all tests
 python -m pytest tests/ -q
 
 # 2. Status-table sync check
@@ -141,7 +141,7 @@ CI must be green before merging.  A reviewer will check:
 ## Deferred GPU/compute checkpoint
 
 The following acceptance checks **require human action** (a GPU machine with
-the appropriate driver, access to a prebuilt source environment, and an
+the appropriate driver, and an
 `HF_TOKEN`) and are therefore **not run in CI**:
 
 - GPU validate: `install.sh <env>` on a GPU box and verify D3 compiles or

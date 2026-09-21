@@ -1,9 +1,8 @@
-"""JSON-schema validation tests for models.json and dist_manifest.json.
+"""JSON-schema validation tests for models.json.
 
 These run on every PR without a GPU, conda env, torch, or ase.
 They guard against:
   - structural drift in models.json (missing honesty fields, bad enum values)
-  - structural drift in dist_manifest.json (missing required keys)
 
 The models schema requires the four honesty fields (gated, weights, validation,
 inference) on every version entry — this guards against an "all-validated"
@@ -21,9 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_DIR = Path(__file__).resolve().parent / "schema"
 
 MODELS_JSON = REPO_ROOT / "models.json"
-DIST_MANIFEST_JSON = REPO_ROOT / "dist_manifest.json"
 MODELS_SCHEMA_FILE = SCHEMA_DIR / "models.schema.json"
-DIST_MANIFEST_SCHEMA_FILE = SCHEMA_DIR / "dist_manifest.schema.json"
 
 
 def _load(path: Path) -> dict:
@@ -36,18 +33,8 @@ def models_schema() -> dict:
 
 
 @pytest.fixture(scope="module")
-def dist_manifest_schema() -> dict:
-    return _load(DIST_MANIFEST_SCHEMA_FILE)
-
-
-@pytest.fixture(scope="module")
 def models_data() -> dict:
     return _load(MODELS_JSON)
-
-
-@pytest.fixture(scope="module")
-def dist_manifest_data() -> dict:
-    return _load(DIST_MANIFEST_JSON)
 
 
 # ── models.json ──────────────────────────────────────────────────────────────
@@ -155,33 +142,3 @@ def test_models_json_no_tgm_paths(models_data):
     """Public registry must not contain any /TGM/ absolute paths."""
     raw = MODELS_JSON.read_text(encoding="utf-8")
     assert "/TGM/" not in raw, "models.json contains /TGM/ path(s) — use $OH_MY_MLIP_HOME"
-
-
-# ── dist_manifest.json ────────────────────────────────────────────────────────
-
-def test_dist_manifest_is_valid_json():
-    data = _load(DIST_MANIFEST_JSON)
-    assert isinstance(data, dict)
-
-
-def test_dist_manifest_passes_schema(dist_manifest_data, dist_manifest_schema):
-    jsonschema.validate(instance=dist_manifest_data, schema=dist_manifest_schema)
-
-
-def test_dist_manifest_v1_envs_present(dist_manifest_data):
-    """v1-shipped envs (mace, sevennet) must appear in the manifest."""
-    assert "mace" in dist_manifest_data
-    assert "sevennet" in dist_manifest_data
-
-
-def test_dist_manifest_required_keys(dist_manifest_data):
-    """Every non-meta entry must carry all required distribution keys."""
-    required = {"env", "hf_repo", "revision", "sha256", "unpack_size_bytes", "min_driver_version"}
-    missing: list[str] = []
-    for env, entry in dist_manifest_data.items():
-        if env.startswith("_"):
-            continue
-        for key in required:
-            if key not in entry:
-                missing.append(f"{env}: missing '{key}'")
-    assert not missing, "\n".join(missing)

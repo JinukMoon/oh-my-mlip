@@ -1,7 +1,7 @@
 """oh_my_mlip — public teacher-provider base for the oh-my-mlip HUB.
 
-A path-importable (NOT pip) package that turns the trusted ``models.json`` +
-``dist_manifest.json`` registry into a tiered, machine-readable interface for
+A path-importable (NOT pip) package that turns the trusted ``models.json``
+registry into a tiered, machine-readable interface for
 running 20 frameworks / 31 model variants, each in its own conda env. The four
 layers:
 

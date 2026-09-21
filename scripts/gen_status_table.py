@@ -21,9 +21,8 @@ and keeps both byte-for-byte in sync (CI runs `--check`):
 
 Both are derived ENTIRELY from the registry (`weights` / `gated` per version,
 `repo` per framework), so neither view can drift from `models.json`. The
-per-version `validation` field and the prebuilt-env (tarball) state stay in the
-registry and in the MCP `model_status` tool but are not rendered in the public
-docs.
+per-version `validation` field stays in the registry and in the MCP
+`model_status` tool but is not rendered in the public docs.
 
 Modes:
   (default)   print both generated blocks to stdout (clearly delimited).

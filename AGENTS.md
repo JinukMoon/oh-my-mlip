@@ -58,8 +58,8 @@ to submit themselves.
    that creates the calculator), `arch_pinned` and `gated` flags, `env_run`
    prefixes and notes. Look facts up here every time; never write them from
    memory.
-2. **`dist_manifest.json`** — prebuilt, relocatable envs that can be downloaded
-   instead of built (currently MACE and SevenNet); `oh_my_mlip/fetch.py` uses it.
+2. **`envs/<env>.yml`** — each env's recipe (conda + PyPI), which `install.sh`
+   builds; this is the only way an env is installed.
 
 Run `source env.sh` once per shell before anything else: it sets up the model
 caches and the CUDA environment that the D3 correction needs.
@@ -69,7 +69,6 @@ caches and the CUDA environment that the D3 correction needs.
 ```
 oh-my-mlip/                          # $OH_MY_MLIP_HOME (the clone root)
 ├── models.json                      # model registry
-├── dist_manifest.json               # prebuilt envs
 ├── env.sh                           # caches + CUDA environment (source it)
 ├── install.sh                       # builds envs from envs/<env>.yml
 ├── oh_my_mlip/                      # Python interface (import by path, not pip)
@@ -528,7 +527,7 @@ adapter (see `oh_my_mlip/mcp_server.py`).
 | §0–1 registry and layout | `list_models` |
 | §0 one model's `resolve()` dict | `describe_model` |
 | §5 gated / weights status | `model_status` |
-| §1, §6 install an env / compile | `install_model` |
+| §1, §6 is an env installed / the command that builds it | `install_model` |
 | §3A single point | `run_singlepoint` |
 | §3A relaxation | `run_relax` |
 | §3B CatBench across models | `run_catbench` |

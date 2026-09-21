@@ -57,12 +57,6 @@ the env as it was when it passed verification, which is why the two can differ.
 `python3 scripts/verify_determinism.py` lists every such difference, and fails
 if a recipe or build script installs anything without an exact version.
 
-## Prebuilt envs
-
-MACE and SevenNet are also published as prebuilt, relocatable envs on the
-Hugging Face Hub (pinned revision and sha256). `oh_my_mlip.fetch.fetch_env("MACE")`
-downloads, checks and unpacks one instead of building from the recipe.
-
 ## Use an env you already have
 
 ```bash

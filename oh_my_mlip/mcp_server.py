@@ -1,7 +1,7 @@
 """oh_my_mlip.mcp_server — a thin MCP adapter over the public oh_my_mlip API.
 
 This module exposes the existing teacher-provider interface
-(``list_models`` / ``resolve`` / ``run`` / ``Worker`` / ``fetch_env``) as
+(``list_models`` / ``resolve`` / ``run`` / ``Worker``) as
 Model-Context-Protocol tools so a tool-calling agent can drive the hub the same
 way a human follows ``AGENTS.md``. It REIMPLEMENTS NOTHING — every tool is a
 small wrapper that validates its arguments and forwards to the real function.
@@ -9,10 +9,10 @@ small wrapper that validates its arguments and forwards to the real function.
 Two classes of tool:
 
   * GPU-free (work right now, pure registry reads, no env/torch/GPU needed):
-      ``list_models``, ``describe_model``, ``model_status``.
-  * compute-dependent (need a materialized conda env + GPU at runtime; they are
-      validated end-to-end at the compute checkpoint):
-      ``run_singlepoint``, ``run_relax``, ``run_catbench``, ``install_model``.
+      ``list_models``, ``describe_model``, ``model_status``, ``install_model``
+      (reports whether an env is installed and the command that installs it).
+  * compute-dependent (need an installed conda env + GPU at runtime):
+      ``run_singlepoint``, ``run_relax``, ``run_catbench``.
 
 The ``mcp`` SDK is imported LAZILY (see ``_require_mcp``) so that importing
 ``oh_my_mlip`` never requires ``mcp`` to be installed — mirroring how torch /
@@ -50,7 +50,7 @@ TOOL_NAMES: tuple[str, ...] = (
 
 # Tools that need no GPU / conda env / heavy deps — they answer from the registry.
 GPU_FREE_TOOLS: frozenset[str] = frozenset(
-    {"list_models", "describe_model", "model_status"}
+    {"list_models", "describe_model", "model_status", "install_model"}
 )
 
 
@@ -134,16 +134,15 @@ def structure_to_atoms(structure: Any):
 
 # ── graceful "env not installed" guard for compute tools ─────────────────────
 def _env_hint(model: str, version: str | None) -> str:
-    """Return an actionable hint pointing at install_model / install.sh."""
+    """Return an actionable hint pointing at install.sh."""
     try:
         spec = registry.resolve(model, version=version)
         env = spec["env"]
     except Exception:  # noqa: BLE001 - resolution errors handled by caller
         env = "<env>"
     return (
-        f"the conda env {env!r} for {model} is not materialized yet. Install it "
-        f"first via the install_model tool (model={model!r}), or build it "
-        f'locally with:  bash "$OH_MY_MLIP_HOME/install.sh" {env}'
+        f"the conda env {env!r} for {model} is not installed yet. Build it from "
+        f'its recipe with:  bash "$OH_MY_MLIP_HOME/install.sh" {env}'
     )
 
 
@@ -167,12 +166,10 @@ def _status_rows() -> list[dict[str, Any]]:
     """Build the per-(model, version) status rows from models.json.
 
     Renders the SAME data as ``scripts/gen_status_table.py``: mlip name,
-    framework, weights, validation (human label), gated, and whether a v1 tarball
-    is authored (``shipped_v1`` in ``_meta``). Pure registry read — no GPU.
+    framework, weights, validation (human label) and gated. Pure registry read —
+    no GPU.
     """
     models = registry.load_models()
-    shipped = set(models.get("_meta", {}).get("shipped_v1", []))
-    published = registry.published_envs()
     rows: list[dict[str, Any]] = []
     for framework, info in models.items():
         if framework.startswith("_"):
@@ -188,11 +185,6 @@ def _status_rows() -> list[dict[str, Any]]:
                     "validation": _VALIDATION_LABEL.get(code, code),
                     "validation_code": code,
                     "gated": bool(vinfo.get("gated", False)),
-                    "v1_tarball": f"published ({published[info['env']]})"
-                    if info.get("env") in published
-                    else (
-                        "upload-pending" if framework in shipped else "Phase 2"
-                    ),
                 }
             )
     return rows
@@ -247,7 +239,7 @@ def build_server():
 
     @mcp.tool()
     def model_status() -> dict:
-        """Per-model ship status: validation / gated / weights / v1 tarball. GPU-FREE.
+        """Per-model status: validation / gated / weights. GPU-FREE.
 
         Renders the same data as ``scripts/gen_status_table.py`` (the detailed
         ``docs/model_status.md`` table) straight from ``models.json`` — the single
@@ -368,31 +360,28 @@ def build_server():
 
     @mcp.tool()
     def install_model(model: str, version: str | None = None) -> dict:
-        """Materialize a model's conda env (download + relocate). NEEDS HF/COMPUTE.
+        """Report whether a model's conda env is installed, and how to install it.
 
-        Wraps ``oh_my_mlip.fetch.fetch_env``: resolves the env's conda-pack
-        tarball from ``dist_manifest.json``, downloads it (revision-pinned),
-        verifies its sha256, runs ``conda-unpack`` once, and returns the relocated
-        interpreter path. For GATED models you must first accept the upstream
-        license and export ``HF_TOKEN``; without it this returns the license URL
-        and stops by design (it never redistributes gated weights). If no tarball
-        is published yet, it points you at the ``install.sh`` local-build fallback.
+        Environments are built from their recipes by ``install.sh`` (conda +
+        PyPI), which takes minutes to tens of minutes, so this tool does not
+        run the build itself. When the env is present it returns its
+        interpreter; otherwise it returns the exact command to run in a shell.
+        GATED models additionally need the upstream license accepted and a
+        Hugging Face login before their weights download on first use.
         """
-        from oh_my_mlip import fetch
-
         try:
-            python_path = fetch.fetch_env(model, version=version)
-        except fetch.GatedError as exc:
             spec = registry.resolve(model, version=version)
-            return {
-                "ok": False,
-                "gated": True,
-                "license_url": spec.get("license_url"),
-                "error": str(exc),
-            }
-        except fetch.FetchError as exc:
+        except registry.RegistryError as exc:
             return {"ok": False, "error": str(exc)}
-        return {"ok": True, "python": python_path}
+        command = f'bash "$OH_MY_MLIP_HOME/install.sh" {spec["env"]}'
+        result: dict[str, Any] = {"env": spec["env"], "command": command,
+                                  "gated": bool(spec.get("gated"))}
+        if spec.get("gated"):
+            result["license_url"] = spec.get("license_url")
+        if Path(spec["python"]).exists():
+            return {"ok": True, "python": spec["python"], **result}
+        return {"ok": False, "error": f"the {spec['env']} env is not installed; run: {command}",
+                **result}
 
     @mcp.tool()
     def run_catbench(

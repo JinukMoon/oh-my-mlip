@@ -507,7 +507,7 @@ def test_run_version_none_resolves_default(monkeypatch):
         assert "--model" in captured["proc"].cmd and model in captured["proc"].cmd
 
 
-def test_fetch_env_check_gated_resolves_version_none():
+def test_check_gated_resolves_version_none():
     # fetch._check_gated calls resolve(model, version=None); must not raise for
     # multi-version MACE/SevenNet now that defaults exist.
     from oh_my_mlip import fetch

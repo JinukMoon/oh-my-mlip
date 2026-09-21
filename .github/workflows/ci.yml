@@ -8,7 +8,7 @@ name: CI (GPU-free)
 #   1. Checkout repository
 #   2. Set up Python 3.11
 #   3. Install dev dependencies (pytest, jsonschema)
-#   4. JSON-schema validate models.json + dist_manifest.json
+#   4. JSON-schema validate models.json
 #   5. shellcheck install.sh + scripts/*.sh
 #   6. ast.parse every inference/import string in models.json (no exec)
 #   7. Status-table sync: gen_status_table.py --check
@@ -47,8 +47,7 @@ jobs:
       # ── 4. JSON-schema validate registries ───────────────────────────────────
       # The models schema enforces the four honesty fields (gated, weights,
       # validation, inference) on every version entry (overclaim guard).
-      # The dist_manifest schema enforces the six distribution keys.
-      - name: Validate models.json and dist_manifest.json schemas
+      - name: Validate the models.json schema
         run: |
           python -m pytest tests/test_schemas.py -v \
             --tb=short \

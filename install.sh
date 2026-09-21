@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 # install.sh — oh-my-mlip build-from-recipe orchestrator (PRIMARY install path).
 #
-# Build-from-recipe is the PRIMARY install path today: this script rebuilds a
-# model's env from envs/<env>.yml on the current host (host-correct by
+# Build-from-recipe is the ONLY install path: this script builds a model's env
+# from envs/<env>.yml (conda + PyPI) on the current host (host-correct by
 # construction), installs catbench, and triggers the first-run D3 compile.
-# (Relocatable conda-pack tarballs are LIVE for the envs listed in
-# dist_manifest.json — mace + sevennet as of v1; `oh_my_mlip.fetch.fetch_env`
-# is the tarball path, and this recipe build remains the universal fallback
-# and the path for every not-yet-published env.) It writes the on-disk layout:
+# No prebuilt environment is distributed. It writes the on-disk layout:
 #   $OH_MY_MLIP_HOME/envs/<env>/bin/python   (+ a .omm_ready sentinel)
 #
 # Usage:

@@ -7,7 +7,7 @@ eSEN-30M-OAM).
 **The token is yours.** oh-my-mlip *reads* it to download weights on your
 machine; it never **writes**, **echoes**, **commits**, or **redistributes** it.
 Gated weights are fetched on first run with *your* token, after *you* accept the
-upstream license — they are never baked into this repo or any published tarball.
+upstream license — they are never baked into this repo or published by it.
 
 > See [`gated_models.md`](gated_models.md) for which models are gated and what
 > happens when a token is missing. This file is the canonical token-setup doc.

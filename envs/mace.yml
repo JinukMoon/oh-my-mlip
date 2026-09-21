@@ -3,8 +3,7 @@
 #
 # Validated, buildable recipe. Pins mirror the validated internal setup:
 #   python 3.11.13 / torch 2.7.1+cu126.
-# install.sh build-from-recipe is the PRIMARY install path today. (conda-pack
-# tarballs are planned but not yet published; do not assume any are hosted.)
+# install.sh builds this env from this recipe; no prebuilt env is distributed.
 #
 #   - torch is pinned to the CUDA 12.6 build (cu126) from the official PyTorch
 #     wheel index; the host NVIDIA driver must satisfy the cu126 min-driver floor.

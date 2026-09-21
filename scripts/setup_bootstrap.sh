@@ -238,8 +238,7 @@ info "Conda/mamba found: $CONDA_BIN ($(command -v "$CONDA_BIN"))"
 printf '\n'
 printf '# [bootstrap] AGENTS.md section 0 -- read these files FIRST (in order):\n'
 printf '#   1. %s/models.json\n'        "$OH_MY_MLIP_HOME"
-printf '#   2. %s/dist_manifest.json\n' "$OH_MY_MLIP_HOME"
-printf '#   3. %s/AGENTS.md\n'          "$OH_MY_MLIP_HOME"
+printf '#   2. %s/AGENTS.md\n'          "$OH_MY_MLIP_HOME"
 printf '\n'
 
 # ---------------------------------------------------------------------------

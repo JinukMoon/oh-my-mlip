@@ -41,8 +41,7 @@ def _env_not_installed_msg(model: str, env: str, python_exe: str) -> str:
         f"the conda env {env!r} for {model} is not materialized yet "
         f"(interpreter not found: {python_exe}). Install it first:\n"
         f'    bash "$OH_MY_MLIP_HOME/install.sh" {model}\n'
-        f"  (or by env name: install.sh {env}), or fetch the prebuilt env via "
-        f"oh_my_mlip.fetch.fetch_env({model!r}) / the install_model MCP tool."
+        f"  (or by env name: install.sh {env})."
     )
 
 

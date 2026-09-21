@@ -52,6 +52,6 @@ belongs to a different account. Accept the license, log in, and run again.
 
 ## Policy
 
-- Gated weights are never committed to this repository, packed into a prebuilt
-  environment, or uploaded anywhere by oh-my-mlip.
+- Gated weights are never committed to this repository or uploaded anywhere
+  by oh-my-mlip.
 - They are always downloaded on demand with the user's own credentials.

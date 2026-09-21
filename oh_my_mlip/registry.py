@@ -1,4 +1,4 @@
-"""oh_my_mlip.registry — load + validate models.json / dist_manifest.json and
+"""oh_my_mlip.registry — load + validate models.json and
 resolve a model into a machine-readable codegen dict (the base layer of the
 teacher-provider interface).
 
@@ -31,9 +31,7 @@ __all__ = [
     "RegistryError",
     "home",
     "models_json_path",
-    "dist_manifest_path",
     "load_models",
-    "load_manifest",
     "list_models",
     "list_versions",
     "resolve",
@@ -209,37 +207,8 @@ def record_local_verified(
     )
 
 
-def published_envs(home_path: str | None = None) -> dict:
-    """Envs whose conda-pack tarball is actually LIVE, from dist_manifest.json.
-
-    Returns {env: revision} for entries whose sha256 is a real pin (not the
-    'TODO-on-upload' placeholder). This is the single source of truth for
-    "published vs pending" — status tables and the MCP server derive their
-    tarball column from here instead of hardcoding it.
-    """
-    path = Path(home_path or home()) / "dist_manifest.json"
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise RegistryError(f"dist_manifest.json is not valid JSON: {exc}") from exc
-    out = {}
-    for env, entry in data.items():
-        if env.startswith("_") or not isinstance(entry, dict):
-            continue
-        sha = entry.get("sha256")
-        if sha and sha != "TODO-on-upload":
-            out[env] = entry.get("revision", "?")
-    return out
-
-
 def models_json_path() -> Path:
     return _REPO_ROOT / "models.json"
-
-
-def dist_manifest_path() -> Path:
-    return _REPO_ROOT / "dist_manifest.json"
 
 
 def _load_json(path: Path) -> dict:
@@ -268,20 +237,6 @@ def load_models(path: str | os.PathLike | None = None) -> dict:
             raise RegistryError(f"models.json: '{fw}' missing 'env'/'python'")
         if "versions" not in info or not isinstance(info["versions"], dict):
             raise RegistryError(f"models.json: '{fw}' missing 'versions' object")
-    return data
-
-
-def load_manifest(path: str | os.PathLike | None = None) -> dict:
-    """Load + lightly validate dist_manifest.json. Returns the raw dict."""
-    p = Path(path) if path is not None else dist_manifest_path()
-    data = _load_json(p)
-    for env, entry in data.items():
-        if env.startswith("_"):
-            continue
-        if not isinstance(entry, dict) or "env" not in entry or "hf_repo" not in entry:
-            raise RegistryError(
-                f"dist_manifest.json: '{env}' must carry 'env' + 'hf_repo'"
-            )
     return data
 
 

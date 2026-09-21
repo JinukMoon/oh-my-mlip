@@ -1,21 +1,17 @@
-"""oh_my_mlip.fetch — env tarball resolver (conda-pack distribution path).
+"""oh_my_mlip.fetch — materialize the weights a model's inference lines name.
 
-Reads ``dist_manifest.json`` to map an env -> its conda-pack tarball on the
-Hugging Face Hub, downloads it into the shared cache, runs ``conda-unpack``
-once (guarded by a sentinel file), and returns the relocated interpreter path.
+``ensure_weights`` makes sure every weight path in a model's inference lines
+exists before the calculator is built: it downloads url-hosted weights
+(resumable, checked against the recorded size and sha256, with a registry
+mirror as fallback), runs an env's prestage/prepare step, or fetches gated
+Hugging Face weights with the user's own token after printing the license URL.
+Gated weights are never redistributed by this repo.
 
-Honesty / safety behaviour:
-  * gated-aware  : if the model is ``gated`` in models.json, require ``HF_TOKEN``
-                   and print the ``license_url`` before any download. Gated
-                   weights are NEVER redistributed by this repo.
-  * CUDA probe   : after unpack, probe ``torch.cuda`` against the manifest's
-                   ``min_driver_version``; on failure, print the EXACT
-                   ``install.sh`` fallback command (not a raw traceback).
-  * TODO marker  : manifest entries still carrying ``TODO-on-upload`` are
-                   treated as not-yet-publishable (raises a clear error).
+Environments themselves are built from the recipes by ``install.sh``; nothing
+here downloads or unpacks an environment.
 
-``huggingface_hub`` and ``torch`` are imported lazily INSIDE functions so this
-module imports on a host without them (the unit tests rely on that).
+``huggingface_hub`` is imported lazily INSIDE functions so this module imports
+on a host without it (the unit tests rely on that).
 """
 from __future__ import annotations
 
@@ -39,14 +35,9 @@ __all__ = [
     "GatedError",
     "cache_root",
     "ensure_weights",
-    "env_install_dir",
-    "fetch_env",
-    "interpreter_path",
 ]
 
 TODO_MARKER = "TODO-on-upload"
-SENTINEL_NAME = ".oh-my-mlip-unpacked"
-BUILD_SENTINEL_NAME = ".omm_ready"  # written by install.sh when a local build finished
 _MODEL_PATH_RE = re.compile(r"['\"]([^'\"]*/models/[^'\"]+)['\"]")
 _DIRECT_URL_MARKERS = ("/resolve/", "/raw/", "/ndownloader/", "/api/records/")
 _DIRECT_URL_SUFFIXES = (
@@ -638,38 +629,13 @@ def _resolve_token(env: dict | None = None) -> dict:
 
 # ── cache / layout ───────────────────────────────────────────────────────────
 def cache_root() -> Path:
-    """Shared download+unpack cache: $OH_MY_MLIP_HOME/cache or ~/.cache/oh-my-mlip."""
+    """Shared download cache: $OH_MY_MLIP_HOME/cache or ~/.cache/oh-my-mlip."""
     home = os.environ.get("OH_MY_MLIP_HOME")
     if home:
         root = Path(home) / "cache"
     else:
         root = Path.home() / ".cache" / "oh-my-mlip"
     return root
-
-
-def env_install_dir(env: str) -> Path:
-    """Where the relocated env lives after unpack: $OH_MY_MLIP_HOME/envs/<env>."""
-    return Path(registry.home()) / "envs" / env
-
-
-def interpreter_path(env: str) -> Path:
-    return env_install_dir(env) / "bin" / "python"
-
-
-# ── manifest lookup ──────────────────────────────────────────────────────────
-def _manifest_entry(env: str, manifest: dict | None = None) -> dict:
-    data = manifest if manifest is not None else registry.load_manifest()
-    if env not in data or env.startswith("_"):
-        raise FetchError(f"no dist_manifest.json entry for env {env!r}")
-    entry = data[env]
-    placeholders = [k for k, v in entry.items() if v == TODO_MARKER]
-    if placeholders:
-        raise FetchError(
-            f"env {env!r} is not yet publishable: manifest fields "
-            f"{placeholders} still carry the {TODO_MARKER!r} marker. "
-            f"Use install.sh to build this env locally instead."
-        )
-    return entry
 
 
 # ── gated gate ───────────────────────────────────────────────────────────────
@@ -702,195 +668,6 @@ def _check_gated(model: str, version: str | None) -> dict:
     return spec
 
 
-# ── fallback message ─────────────────────────────────────────────────────────
-def _install_fallback_cmd(env: str) -> str:
-    return f'bash "$OH_MY_MLIP_HOME/install.sh" {env}'
-
-
-def _print_fallback(env: str, reason: str) -> None:
-    print(
-        f"[oh-my-mlip] cannot use the prebuilt {env} tarball on this host:\n"
-        f"    {reason}\n"
-        f"  Fall back to a local build:\n"
-        f"    {_install_fallback_cmd(env)}",
-        file=sys.stderr,
-        flush=True,
-    )
-
-
-# ── CUDA capability probe ────────────────────────────────────────────────────
-def _probe_cuda(env: str, min_driver_version, python_exe: Path) -> bool:
-    """Probe torch.cuda inside the unpacked env. Returns True if usable; on
-    failure prints the install.sh fallback command (not a raw traceback).
-
-    When ``min_driver_version`` is recorded (not the ``TODO-on-upload``
-    placeholder / None), the host's CUDA driver version (from
-    ``torch._C._cuda_getDriverVersion``) is compared against it and a host below
-    the minimum is rejected with the fallback message. A placeholder skips the
-    comparison."""
-    probe = (
-        "import json,sys\n"
-        "try:\n"
-        "    import torch\n"
-        "    info={'available':torch.cuda.is_available(),"
-        "'driver':getattr(torch._C,'_cuda_getDriverVersion',lambda:None)()}\n"
-        "    print('PROBE_OK '+json.dumps(info))\n"
-        "except Exception as e:\n"
-        "    print('PROBE_FAIL '+repr(e))\n"
-    )
-    try:
-        out = subprocess.run(
-            [str(python_exe), "-c", probe],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except Exception as exc:  # noqa: BLE001
-        _print_fallback(env, f"could not run CUDA probe: {exc!r}")
-        return False
-
-    line = (out.stdout or out.stderr).strip().splitlines()
-    line = line[-1] if line else ""
-    if not line.startswith("PROBE_OK"):
-        _print_fallback(env, f"torch import/CUDA probe failed: {line or out.stderr.strip()}")
-        return False
-    import json as _json
-
-    info = _json.loads(line[len("PROBE_OK ") :])
-    if not info.get("available"):
-        _print_fallback(
-            env,
-            f"torch.cuda not available (host driver may be below the env's "
-            f"min_driver_version={min_driver_version}).",
-        )
-        return False
-
-    # Compare the host driver against the env's minimum. The placeholder
-    # 'TODO-on-upload' (and a missing/None value) means "not yet recorded" -> we
-    # skip the comparison rather than block. A recorded minimum is enforced.
-    if min_driver_version not in (None, "", TODO_MARKER):
-        host_driver = info.get("driver")
-        try:
-            min_req = int(min_driver_version)
-        except (TypeError, ValueError):
-            min_req = None
-        if min_req is not None and host_driver is not None and host_driver < min_req:
-            _print_fallback(
-                env,
-                f"host CUDA driver version {host_driver} is below the env's "
-                f"min_driver_version={min_req}.",
-            )
-            return False
-    return True
-
-
-# ── main resolver ────────────────────────────────────────────────────────────
-def fetch_env(
-    model: str,
-    version: str | None = None,
-    *,
-    probe: bool = True,
-    manifest: dict | None = None,
-) -> str:
-    """Resolve, download, and unpack the conda-pack env for ``model``.
-
-    Steps:
-      1. gated check (require HF_TOKEN + print license_url for gated models).
-      2. manifest lookup (reject TODO-on-upload placeholders).
-      3. hf_hub_download the tarball (revision-pinned) into the cache.
-      4. unpack + conda-unpack ONCE, guarded by a sentinel file.
-      5. optional CUDA probe against min_driver_version; on fail print the
-         exact install.sh fallback command.
-
-    Returns the absolute relocated interpreter path. Heavy deps (huggingface_hub,
-    torch) are imported lazily here so the module imports without them.
-    """
-    spec = _check_gated(model, version)
-    env = spec["env"]
-    entry = _manifest_entry(env, manifest)
-
-    install_dir = env_install_dir(env)
-    sentinel = install_dir / SENTINEL_NAME
-    py = interpreter_path(env)
-
-    if (sentinel.exists() or (install_dir / BUILD_SENTINEL_NAME).exists()) and py.exists():
-        # Already unpacked, or built by install.sh; just (optionally) re-probe.
-        if probe:
-            _probe_cuda(env, entry.get("min_driver_version"), py)
-        return str(py)
-    if py.exists():
-        # An env is there but neither marker is: an interrupted install.sh build
-        # or an unpack that failed. Unpacking a tarball over it would mix two
-        # environments, so leave it to the tool that owns it.
-        raise FetchError(
-            f"{install_dir} holds an environment that no install finished "
-            f"(no {BUILD_SENTINEL_NAME} or {SENTINEL_NAME}); not unpacking over it.\n"
-            f"  Repair it with: {_install_fallback_cmd(env)}\n"
-            f"  or remove {install_dir} and call install_model again."
-        )
-
-    _check_free_space(env, install_dir, entry.get("unpack_size_bytes"))
-
-    # 3) download the tarball (lazy import).
-    try:
-        from huggingface_hub import hf_hub_download
-    except ImportError as exc:
-        raise FetchError(
-            "huggingface_hub is required to fetch env tarballs "
-            "(pip install huggingface_hub), or build locally with install.sh"
-        ) from exc
-
-    cache = cache_root()
-    cache.mkdir(parents=True, exist_ok=True)
-    # Pass an explicit HF_TOKEN if present; otherwise let huggingface_hub do its
-    # own standard resolution (HF_TOKEN_PATH / the HF cache login). We never read
-    # a token file ourselves, so no token literal enters this process's state.
-    token = os.environ.get("HF_TOKEN") or None
-    tarball_name = entry.get("tarball") or f"{env}.tar.gz"
-    local_tar = hf_hub_download(
-        repo_id=entry["hf_repo"],
-        filename=tarball_name,
-        revision=entry["revision"],
-        cache_dir=str(cache),
-        token=token,
-    )
-
-    _verify_sha256(local_tar, entry.get("sha256"))
-
-    # 4) unpack + conda-unpack once.
-    install_dir.mkdir(parents=True, exist_ok=True)
-    _extract_tarball(local_tar, install_dir)
-    _conda_unpack(install_dir)
-    sentinel.write_text("ok\n", encoding="utf-8")
-
-    if not py.exists():
-        raise FetchError(f"unpack finished but interpreter missing: {py}")
-
-    # 5) CUDA probe.
-    if probe:
-        _probe_cuda(env, entry.get("min_driver_version"), py)
-    return str(py)
-
-
-def _check_free_space(env: str, install_dir: Path, unpack_size) -> None:
-    """Refuse to start when the unpacked env cannot fit: an unpack that runs out
-    of disk halfway leaves a broken prefix. Skipped while the manifest carries
-    the upload placeholder instead of a size."""
-    try:
-        need = int(unpack_size)
-    except (TypeError, ValueError):
-        return
-    probe = install_dir
-    while not probe.exists() and probe != probe.parent:
-        probe = probe.parent
-    free = shutil.disk_usage(probe).free
-    if free < need:
-        raise FetchError(
-            f"{env}: the unpacked env needs {need / 1e9:.1f} GB but {probe} has "
-            f"{free / 1e9:.1f} GB free. Free space, or build locally: {_install_fallback_cmd(env)}"
-        )
-
-
 def _verify_sha256(path: str, expected) -> None:
     if not expected or expected == TODO_MARKER:
         return
@@ -903,44 +680,3 @@ def _verify_sha256(path: str, expected) -> None:
     got = h.hexdigest()
     if got != expected:
         raise FetchError(f"sha256 mismatch for {path}: expected {expected}, got {got}")
-
-
-def _extract_tarball(tar_path: str, dest: Path) -> None:
-    import tarfile
-
-    with tarfile.open(tar_path, "r:*") as tf:
-        # Python 3.12 supports the 'data' filter to reject unsafe members.
-        try:
-            tf.extractall(dest, filter="data")
-        except TypeError:  # pragma: no cover - older python
-            tf.extractall(dest)
-
-
-def _conda_unpack(install_dir: Path) -> None:
-    """Run the env's bundled conda-unpack to fix up relocation.
-
-    A conda-pack tarball MUST ship the ``bin/conda-unpack`` shim. If it is
-    absent the env is not relocatable and must not be treated as ready, so we
-    raise ``FetchError`` (the caller will not write the ready sentinel)."""
-    unpack = install_dir / "bin" / "conda-unpack"
-    if not unpack.exists():
-        raise FetchError(
-            f"conda-unpack shim missing under {install_dir}; the tarball is not "
-            f"a relocatable conda-pack env. Build locally with install.sh instead."
-        )
-    # Invoke the shim VIA THE ENV'S OWN INTERPRETER: the shim's shebang is
-    # `/usr/bin/env python`, and a bare `python` does not exist on many hosts
-    # (python3-only distros) — running it directly fails with
-    # "/usr/bin/env: 'python': No such file or directory".
-    env_python = install_dir / "bin" / "python"
-    if not env_python.exists():
-        raise FetchError(f"env interpreter missing under {install_dir}/bin")
-    proc = subprocess.run([str(env_python), str(unpack)], cwd=str(install_dir),
-                          capture_output=True, text=True)
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "").strip().splitlines()[-20:]
-        raise FetchError(
-            f"conda-unpack failed in {install_dir} (exit {proc.returncode}):\n    "
-            + "\n    ".join(detail)
-            + f"\n  The env is not usable. Build it locally instead: {_install_fallback_cmd(env_python.parent.parent.name)}"
-        )

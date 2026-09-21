@@ -84,6 +84,7 @@ def test_mcp_server_module_constants_present():
         "list_models",
         "describe_model",
         "model_status",
+        "install_model",
     }
 
 
@@ -211,14 +212,8 @@ def test_model_status_tool_matches_status_table():
     assert len(rows) == total
     uma = [r for r in rows if r["framework"] == "UMA"]
     assert uma and all(r["gated"] for r in uma)
-    mace = [r for r in rows if r["framework"] == "MACE"]
-    # Derived from dist_manifest.json: published (<rev>) once the tarball is
-    # live, upload-pending before that. Accept either so the test tracks the
-    # mechanism, not the current publication state.
-    assert all(
-        r["v1_tarball"].startswith(("published (", "upload-pending"))
-        for r in mace
-    )
+    # environments are built from recipes only; no row advertises a tarball
+    assert all("v1_tarball" not in r for r in rows)
     # validation labels are humanized
     assert any(r["validation"] == "validated (sm89)" for r in rows)
 
@@ -257,3 +252,25 @@ def test_run_singlepoint_bad_structure_graceful():
     out = run_sp("MACE", 12345)
     assert out["ok"] is False
     assert "structure" in out["error"].lower()
+
+
+@requires_mcp
+def test_install_model_reports_the_recipe_command_not_a_download(monkeypatch, tmp_path):
+    """Environments are built from recipes only: install_model never downloads
+    an env; it returns the interpreter when installed, else the install.sh
+    command to run."""
+    server = mcp_server.build_server()
+    install = _tool(server, "install_model")
+    spec = {"env": "mace", "python": str(tmp_path / "envs" / "mace" / "bin" / "python"),
+            "gated": False}
+    monkeypatch.setattr(mcp_server.registry, "resolve", lambda m, version=None, **k: dict(spec))
+    out = install("MACE")
+    assert out["ok"] is False
+    assert out["command"] == 'bash "$OH_MY_MLIP_HOME/install.sh" mace'
+    py = tmp_path / "envs" / "mace" / "bin" / "python"
+    py.parent.mkdir(parents=True)
+    py.write_text("")
+    out = install("MACE")
+    assert out["ok"] is True and out["python"] == str(py)
+    monkeypatch.undo()  # the real registry: an unknown model is an error, not a crash
+    assert install("NotAModel")["ok"] is False

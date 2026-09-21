@@ -47,8 +47,8 @@ fi
 #   export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1
 
 # ── 2) catbench D3 ──
-#   The arch-specific pair_d3.so (catbench/dispersion/cuda/pair_d3.so) is NOT baked into
-#   distributed tarballs. It compiles on the user GPU on FIRST RUN -> needs `nvcc` on PATH
+#   The arch-specific pair_d3.so (catbench/dispersion/cuda/pair_d3.so) is never shipped;
+#   it compiles on the user GPU on FIRST RUN -> needs `nvcc` on PATH
 #   (see section 3). After the first compile it is cached and reused.
 export PYTHONUTF8=1                                      # prevents ascii decode crash during D3 (re)compile
 
