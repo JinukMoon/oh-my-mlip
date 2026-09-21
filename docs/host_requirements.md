@@ -44,6 +44,12 @@ approximate Linux minimums for each CUDA build.
 
 ## Common problems
 
+- **GRACE weights download very slowly:** `GRACE-2L-OAM` (about 100 MB) is fetched
+  by `grace_models` from the upstream ICAMS share, which has been seen serving a few
+  KiB/s -- several hours for the full file. The download does not resume: an
+  interrupted fetch starts over. Let the first `setup_verify.py GRACE` run finish
+  undisturbed, on a host with outbound network, before using the model elsewhere.
+
 - **Driver too old for a CUDA 13.0 env** (dpa4, matris, tace):
   `torch.cuda.is_available()` is `False`. Upgrade the driver, or use a host whose
   driver matches the build. A CPU run is not a general fallback here: these
