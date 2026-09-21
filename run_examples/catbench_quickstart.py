@@ -289,7 +289,9 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("tag", nargs="?", default=None, help="benchmark tag (raw_data/<tag>_adsorption.json)")
     ap.add_argument("--only", default=None, help="comma-separated framework filter (e.g. MACE,SevenNet)")
-    ap.add_argument("--calc-num", type=int, default=3, help="calculator instances per model (catbench skeleton)")
+    ap.add_argument("--calc-num", type=int, default=3,
+                    help="calculator instances per model, all live at once, so GPU memory scales with it "
+                         "(default 3, as the catbench skeleton uses; drop to 1 if a model OOMs)")
     ap.add_argument("--d3", action="store_true", help="apply D3 (mlip_name gets a _D3 suffix)")
     ap.add_argument(
         "--version",
@@ -331,7 +333,8 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
 
     print(f"  benchmark : {tag}")
     print(f"  models    : {models}")
-    print(f"  calc_num  : {args.calc_num}   D3: {args.d3}   arch: {args.arch or 'auto'}"
+    print(f"  calc_num  : {args.calc_num} (that many calculators live at once -- GPU memory scales with it)"
+          f"   D3: {args.d3}   arch: {args.arch or 'auto'}"
           f"   versions: {'all' if args.all_versions else 'default'}")
     print(f"  results   : {Path.cwd() / 'result'}")
 

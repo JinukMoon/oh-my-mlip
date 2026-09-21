@@ -802,3 +802,41 @@ def test_cli_stage_failure_exits_3(tree: Path, tmp_path: Path, capsys):
     assert st.main(["stage", "--source", str(tree), "--dest", str(tree / "inside"), "--dataset-name", "x",
                     "--coeff", str(coeff), "--python", "/usr/bin/python3"]) == 3
     assert json.loads(capsys.readouterr().out)["reason"] == "destination_refused"
+
+
+# ── the two ways a staged dataset goes quietly wrong ─────────────────────────
+NSW_RELAX = "   NSW    =    200    number of steps for IOM\n"
+ACCURACY = " reached required accuracy - stopping structural energy minimisation\n"
+
+
+def test_an_unconverged_relaxation_is_reported_and_does_not_block(tree: Path, tmp_path: Path):
+    """An unfinished relaxation's last ionic step still parses as an energy, so
+    it became a reference energy with no signal anywhere."""
+    (tree / "Pt111" / "H" / "site_0" / "OUTCAR").write_text(NSW_RELAX + "ionic step\n" * 40)
+    proposal = st.propose_mapping(st.scan(tree))
+    flagged = [p for p in proposal["problems"] if p["issue"] == "unconverged_relaxation"]
+    assert [p["dir"] for p in flagged] == ["Pt111/H/site_0"]
+    # reported, not blocking: the user may still want the run staged deliberately
+    assert "unconverged_relaxation" not in st.BLOCKING_ISSUES
+    rec = st.stage(tree, tmp_path / "dest", "pt_h", COEFF, "/usr/bin/python3")
+    assert rec["ok"] and any(p["issue"] == "unconverged_relaxation" for p in rec["problems"])
+
+
+def test_a_converged_relaxation_and_a_single_point_are_not_flagged(tree: Path):
+    (tree / "Pt111" / "slab" / "OUTCAR").write_text(NSW_RELAX + "ionic step\n" + ACCURACY)
+    (tree / "Pt111" / "H" / "site_1" / "OUTCAR").write_text("   NSW    =      0    number of steps for IOM\n")
+    proposal = st.propose_mapping(st.scan(tree))
+    assert not [p for p in proposal["problems"] if p["issue"] == "unconverged_relaxation"]
+
+
+def test_a_positive_gas_coefficient_is_warned_about(tree: Path, tmp_path: Path):
+    """Upstream sums energy_ref * stoi and the convention subtracts the gas
+    terms, so +0.5 where -0.5 was meant shifts every adsorption energy."""
+    flipped = {"H": {"slab": -1, "adslab": 1, "H2gas": 0.5},
+               "OH": {"slab": -1, "adslab": 1, "H2gas": -0.5}}
+    warnings = st.coeff_warnings(flipped)
+    assert len(warnings) == 1
+    assert "H2gas" in warnings[0] and "-0.5" in warnings[0] and warnings[0].startswith("H:")
+    assert st.coeff_warnings(COEFF) == []          # the correct signs say nothing
+    rec = st.stage(tree, tmp_path / "dest", "pt_h", flipped, "/usr/bin/python3")
+    assert rec["ok"] and rec["warnings"] == warnings

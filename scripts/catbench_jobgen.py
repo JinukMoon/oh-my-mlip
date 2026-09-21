@@ -359,7 +359,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--python", default=None, help="interpreter for --calc-file (required with it)")
     ap.add_argument("--name", default=None, help="mlip_name for --calc-file (default: file stem)")
     ap.add_argument("--structure", default=None, help="ASE-readable structure for the witness (default: 2-atom Cu)")
-    ap.add_argument("--calc-num", type=int, default=3)
+    ap.add_argument("--calc-num", type=int, default=3,
+                    help="calculator instances per model, all live at once: GPU memory scales with it")
     ap.add_argument("--d3", action="store_true")
     ap.add_argument("--catbench-version", default=None, help="approved catbench version (guard + meta record)")
     ap.add_argument("--slurm", action="store_true")

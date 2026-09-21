@@ -164,6 +164,29 @@ def _oszicar_has_e0(path: Path) -> bool:
     return bool(lines) and "E0=" in lines[-1]
 
 
+def _relaxation_converged(path: Path) -> bool | None:
+    """Did this ionic relaxation converge?
+
+    None when the question does not apply (no OUTCAR, or NSW <= 0: a single
+    point has no ionic convergence to reach). Otherwise True when VASP printed
+    "reached required accuracy". An unconverged run's last ionic step still
+    parses as an energy, so without this an unfinished relaxation becomes a
+    reference energy and shifts every adsorption energy built on it."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(200_000).decode("utf-8", "replace")
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - 200_000))          # the marker is printed at the end
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    match = re.search(r"NSW\s*=\s*(\d+)", head)
+    if not match or int(match.group(1)) <= 0:
+        return None
+    return "reached required accuracy" in tail
+
+
 def scan(source: Path) -> dict:
     """Walk without following symlinks. Every symlink met is recorded; a
     later `stage` refuses when the list is non-empty."""
@@ -183,7 +206,8 @@ def scan(source: Path) -> dict:
         present = {f for f in NEEDED_FILES if f in filenames and not os.path.islink(os.path.join(dirpath, f))}
         if present == set(NEEDED_FILES):
             pairs.append({"dir": os.path.normpath(rel),
-                          "oszicar_has_E0": _oszicar_has_e0(Path(dirpath) / "OSZICAR")})
+                          "oszicar_has_E0": _oszicar_has_e0(Path(dirpath) / "OSZICAR"),
+                          "relaxation_converged": _relaxation_converged(Path(dirpath) / "OUTCAR")})
         elif present:
             incomplete.append({"dir": os.path.normpath(rel), "present": sorted(present),
                                "missing": sorted(set(NEEDED_FILES) - present)})
@@ -236,6 +260,11 @@ def propose_mapping(scan_result: dict) -> dict:
     for p in scan_result["pairs"]:
         if not p["oszicar_has_E0"]:
             problems.append({"dir": p["dir"], "issue": "oszicar_without_E0", "detail": "last OSZICAR line has no E0= (upstream will fail to parse)"})
+        if p.get("relaxation_converged") is False:
+            problems.append({"dir": p["dir"], "issue": "unconverged_relaxation",
+                             "detail": "OUTCAR has NSW > 0 but never printed 'reached required accuracy': this "
+                                       "relaxation stopped at the step limit. Its last step still parses as an "
+                                       "energy, so it would become a reference as-is -- reported, never corrected here"})
     return {
         "convention": "E_ads = 1*adslab - 1*slab - sum(coeff_gas * gas); slab/adslab keys fixed by upstream (vasp.py:241-247)",
         "gas_references": gas, "systems": systems, "reactions": reactions,
@@ -269,6 +298,24 @@ def validate_coeff(coeff_setting: dict, proposal: dict) -> list[str]:
             elif key not in proposal["gas_references"]:
                 errors.append(f"{rxn}: gas reference {key!r} has no gas/{key}/{{CONTCAR,OSZICAR}} in the scan")
     return errors
+
+
+def coeff_warnings(coeff_setting: dict) -> list[str]:
+    """Not errors -- upstream accepts these -- but the sign that silently ruins
+    a dataset. Upstream sums `energy_ref * stoi`, and the convention subtracts
+    the gas terms, so a gas coefficient is normally negative: "H2gas": 0.5
+    instead of -0.5 shifts every adsorption energy in that reaction."""
+    out = []
+    for rxn, coeffs in (coeff_setting or {}).items():
+        if not isinstance(coeffs, dict):
+            continue
+        for key, val in coeffs.items():
+            if key in ("slab", "adslab") or isinstance(val, bool):
+                continue
+            if isinstance(val, (int, float)) and val > 0:
+                out.append(f"{rxn}: gas coefficient {key!r} is positive ({val}); the convention subtracts gas "
+                           f"terms, so this is usually {-val}. Confirm the sign before staging.")
+    return out
 
 
 def blocking_problems(proposal: dict, coeff_setting: dict) -> list[dict]:
@@ -835,7 +882,8 @@ def stage(source: Path, dest: Path, dataset_name: str, coeff_setting: dict, pyth
                   "expected_output": str(dest / "raw_data" / f"{dataset_name}_adsorption.json"),
                   "staged_tree_exact": True, "reused_identical_staging": reused,
                   "previous_outputs_kept": [str(p) for p in previous_outputs],
-                  "problems": proposal["problems"], "staged_utc": utc_now()}
+                  "problems": proposal["problems"], "warnings": coeff_warnings(coeff_setting),
+                  "staged_utc": utc_now()}
         if not (dest / "stage_record.json").exists():   # an owned one is kept: it is never rewritten (see the docstring)
             written["stage_record.json"] = write_exclusive(dest / "stage_record.json", json.dumps(record, indent=2) + "\n")
         if written:

@@ -164,9 +164,13 @@ class Worker:
     Responses are routed by ``id`` (not FIFO), so a single Worker is safe to
     drive from the supervisor.
 
-    DEFERRED: the 100-call live loop against a real GPU model runs at the
-    compute checkpoint. The routing/protocol logic is unit-tested with a mocked
-    worker subprocess; it is not exercised against a real model here.
+    Live loop on record: 100 consecutive request() calls against MACE-MPA-0,
+    65-atom slab rattled between calls, all ok with no restart -- median
+    164.5 ms against 161.3 ms for the same calculator called directly inside
+    the env (2026-09-16, RTX 4060 Ti; run by the release session, not re-run
+    here). That run does NOT cover the stderr drain below: MACE logs only at
+    construction, so the pipe never fills. A model that logs on every call is
+    what exercises that path.
     """
 
     def __init__(
