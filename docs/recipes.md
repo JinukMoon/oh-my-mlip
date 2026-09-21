@@ -654,9 +654,9 @@ bash $OMM/envs/alphanet.build.sh <prefix>      # single conda solve impossible -
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu121 \
 #     -f https://data.pyg.org/whl/torch-2.1.2+cu121.html \
 #     torch==2.1.2+cu121 torch-geometric==2.6.1 torch_scatter==2.1.2+pt21cu121 \
-#     lightning tensorboard "numpy==1.26.4"
+#     lightning==2.6.6 tensorboard==2.21.0 "numpy==1.26.4"
 #     <prefix>/bin/pip install --no-deps "alphanet @ git+https://github.com/zmyybc/AlphaNet.git@65f8ea9330459e0106867d1c694aec4139c6cb19"
-#     <prefix>/bin/pip install pydantic pydantic_settings rich scikit-learn "numpy==1.26.4"
+#     <prefix>/bin/pip install pydantic==2.13.5 pydantic_settings==2.15.0 rich==15.0.0 scikit-learn==1.9.1 "numpy==1.26.4"
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
@@ -1049,8 +1049,8 @@ bash $OMM/envs/equflash.build.sh <prefix>      # single conda solve impossible -
 #     cuequivariance-torch==0.6.0 cuequivariance-ops-torch-cu12==0.6.0 \
 #     "git+https://github.com/SamsungDS/GGNN@16b5cae474370977b59120e8bc57e4bcc19cd093#egg=GGNN"
 #     <prefix>/bin/pip install --no-deps fairchem-core==1.10.0
-#     <prefix>/bin/pip install pyyaml lmdb numba scipy==1.16.0 pymatgen orjson submitit wandb \
-#     torchtnt pydantic huggingface_hub hydra-core tqdm pynvml \
+#     <prefix>/bin/pip install pyyaml==6.0.3 lmdb==2.3.0 numba==0.67.0 scipy==1.16.0 pymatgen==2026.5.4 orjson==3.12.0 submitit==1.5.4 wandb==0.30.0 \
+#     torchtnt==0.2.4 pydantic==2.13.5 huggingface_hub==1.31.0 hydra-core==1.3.6 tqdm==4.70.1 pynvml==13.0.1 \
 #     nvalchemi-toolkit-ops==0.3.0
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```

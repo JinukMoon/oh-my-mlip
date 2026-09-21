@@ -30,8 +30,8 @@ echo "== equflash sidecar [2a] pass 2: fairchem WITHOUT deps =="
 "$PIP" install --no-deps fairchem-core==1.10.0
 
 echo "== equflash sidecar [2b] pass 2: GGNN runtime deps (incl. nvalchemi ops) =="
-"$PIP" install pyyaml lmdb numba scipy==1.16.0 pymatgen orjson submitit wandb \
-  torchtnt pydantic huggingface_hub hydra-core tqdm pynvml \
+"$PIP" install pyyaml==6.0.3 lmdb==2.3.0 numba==0.67.0 scipy==1.16.0 pymatgen==2026.5.4 orjson==3.12.0 submitit==1.5.4 wandb==0.30.0 \
+  torchtnt==0.2.4 pydantic==2.13.5 huggingface_hub==1.31.0 hydra-core==1.3.6 tqdm==4.70.1 pynvml==13.0.1 \
   nvalchemi-toolkit-ops==0.3.0
 
 echo "== equflash sidecar done: $PREFIX/bin/python =="

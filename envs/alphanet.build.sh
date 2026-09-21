@@ -21,7 +21,7 @@ echo "== alphanet [1] torch 2.1.2+cu121 stack + lightning + numpy<2 =="
 "$PIP" install --extra-index-url https://download.pytorch.org/whl/cu121 \
   -f https://data.pyg.org/whl/torch-2.1.2+cu121.html \
   torch==2.1.2+cu121 torch-geometric==2.6.1 torch_scatter==2.1.2+pt21cu121 \
-  lightning tensorboard "numpy==1.26.4" || { echo PASS1_FAILED; exit 12; }
+  lightning==2.6.6 tensorboard==2.21.0 "numpy==1.26.4" || { echo PASS1_FAILED; exit 12; }
 
 echo "== alphanet [2] AlphaNet package (pinned SHA, --no-deps) + runtime deps =="
 "$PIP" install --no-deps "alphanet @ git+https://github.com/zmyybc/AlphaNet.git@${SHA}" \
@@ -29,7 +29,7 @@ echo "== alphanet [2] AlphaNet package (pinned SHA, --no-deps) + runtime deps ==
 # AlphaNet runtime deps for the torch inference path. NOTE: do NOT install
 # matscipy here — it forces numpy>=2 which breaks the torch 2.1.2 ABI and is a
 # JAX-path dep, not needed for AlphaNetCalculator (torch). Keep numpy==1.26.4.
-"$PIP" install pydantic pydantic_settings rich scikit-learn "numpy==1.26.4" \
+"$PIP" install pydantic==2.13.5 pydantic_settings==2.15.0 rich==15.0.0 scikit-learn==1.9.1 "numpy==1.26.4" \
   || { echo DEPS_FAILED; exit 14; }
 
 echo "== alphanet [3] import smoke =="

@@ -377,6 +377,144 @@ def check_all(envs_dir: Path = ENVS_DIR) -> list[RecipeReport]:
     ]
 
 
+# ── beyond the YAML: sidecars and locks ──────────────────────────────────────
+# The YAML check alone passed 20/20 while envs/equflash.build.sh installed a
+# dozen packages with no version, and while envs/mace.yml pinned an ase that
+# the validated build never ended up with. Both undercut the claim that a
+# recipe reproduces the env it was validated with.
+
+def _norm(name: str) -> str:
+    return name.strip().lower().replace("_", "-")
+
+
+def _base_version(version: str) -> str:
+    return version.split("+", 1)[0].strip()
+
+
+def check_build_sidecars(envs_dir: Path = ENVS_DIR) -> list[tuple[Path, int, str]]:
+    """(sidecar, line, requirement) for every package a *.build.sh installs with
+    pip WITHOUT an exact version. A git URL pinned to a commit counts as pinned."""
+    import shlex
+
+    offenders: list[tuple[Path, int, str]] = []
+    for path in sorted(envs_dir.glob("*.build.sh")):
+        raw = path.read_text().splitlines()
+        i = 0
+        while i < len(raw):
+            start, line = i + 1, raw[i]
+            while line.rstrip().endswith("\\") and i + 1 < len(raw):   # join continuations
+                i += 1
+                line = line.rstrip()[:-1] + " " + raw[i]
+            i += 1
+            if "install" not in line or "pip" not in line.lower():
+                continue
+            try:
+                tokens = shlex.split(line, comments=True)
+            except ValueError:
+                continue
+            if "install" not in tokens:
+                continue
+            args = tokens[tokens.index("install") + 1:]
+            for cut, tok in enumerate(args):                     # the pip command ends here
+                if tok in ("||", "&&", "|", ";", "{", "}") or tok.endswith(";"):
+                    args = args[:cut]
+                    break
+            text_all = path.read_text()
+            skip_next = False
+            for tok in args:
+                if skip_next:
+                    skip_next = False
+                    continue
+                if tok in ("-r", "--requirement", "-c", "--constraint", "-e", "--editable",
+                           "-f", "--find-links", "-i", "--index-url", "--extra-index-url"):
+                    skip_next = True
+                    continue
+                if tok.startswith("-") or tok in (";", "&&", "||", "|") or tok.startswith("$"):
+                    continue
+                if "git+" in tok:
+                    # pinned to a commit, directly or through a variable the
+                    # sidecar assigns a full hex SHA (SHA="65f8ea93...")
+                    var = re.search(r"@\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", tok)
+                    pinned = bool(re.search(r"@[0-9a-f]{7,40}(#|$)", tok)) or bool(
+                        var and re.search(rf'^{var.group(1)}="?[0-9a-f]{{40}}"?\s*$', text_all, re.M))
+                    if not pinned:
+                        offenders.append((path, start, tok))
+                    continue
+                if "==" not in tok and not tok.endswith((".whl", ".tar.gz")):
+                    offenders.append((path, start, tok))
+    return offenders
+
+
+def _recipe_pins(text: str) -> dict[str, tuple[str, str]]:
+    """{name: (version, "conda"|"pip")} for every exact pin a recipe declares."""
+    pins: dict[str, tuple[str, str]] = {}
+    in_pip = False
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].rstrip()
+        stripped = line.strip()
+        if stripped.startswith("- pip:"):
+            in_pip = True
+            continue
+        if not stripped.startswith("- "):
+            continue
+        spec = stripped[2:].strip()
+        indent = len(line) - len(line.lstrip())
+        if in_pip and indent < 6:          # left the nested pip list
+            in_pip = False
+        match = re.match(r"^([A-Za-z0-9_.\-]+)\s*(==|=)\s*([^\s,;]+)$", spec)
+        if match:
+            pins[_norm(match.group(1))] = (match.group(3), "pip" if in_pip else "conda")
+    return pins
+
+
+def _lock_versions(locks_dir: Path, env: str) -> dict[str, str]:
+    """The FINAL version of each package in the validated build: conda layer
+    first, then the pip layer on top (pip reinstalls over conda, as the replay
+    does: conda create --file, then pip install -r)."""
+    final: dict[str, str] = {}
+    conda_lock = locks_dir / f"{env}.conda.txt"
+    if conda_lock.exists():
+        for url in conda_lock.read_text().splitlines():
+            if not url.startswith("http"):
+                continue
+            stem = url.rsplit("/", 1)[-1]
+            stem = re.sub(r"\.(conda|tar\.bz2)$", "", stem)
+            parts = stem.rsplit("-", 2)
+            if len(parts) == 3:
+                final[_norm(parts[0])] = parts[1]
+    pip_lock = locks_dir / f"{env}.pip.txt"
+    if pip_lock.exists():
+        for line in pip_lock.read_text().splitlines():
+            match = re.match(r"^([A-Za-z0-9_.\-]+)==([^\s;]+)", line.strip())
+            if match:
+                final[_norm(match.group(1))] = match.group(2)
+    return final
+
+
+def check_recipe_vs_lock(envs_dir: Path = ENVS_DIR) -> list[tuple[str, str, str, str, str]]:
+    """(env, package, recipe_version, layer, locked_final_version) wherever a
+    recipe pins a version the validated build did not end up with."""
+    locks_dir = envs_dir / "locks"
+    out = []
+    for path in sorted(envs_dir.glob("*.yml")):
+        if path.name.startswith("_"):
+            continue
+        final = _lock_versions(locks_dir, path.stem)
+        if not final:
+            continue
+        for name, (version, layer) in sorted(_recipe_pins(path.read_text()).items()):
+            locked = final.get(name)
+            if not locked:
+                continue
+            if version.endswith(".*"):                            # a deliberate series pin
+                if _base_version(locked).startswith(version[:-1]):
+                    continue
+            elif _base_version(locked) == _base_version(version):
+                continue
+            out.append((path.stem, name, version, layer, locked))
+    return out
+
+
 def _print_report(reports: list[RecipeReport], root: Path) -> None:
     for report in reports:
         rel = report.path.relative_to(root) if report.path.is_relative_to(root) else report.path
@@ -415,7 +553,32 @@ def main(argv: list[str] | None = None) -> int:
     envs_dir = Path(args.envs_dir)
     reports = check_all(envs_dir)
     _print_report(reports, REPO_ROOT)
-    return 0 if all(r.deterministic for r in reports) else 1
+
+    sidecar = check_build_sidecars(envs_dir)
+    print()
+    if sidecar:
+        print(f"build sidecars: {len(sidecar)} unpinned pip install(s)")
+        for path, lineno, req in sidecar:
+            print(f"  - {path.name}:{lineno}: {req} (no exact version)")
+    else:
+        print("build sidecars: every pip install is pinned")
+
+    drift = check_recipe_vs_lock(envs_dir)
+    if drift:
+        # Informational, not a failure: a recipe pin is a BUILD input, the lock is
+        # the validated env's FINAL state, and a later install step may upgrade a
+        # package the recipe pinned for the build (setuptools < 81 is pinned so
+        # source builds still find pkg_resources; a later step then lifts it). The
+        # lock is what OMM_USE_LOCK=1 replays exactly.
+        print(f"recipe vs lock (info): {len(drift)} recipe pin(s) differ from the validated final env")
+        for env, name, version, layer, locked in drift:
+            print(f"  - {env}: recipe pins {name} {version} ({layer}); the validated env ends with {locked}")
+        print("  a recipe pin governs the build; OMM_USE_LOCK=1 replays the exact validated env")
+    else:
+        print("recipe vs lock: every recipe pin matches the validated build")
+
+    ok = all(r.deterministic for r in reports) and not sidecar
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

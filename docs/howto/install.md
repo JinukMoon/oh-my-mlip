@@ -48,6 +48,15 @@ dependency resolution:
 OMM_USE_LOCK=1 ./install.sh MACE
 ```
 
+A plain `./install.sh` builds from the recipe in `envs/<env>.yml` (and, for a
+few envs, `envs/<env>.build.sh`) and lets pip resolve what the recipe does not
+pin. The recipe's pins are build inputs, and a later install step can lift one:
+several recipes pin `setuptools` below 81 so source builds still find
+`pkg_resources`, and the finished env ends with a newer one. The lock records
+the env as it was when it passed verification, which is why the two can differ.
+`python3 scripts/verify_determinism.py` lists every such difference, and fails
+if a recipe or build script installs anything without an exact version.
+
 ## Prebuilt envs
 
 MACE and SevenNet are also published as prebuilt, relocatable envs on the

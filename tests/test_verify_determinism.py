@@ -178,3 +178,58 @@ def test_candidate_documented_file_url_passes(tmp_path: Path):
     assert reports[0].deterministic
     assert reports[0].candidate_with_private_source
     assert mod.main(["--envs-dir", str(tmp_path)]) == 0
+
+
+# ── build sidecars and locks (beyond the YAML) ───────────────────────────────
+def _vd():
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location("verify_determinism", root / "scripts" / "verify_determinism.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_an_unpinned_sidecar_install_is_caught_and_shell_syntax_is_not(tmp_path):
+    """The YAML check passed 20/20 while envs/equflash.build.sh installed a dozen
+    packages with no version. Shell control flow after the pip command is not a
+    package, and a git ref pinned through a SHA variable is pinned."""
+    vd = _vd()
+    envs = tmp_path / "envs"; envs.mkdir()
+    (envs / "demo.build.sh").write_text(
+        'SHA="65f8ea9330459e0106867d1c694aec4139c6cb19"\n'
+        '"$PIP" install torch==2.1.2 lightning "numpy==1.26.4" || { echo FAILED; exit 12; }\n'
+        '"$PIP" install --no-deps "pkg @ git+https://github.com/x/y.git@${SHA}" \\\n'
+        '  || { echo PKG_FAILED; exit 13; }\n'
+        '"$PIP" install "floating @ git+https://github.com/x/z.git"\n'
+    )
+    found = [(p.name, req) for p, _line, req in vd.check_build_sidecars(envs)]
+    assert ("demo.build.sh", "lightning") in found
+    assert ("demo.build.sh", "floating @ git+https://github.com/x/z.git") in found
+    assert not any(req in ("{", "}", "echo", "exit", "FAILED;") for _n, req in found)
+    assert not any("${SHA}" in req for _n, req in found)
+    assert len(found) == 2
+
+
+def test_the_shipped_sidecars_pin_every_install():
+    assert _vd().check_build_sidecars() == []
+
+
+def test_recipe_vs_lock_reports_a_pin_the_final_env_does_not_have(tmp_path):
+    vd = _vd()
+    envs = tmp_path / "envs"; (envs / "locks").mkdir(parents=True)
+    (envs / "demo.yml").write_text(
+        "dependencies:\n  - ase=3.25.0\n  - cuda-nvcc=12.8.*\n  - pip:\n      - setuptools==78.1.1\n"
+    )
+    (envs / "locks" / "demo.conda.txt").write_text(
+        "@EXPLICIT\n"
+        "https://conda.anaconda.org/conda-forge/noarch/ase-3.25.0-pyhd8ed1ab_0.conda\n"
+        "https://conda.anaconda.org/nvidia/linux-64/cuda-nvcc-12.8.93-0.conda\n"
+    )
+    (envs / "locks" / "demo.pip.txt").write_text("ase==3.29.0\nsetuptools==84.0.0\n")
+    drift = {(name, version, locked) for _env, name, version, _layer, locked in vd.check_recipe_vs_lock(envs)}
+    # pip lifted both past the recipe pin; the series pin 12.8.* is satisfied by 12.8.93
+    assert drift == {("ase", "3.25.0", "3.29.0"), ("setuptools", "78.1.1", "84.0.0")}
+    # and the series pin really was read -- a quoted spec would be skipped and prove nothing
+    assert vd._recipe_pins((envs / "demo.yml").read_text())["cuda-nvcc"] == ("12.8.*", "conda")
