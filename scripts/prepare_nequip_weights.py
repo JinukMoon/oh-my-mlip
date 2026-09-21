@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _weight_download import download_first_available, is_complete  # noqa: E402
 
 # (nequip.net URI, registry version name, extra nequip-compile args,
-#  zenodo package file name, zenodo md5, zenodo size). nequip.net resolves each
+#  zenodo package file name, zenodo md5, zenodo size, sha256). nequip.net resolves each
 # URI to the zenodo record file named here; md5 and size are zenodo's published
 # values. The package is downloaded by this script (resumable, md5-checked) and
 # compiled from the local file: nequip-compile's own download of the URI cannot
@@ -43,16 +43,19 @@ MIN_RATE = 50_000  # bytes/s averaged over a minute; below this, try the mirror
 MODELS = {
     "nequip": [
         ("nequip.net:mir-group/NequIP-OAM-XL:0.1", "NequIP-OAM-XL", ["--modifiers", "enable_OpenEquivariance"],
-         "NequIP-OAM-XL-0.1.nequip.zip", "3d2369c7238eb83a23141abdcb055a8f", 259627903),
+         "NequIP-OAM-XL-0.1.nequip.zip", "3d2369c7238eb83a23141abdcb055a8f", 259627903,
+         "99c3799b28026f1ecf66c413292038a27a0749d4d4d7cd0b3a642f2e68df9e9c"),
         ("nequip.net:mir-group/NequIP-OAM-L:0.1", "NequIP-OAM-L", ["--modifiers", "enable_OpenEquivariance"],
-         "NequIP-OAM-L-0.1.nequip.zip", "67144367c710a70a53a8e21acf331980", 78464590),
+         "NequIP-OAM-L-0.1.nequip.zip", "67144367c710a70a53a8e21acf331980", 78464590,
+         "5d01a4fab228abb3cdb6ace0033f93993729956bca6a42234a2a8816825b9a0f"),
     ],
     # Allegro's recommended kernel is CuEquivariance (upstream allegro docs,
     # "Inference with CuEquivariance"): AOT Inductor + enable_CuEquivarianceContracter.
     # AOTI with cueq does not support float64 models; the OAM checkpoints are float32.
     "allegro": [
         ("nequip.net:mir-group/Allegro-OAM-L:0.1", "Allegro-OAM-L", ["--modifiers", "enable_CuEquivarianceContracter"],
-         "Allegro-OAM-L-0.1.nequip.zip", "0db7f9b3c3a62e74d78b3fcf2973c462", 80738705),
+         "Allegro-OAM-L-0.1.nequip.zip", "0db7f9b3c3a62e74d78b3fcf2973c462", 80738705,
+         "3f0d3ca7bb136d4c2ee76278170fcbe756436f037e16c673a86e2c57d271c64e"),
     ],
 }
 
@@ -122,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
 
     zip_dir = os.environ.get("OMM_NEQUIP_ZIP_DIR")
     failed = 0
-    for uri, version, extra, zip_name, md5, size in MODELS[env_name]:
+    for uri, version, extra, zip_name, md5, size, sha256 in MODELS[env_name]:
         out = out_dir / f"{version}_{arch}.nequip.pt2"
         if not args.dry_run and out.is_file() and out.stat().st_size > 0:
             print(f"  {version}: {out} already present, kept")
@@ -136,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  downloading {zip_name} -> {package}", flush=True)
                 try:
                     used = download_first_available(sources, package, size=size, md5=md5,
-                                                    label=version, min_rate=MIN_RATE)
+                                                    sha256=sha256, label=version, min_rate=MIN_RATE)
                     print(f"  {version}: package from {used}", flush=True)
                 except Exception as exc:  # noqa: BLE001 - reported, the other models still run
                     print(f"  {version}: download failed ({exc}); rerun to resume it, or set "

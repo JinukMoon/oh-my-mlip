@@ -82,7 +82,8 @@ Weights licenses are read from the record that hosts the checkpoint file oh-my-m
 The files are byte-identical copies, unchanged. `scripts/prepare_nequip_weights.py`
 downloads from Zenodo first and uses the mirror only when Zenodo fails or stays
 slow; whichever source delivers the file, it must match Zenodo's published size
-and MD5, and the log names the source used. No other weights are mirrored.
+and MD5 (and the sha256 of the same bytes), and the log names the source used. No
+other weights are mirrored.
 
 ## Quick reference: commercial use
 

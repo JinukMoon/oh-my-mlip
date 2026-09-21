@@ -228,7 +228,7 @@ def test_nequip_compiles_from_a_package_it_downloaded_itself(tmp_path, server, m
     monkeypatch.delenv("OMM_NEQUIP_ZIP_DIR", raising=False)
     md5 = hashlib.md5(PAYLOAD).hexdigest()
     monkeypatch.setitem(mod.MODELS, "allegro", [
-        ("nequip.net:x/Allegro-T:0.1", "Allegro-T", [], "Allegro-T.nequip.zip", md5, len(PAYLOAD))])
+        ("nequip.net:x/Allegro-T:0.1", "Allegro-T", [], "Allegro-T.nequip.zip", md5, len(PAYLOAD), SHA)])
     monkeypatch.setattr(mod, "ZENODO", server.url + "?{name}")
     monkeypatch.setattr(mod, "MIRROR", "http://127.0.0.1:9/unused?{name}")
     monkeypatch.setattr(mod, "host_arch", lambda: "sm00")
@@ -251,11 +251,16 @@ def test_nequip_compiles_from_a_package_it_downloaded_itself(tmp_path, server, m
 
 def test_nequip_package_records_match_zenodo():
     mod = _load("prepare_nequip_weights")
-    rows = {row[3]: (row[4], row[5]) for rows in mod.MODELS.values() for row in rows}
+    rows = {row[3]: (row[4], row[5], row[6]) for rows in mod.MODELS.values() for row in rows}
+    # md5 and size from Zenodo record 18775904; sha256 from the mirror's LFS
+    # metadata, computed over the same bytes
     assert rows == {
-        "NequIP-OAM-XL-0.1.nequip.zip": ("3d2369c7238eb83a23141abdcb055a8f", 259627903),
-        "NequIP-OAM-L-0.1.nequip.zip": ("67144367c710a70a53a8e21acf331980", 78464590),
-        "Allegro-OAM-L-0.1.nequip.zip": ("0db7f9b3c3a62e74d78b3fcf2973c462", 80738705),
+        "NequIP-OAM-XL-0.1.nequip.zip": ("3d2369c7238eb83a23141abdcb055a8f", 259627903,
+                                         "99c3799b28026f1ecf66c413292038a27a0749d4d4d7cd0b3a642f2e68df9e9c"),
+        "NequIP-OAM-L-0.1.nequip.zip": ("67144367c710a70a53a8e21acf331980", 78464590,
+                                        "5d01a4fab228abb3cdb6ace0033f93993729956bca6a42234a2a8816825b9a0f"),
+        "Allegro-OAM-L-0.1.nequip.zip": ("0db7f9b3c3a62e74d78b3fcf2973c462", 80738705,
+                                         "3f0d3ca7bb136d4c2ee76278170fcbe756436f037e16c673a86e2c57d271c64e"),
     }
 
 
