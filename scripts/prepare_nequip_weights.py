@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -97,9 +98,22 @@ def compile_env(prefix: Path) -> dict:
                 + sorted(glob.glob(str(prefix / "targets" / "*" / "include"))))
     if includes:
         env["CPATH"] = os.pathsep.join(includes) + (os.pathsep + env["CPATH"] if env.get("CPATH") else "")
-    # -lcuda / -lnvrtc at link time: conda CUDA libs + the libcuda link stub.
+    # CUDA_HOME as env.sh sets it (existing value -> nvcc on PATH -> /usr/local/cuda),
+    # so the compile commands printed by the hub also work in a shell that did not
+    # source env.sh. torch inductor links against it.
+    cuda_home = env.get("CUDA_HOME")
+    if not cuda_home:
+        nvcc = shutil.which("nvcc", path=env["PATH"])
+        cuda_home = str(Path(nvcc).parent.parent) if nvcc else "/usr/local/cuda"
+        if Path(cuda_home).is_dir():
+            env["CUDA_HOME"] = cuda_home
+    # -lcuda / -lnvrtc at link time: conda CUDA libs + the libcuda link stub, from the
+    # env, from CUDA_HOME, or (on WSL) the driver's own libcuda. Without one of them
+    # the AOT compile dies in the linker with "cannot find -lcuda".
     libs = (sorted(glob.glob(str(prefix / "targets" / "*" / "lib")))
-            + sorted(glob.glob(str(prefix / "targets" / "*" / "lib" / "stubs"))))
+            + sorted(glob.glob(str(prefix / "targets" / "*" / "lib" / "stubs")))
+            + [d for d in (f"{cuda_home}/lib64", f"{cuda_home}/lib64/stubs", "/usr/lib/wsl/lib")
+               if Path(d).is_dir()])
     if libs:
         env["LIBRARY_PATH"] = os.pathsep.join(libs) + (os.pathsep + env["LIBRARY_PATH"] if env.get("LIBRARY_PATH") else "")
     return env

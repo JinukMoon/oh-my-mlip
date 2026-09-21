@@ -412,3 +412,33 @@ def test_nequip_packages_come_from_the_cited_record_then_the_mirror():
     mod = _load("prepare_nequip_weights")
     assert "records/18775904/" in mod.ZENODO
     assert mod.MIRROR.startswith("https://huggingface.co/JinukMoon/oh-my-mlip-mirror-nequip/resolve/main/")
+
+
+def test_nequip_compile_env_finds_libcuda_without_env_sh(tmp_path, monkeypatch):
+    # the compile command the hub prints, pasted into a fresh shell (no env.sh),
+    # died in the linker with "cannot find -lcuda"
+    mod = _load("prepare_nequip_weights")
+    cuda = tmp_path / "cuda"
+    (cuda / "bin").mkdir(parents=True)
+    (cuda / "lib64" / "stubs").mkdir(parents=True)
+    nvcc = cuda / "bin" / "nvcc"
+    nvcc.write_text("#!/bin/sh\n")
+    nvcc.chmod(0o755)
+    prefix = tmp_path / "env"
+    (prefix / "bin").mkdir(parents=True)
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    monkeypatch.delenv("LIBRARY_PATH", raising=False)
+    monkeypatch.setenv("PATH", f"{cuda / 'bin'}:/usr/bin:/bin")
+    env = mod.compile_env(prefix)
+    assert env["CUDA_HOME"] == str(cuda)
+    assert str(cuda / "lib64" / "stubs") in env["LIBRARY_PATH"].split(":")
+
+
+def test_nequip_compile_env_keeps_an_existing_cuda_home(tmp_path, monkeypatch):
+    mod = _load("prepare_nequip_weights")
+    cuda = tmp_path / "mycuda"
+    (cuda / "lib64" / "stubs").mkdir(parents=True)
+    monkeypatch.setenv("CUDA_HOME", str(cuda))
+    env = mod.compile_env(tmp_path / "env")
+    assert env["CUDA_HOME"] == str(cuda)
+    assert str(cuda / "lib64" / "stubs") in env["LIBRARY_PATH"].split(":")
