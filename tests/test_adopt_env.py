@@ -152,7 +152,7 @@ def test_adoption_prepares_weights_like_install_sh(tmp_path: Path):
     scripts.mkdir(exist_ok=True)
     marker = tmp_path / "prepared.txt"
     (scripts / "prepare_alpha_weights.py").write_text(
-        f"open({str(marker)!r}, 'w').write('done')\n"
+        f"import sys\nopen({str(marker)!r}, 'w').write(' '.join(sys.argv[1:]))\n"
     )
     prefix = _passthrough_env(tmp_path, "alpha_env")
 
@@ -162,7 +162,8 @@ def test_adoption_prepares_weights_like_install_sh(tmp_path: Path):
     )
     assert proc.returncode == 0, proc.stderr
     assert "preparing weights: prepare_alpha_weights.py" in proc.stdout
-    assert marker.read_text() == "done"
+    # the same arguments install.sh passes; the real prepare scripts require them
+    assert marker.read_text() == f"--target-root {home / 'models' / 'alpha'}"
 
 
 def test_a_failing_weight_preparation_is_reported_but_keeps_the_adoption(tmp_path: Path):
@@ -178,4 +179,63 @@ def test_a_failing_weight_preparation_is_reported_but_keeps_the_adoption(tmp_pat
     )
     assert proc.returncode == 0
     assert "FAILED" in proc.stderr and "no network" in proc.stderr
+    assert f"prepare_alpha_weights.py --target-root {home / 'models' / 'alpha'}" in proc.stderr
     assert json.loads((home / "env_map.local.json").read_text())["alpha"] == str(prefix)
+
+
+def _parse_only(script: Path, argv: list[str]):
+    """Run `script`'s main() just far enough to parse argv with its own parser."""
+    import argparse
+    import importlib.util
+
+    class Parsed(Exception):
+        pass
+
+    original = argparse.ArgumentParser.parse_args
+
+    def parse_then_stop(self, args=None, namespace=None):
+        raise Parsed(original(self, args, namespace))
+
+    spec = importlib.util.spec_from_file_location(script.stem, script)
+    mod = importlib.util.module_from_spec(spec)
+    old_argv, old_path = sys.argv, list(sys.path)
+    sys.path.insert(0, str(script.parent))
+    try:
+        spec.loader.exec_module(mod)
+        sys.argv = [str(script), *argv]
+        argparse.ArgumentParser.parse_args = parse_then_stop
+        try:
+            mod.main()
+        except Parsed as done:
+            return done.args[0]
+        raise AssertionError(f"{script.name}: main() returned without parsing arguments")
+    finally:
+        argparse.ArgumentParser.parse_args = original
+        sys.argv, sys.path[:] = old_argv, old_path
+
+
+def test_every_real_weight_script_accepts_the_arguments_adoption_passes(tmp_path: Path):
+    """The fake scripts above take any argv; the real ones do not. adopt_env once
+    called them with none, and prepare_{nequip,allegro,deepmd,pet} all require
+    --target-root, so every adoption of those envs left the weights unprepared."""
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import adopt_env
+
+    envs = sorted({p.stem.split("_", 1)[1].rsplit("_weights", 1)[0]
+                   for p in (REPO_ROOT / "scripts").glob("pre*_*_weights.py")})
+    assert {"nequip", "allegro", "deepmd", "pet", "grace"} <= set(envs)
+    seen = 0
+    for env in envs:
+        for argv in adopt_env.weight_steps(REPO_ROOT, env, Path(sys.executable)):
+            try:
+                _parse_only(Path(argv[1]), argv[2:])
+            except SystemExit as exc:  # argparse rejects the argv
+                raise AssertionError(f"{Path(argv[1]).name} rejects {argv[2:]}") from exc
+            seen += 1
+    assert seen >= 8
+
+
+def test_adoption_and_install_sh_call_the_weight_scripts_the_same_way():
+    text = (REPO_ROOT / "install.sh").read_text()
+    assert 'python3 "$prestage" ||' in text
+    assert '"$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name"' in text

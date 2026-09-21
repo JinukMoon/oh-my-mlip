@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -63,23 +64,31 @@ def prepare_weights(home: Path, env_name: str, python: Path) -> None:
     prestage_* is pure stdlib and runs on any python, prepare_* needs the env's
     own CLI. Failure leaves the adoption standing -- the weights can be fetched
     later -- but it is reported, never swallowed."""
-    steps = [
-        (home / "scripts" / f"prestage_{env_name}_weights.py", sys.executable),
-        (home / "scripts" / f"prepare_{env_name}_weights.py", str(python)),
-    ]
     child_env = dict(os.environ, OH_MY_MLIP_HOME=str(home))
-    for script, interpreter in steps:
-        if not script.exists():
-            continue
+    for argv in weight_steps(home, env_name, python):
+        script = Path(argv[1])
         print(f"preparing weights: {script.name} ...")
-        proc = subprocess.run([interpreter, str(script)], capture_output=True, text=True,
-                              timeout=3600, env=child_env)
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=3600, env=child_env)
         if proc.returncode != 0:
             tail = (proc.stderr.strip().splitlines() or ["<no stderr>"])[-1]
             print(f"  {script.name} FAILED: {tail}\n"
-                  f"  the adoption stands, but this model's weights are not staged yet -- "
-                  f"rerun it, or run `python3 scripts/setup_verify.py {env_name}` to fetch on demand.",
+                  f"  the adoption stands, but this model's weights are not ready yet; "
+                  f"rerun this step with:\n    {shlex.join(argv)}",
                   file=sys.stderr)
+
+
+def weight_steps(home: Path, env_name: str, python: Path) -> list[list[str]]:
+    """The weight-preparation commands install.sh runs after building `env_name`,
+    in the same form: prestage_* on any python with no arguments, prepare_* on
+    the env's interpreter with --target-root models/<env>."""
+    steps = []
+    prestage = home / "scripts" / f"prestage_{env_name}_weights.py"
+    if prestage.exists():
+        steps.append([sys.executable, str(prestage)])
+    prepare = home / "scripts" / f"prepare_{env_name}_weights.py"
+    if prepare.exists():
+        steps.append([str(python), str(prepare), "--target-root", str(home / "models" / env_name)])
+    return steps
 
 
 def main() -> int:
