@@ -93,9 +93,14 @@ def ensure_weights(
     targets = _inference_weight_targets(resolved)
     if not targets:
         return []
-    # size/sha in the registry describe THE weight file; with several targets
-    # there is nothing to attribute them to, so they are only used for one.
-    expected_size = resolved.get("weights_size") if len(targets) == 1 else None
+    # size/sha in the registry describe the DOWNLOADED artifact. They apply only
+    # when the inference target IS that artifact: with several targets there is
+    # nothing to attribute them to, and an env with a prepare step derives its
+    # target from the download (DeePMD freezes dpa-3.1-3m-ft.pth into
+    # frozen-omat24.pth, PET exports its .ckpt to a .pt). Checking a derived file
+    # against the download's size rejected a correct weight forever.
+    checkable = len(targets) == 1 and not _derives_its_target(resolved)
+    expected_size = resolved.get("weights_size") if checkable else None
     if all(_target_ready(path, expected_size) for path in targets):
         return [str(path) for path in targets]
 
@@ -121,10 +126,18 @@ def ensure_weights(
     # Hash once, here, rather than on every readiness probe: this runs after a
     # real download, and rehashing a multi-GB checkpoint on each resolve() would
     # make every call pay for it (AGENTS.md ground rule 5).
-    expected_sha = resolved.get("weights_sha256") if len(targets) == 1 else None
+    expected_sha = resolved.get("weights_sha256") if checkable else None
     if expected_sha and not _looks_like_dir_target(targets[0]):
         _verify_sha256(str(targets[0]), expected_sha)
     return [str(path) for path in targets]
+
+
+def _derives_its_target(spec: dict) -> bool:
+    """True when the env's inference weight is PRODUCED from the download by a
+    prepare step (scripts/prepare_<env>_weights.py, run by install.sh and
+    adopt_env.py), so it never has the downloaded artifact's size or hash."""
+    env = spec.get("env")
+    return bool(env) and (Path(registry.home()) / "scripts" / f"prepare_{env}_weights.py").exists()
 
 
 def weight_targets(spec: dict) -> list[str]:

@@ -65,3 +65,50 @@ def test_directory_holding_only_a_partial_download_is_not_ready(tmp_path: Path):
     assert fetch._target_ready(target) is False
     (target / "saved_model.pb").write_bytes(b"x")
     assert fetch._target_ready(target) is True
+
+
+# ── the recorded size is the DOWNLOAD's, not a derived file's ────────────────
+def test_a_derived_target_is_ready_whatever_its_size(tmp_path: Path, monkeypatch):
+    """Regression (reported against c89eda2): DeePMD's inference target is
+    frozen-omat24.pth, which scripts/prepare_deepmd_weights.py freezes from the
+    downloaded dpa-3.1-3m-ft.pth. models.json records the DOWNLOAD's size, so
+    checking it against the frozen file rejected a correct weight forever."""
+    home = tmp_path / "hub"
+    (home / "scripts").mkdir(parents=True)
+    (home / "scripts" / "prepare_deepmd_weights.py").write_text("# derives the target\n")
+    target = home / "models" / "deepmd" / "frozen-omat24.pth"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"x" * 1234)                 # nothing like the download's 47,176,032 bytes
+    spec = {"model": "DeePMD", "version": "DPA-3.1-3M-FT", "env": "deepmd",
+            "weights_fetch": "by-name", "weights_size": 47176032, "weights_sha256": "0" * 64}
+    monkeypatch.setattr(fetch.registry, "home", lambda: str(home))
+    monkeypatch.setattr(fetch, "_inference_weight_targets", lambda s: [target])
+    assert fetch._derives_its_target(spec) is True
+    assert fetch.ensure_weights("DeePMD", version="DPA-3.1-3M-FT", spec=spec) == [str(target)]
+
+
+def test_only_targets_that_are_the_download_are_size_checked():
+    """Registry-wide guard. A variant is size-checked only when its single
+    inference target is the downloaded artifact itself. This set was confirmed
+    by comparing each recorded weights_size with the real file on a host that
+    had them all (2026-09-21): the six below matched byte for byte, while
+    DPA-3.1-3M-FT and PET-OAM-XL are derived by a prepare step and did not. A new
+    variant joining this set is a conscious decision, not an accident."""
+    import json
+
+    from oh_my_mlip import registry
+
+    checked = set()
+    models = json.loads((REPO_ROOT / "models.json").read_text())
+    for family, info in models.items():
+        if family.startswith("_"):
+            continue
+        for version in info["versions"]:
+            spec = registry.resolve(version)
+            targets = fetch.weight_targets(spec)
+            if (spec.get("weights_size") and len(targets) == 1
+                    and not fetch._looks_like_dir_target(Path(targets[0]))
+                    and not fetch._derives_its_target(spec)):
+                checked.add(version)
+    assert checked == {"Nequix-MP-1", "eSEN-30M-OAM", "EqV3-OMatMPtrjSalex",
+                       "EquFlashV2", "EquFlash-v1", "DPA-4.0.1-pro-MPtrj"}
