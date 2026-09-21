@@ -177,3 +177,49 @@ def test_fetch_url_download_resumes_after_a_cut(tmp_path, server, capsys):
     assert local.read_bytes() == PAYLOAD
     assert server.ranges[-1] == "bytes=400000-"
     assert capsys.readouterr().out == "", "progress must stay off stdout (MCP channel)"
+
+
+def test_md5_is_checked_when_given(tmp_path, server):
+    dest = tmp_path / "pkg.zip"
+    with pytest.raises(RuntimeError, match="md5"):
+        wd.download(server.url, dest, md5="0" * 32)
+    assert not dest.exists()
+    wd.download(server.url, dest, md5=hashlib.md5(PAYLOAD).hexdigest())
+    assert dest.read_bytes() == PAYLOAD
+
+
+def test_nequip_compiles_from_a_package_it_downloaded_itself(tmp_path, server, monkeypatch):
+    # nequip-compile's own download of nequip.net URIs cannot resume, and a slow
+    # zenodo connection broke it partway; the package is fetched here instead
+    mod = _load("prepare_nequip_weights")
+    monkeypatch.delenv("OMM_NEQUIP_ZIP_DIR", raising=False)
+    md5 = hashlib.md5(PAYLOAD).hexdigest()
+    monkeypatch.setitem(mod.MODELS, "allegro", [
+        ("nequip.net:x/Allegro-T:0.1", "Allegro-T", [], "Allegro-T.nequip.zip", md5, len(PAYLOAD))])
+    monkeypatch.setattr(mod, "ZENODO", server.url + "?{record}{name}")
+    monkeypatch.setattr(mod, "host_arch", lambda: "sm00")
+    target_root = tmp_path / "models" / "allegro"
+    (target_root).mkdir(parents=True)
+    (target_root / "Allegro-T.nequip.zip").write_bytes(PAYLOAD[:500])  # an earlier cut-off try
+
+    compiled = []
+
+    def fake_run(cmd, env=None):
+        compiled.append(cmd[1])
+        Path(cmd[2]).write_bytes(b"pt2")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod.main(["--target-root", str(target_root)]) == 0
+    assert compiled == [str(target_root / "Allegro-T.nequip.zip")]
+    assert (target_root / "Allegro-T.nequip.zip").read_bytes() == PAYLOAD
+
+
+def test_nequip_package_records_match_zenodo():
+    mod = _load("prepare_nequip_weights")
+    rows = {row[3]: (row[4], row[5]) for rows in mod.MODELS.values() for row in rows}
+    assert rows == {
+        "NequIP-OAM-XL-0.1.nequip.zip": ("3d2369c7238eb83a23141abdcb055a8f", 259627903),
+        "NequIP-OAM-L-0.1.nequip.zip": ("67144367c710a70a53a8e21acf331980", 78464590),
+        "Allegro-OAM-L-0.1.nequip.zip": ("0db7f9b3c3a62e74d78b3fcf2973c462", 80738705),
+    }

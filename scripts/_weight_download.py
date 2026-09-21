@@ -20,8 +20,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 
-def sha256_of(path: Path) -> str:
-    h = hashlib.sha256()
+def sha256_of(path: Path, algorithm: str = "sha256") -> str:
+    h = hashlib.new(algorithm)
     with open(path, "rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             h.update(chunk)
@@ -37,13 +37,13 @@ def is_complete(path: Path, size: int | None) -> bool:
 
 
 def download(url: str, dest: Path, *, size: int | None = None, sha256: str | None = None,
-             label: str = "weights") -> None:
+             md5: str | None = None, label: str = "weights") -> None:
     """Download `url` to `dest` only if it arrives whole.
 
     The bytes land in `.<name>.download` beside `dest`; a rerun continues it with
     an HTTP Range request. The file is renamed onto `dest` only when its size
-    matches `size` (or the server's declared length) and its sha256 matches
-    `sha256` when given; a file that fails the hash is deleted, never resumed."""
+    matches `size` (or the server's declared length) and its sha256 / md5 match
+    when given; a file that fails the hash is deleted, never resumed."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.parent / f".{dest.name}.download"
     have = part.stat().st_size if part.exists() else 0
@@ -79,9 +79,11 @@ def download(url: str, dest: Path, *, size: int | None = None, sha256: str | Non
     if got == 0:
         part.unlink()
         raise RuntimeError(f"{url}: downloaded nothing")
-    if sha256:
-        digest = sha256_of(part)
-        if digest != sha256.lower():
+    for algorithm, expected in (("sha256", sha256), ("md5", md5)):
+        if not expected:
+            continue
+        digest = sha256_of(part, algorithm)
+        if digest != expected.lower():
             part.unlink()
-            raise RuntimeError(f"{url}: sha256 {digest} does not match the recorded {sha256}")
+            raise RuntimeError(f"{url}: {algorithm} {digest} does not match the recorded {expected}")
     os.replace(part, dest)

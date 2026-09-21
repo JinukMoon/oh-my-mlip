@@ -27,8 +27,9 @@ Both load an AOT-compiled model through
 `NequIPCalculator.from_compiled_model(...)`, so each checkpoint must be compiled
 with `nequip-compile` for the GPU it will run on. During install,
 `scripts/prepare_nequip_weights.py` (NequIP) and
-`scripts/prepare_allegro_weights.py` (Allegro) download the checkpoint, check its
-MD5, and compile it for the current GPU into:
+`scripts/prepare_allegro_weights.py` (Allegro) download the checkpoint into
+`models/<env>/` (an interrupted download resumes when you rerun the script), check
+its MD5, and compile it for the current GPU into:
 
 ```
 models/compiled/<arch>/<Version>_<arch>.nequip.pt2     # e.g. sm89/NequIP-OAM-L_sm89.nequip.pt2
