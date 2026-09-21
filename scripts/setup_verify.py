@@ -188,7 +188,16 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
     if skew["skew"]:
         command += ["--device", "cpu"]
     if structure:
-        command += ["--structure", structure]
+        # The child runs with cwd=home, so a relative path from the user's shell
+        # would resolve against the clone instead -- and the tool's own usage line
+        # shows `--structure POSCAR`. Resolve it here, against the caller's cwd.
+        structure_path = Path(structure).expanduser()
+        if not structure_path.is_absolute():
+            structure_path = Path.cwd() / structure_path
+        if not structure_path.exists():
+            return {"pass": False, "version": version,
+                    "reason": f"structure not found: {structure_path}"}
+        command += ["--structure", str(structure_path)]
 
     log_dir = home / ".sweep" / "verify"
     log_dir.mkdir(parents=True, exist_ok=True)

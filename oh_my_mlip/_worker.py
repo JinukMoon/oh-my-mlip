@@ -56,6 +56,15 @@ import sys
 
 
 # ── numpy-aware JSON (lazy: numpy only needed when actually (de)serializing) ──
+def error_text(exc: BaseException) -> str:
+    """The message a caller can act on.
+
+    repr(FileNotFoundError(...)) renders as "FileNotFoundError(2, 'No such file
+    or directory')" -- the PATH is gone, which is the one thing the user needs
+    when a --structure argument does not resolve."""
+    return f"{type(exc).__name__}: {exc}"
+
+
 def _json_default(obj):
     # numpy scalars/arrays -> native python; imported lazily so this module
     # still imports on a host without numpy.
@@ -223,7 +232,7 @@ def serve(calc, infile=sys.stdin, outfile=sys.stdout) -> None:
                 results = compute(calc, atoms, props)
             _emit(outfile, {"id": rid, "ok": True, "results": results})
         except Exception as exc:  # noqa: BLE001 - surface as ok:false, stay alive
-            _emit(outfile, {"id": rid, "ok": False, "error": repr(exc)})
+            _emit(outfile, {"id": rid, "ok": False, "error": error_text(exc)})
 
 
 def _emit(outfile, obj: dict) -> None:
@@ -253,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
                 arch=args.arch,
             )
     except Exception as exc:  # noqa: BLE001 - handshake failure
-        _emit(sys.stdout, {"ready": False, "error": repr(exc)})
+        _emit(sys.stdout, {"ready": False, "error": error_text(exc)})
         return 1
 
     _emit(sys.stdout, {"ready": True, "model": args.model, "version": args.version})

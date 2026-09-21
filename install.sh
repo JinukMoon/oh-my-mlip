@@ -11,13 +11,15 @@
 #   $OH_MY_MLIP_HOME/envs/<env>/bin/python   (+ a .omm_ready sentinel)
 #
 # Usage:
-#   ./install.sh [--dry-run] [TARGET ...]
+#   ./install.sh [--dry-run] [--all] [TARGET ...]
 #     TARGET     one or more env names (mace, sevennet, ...) OR registered model
 #                names (MACE, SevenNet, ...), case-insensitive. Model names are
 #                resolved to their env via models.json, so 'install.sh MACE',
 #                'install.sh mace', and 'install.sh SevenNet' all work.
-#                Default: all recipes.
+#                With no TARGET, install.sh refuses: pass --all to build every
+#                recipe (that is every framework, hundreds of GB and hours).
 #     --dry-run  print the plan and exit WITHOUT downloading/installing anything
+#     --all      build every recipe (required when no TARGET is named)
 #                (the no-network / contributor inspection path).
 #     --status   inspect the install state of each target env and exit (ready /
 #                partial / broken / not installed); changes nothing. An env
@@ -63,6 +65,7 @@ CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.4}"
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --all) BUILD_ALL=1 ;;
     --status) STATUS=1 ;;
     --with-accel) WITH_ACCEL=1 ;;
     -h|--help)
@@ -262,7 +265,16 @@ PY
   return "$rc"
 }
 
-# If no env names were given, target every recipe.
+# No env names: building all 20 frameworks is hundreds of GB and hours of work,
+# so it has to be asked for. A bare `./install.sh` used to start exactly that.
+if [ "${#REQUESTED[@]}" -eq 0 ] && [ "${BUILD_ALL:-0}" -eq 0 ]; then
+  echo "install.sh: name at least one target, or pass --all." >&2
+  echo "  ./install.sh MACE            # one model (or its env name: mace)" >&2
+  echo "  ./install.sh MACE SevenNet   # several" >&2
+  echo "  ./install.sh --all           # every recipe: ${#ALL_ENVS[@]} envs, hundreds of GB" >&2
+  echo "  ./install.sh --dry-run --all # see that plan without installing" >&2
+  exit 2
+fi
 if [ "${#REQUESTED[@]}" -eq 0 ]; then
   TARGETS=("${ALL_ENVS[@]}")
 else
@@ -390,6 +402,7 @@ install_one() {
   local recipe="$ENVS_DIR/$env_name.yml"
   local prefix="$ENVS_DIR/$env_name"
   local sentinel="$prefix/.omm_ready"
+  local weights_prepared=1
 
   if [ ! -e "$recipe" ]; then
     echo "install.sh: SKIP '$env_name' (no recipe at $recipe)" >&2
@@ -521,8 +534,10 @@ install_one() {
   prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
   if [ -e "$prepare" ]; then
     echo "  preparing weights for '$env_name' via $(basename "$prepare") (env interpreter) ..."
-    "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name" \
-      || echo "  (weight prepare skipped/failed; inference will fail until $(basename "$prepare") succeeds)"
+    if ! "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name"; then
+      echo "  weight prepare FAILED for '$env_name' ($(basename "$prepare")); inference cannot work until it succeeds." >&2
+      weights_prepared=0
+    fi
   fi
 
   # Trigger first-run D3 compile so the user does not pay the cost mid-workflow.
@@ -542,6 +557,13 @@ PYEOF
     echo "  nvcc absent: D3 left to degrade off for '$env_name' (MLIP still runs)."
   fi
 
+  if [ "${weights_prepared:-1}" -eq 0 ]; then
+    # The sentinel means "ready to use". Writing it after a failed weight
+    # preparation made a re-run skip the env (docs/help.md promises a re-run
+    # repairs it), leaving inference failing on a missing checkpoint forever.
+    echo "  '$env_name' built but its weights are not prepared — no sentinel written, so a re-run retries." >&2
+    return 1
+  fi
   : > "$sentinel"
   echo "  '$env_name' ready -> $prefix/bin/python"
 

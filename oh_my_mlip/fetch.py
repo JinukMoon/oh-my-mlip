@@ -207,7 +207,24 @@ def _materialize_url_weights(spec: dict, targets: list[Path]) -> None:
     # find the SavedModel).
     staging = root.parent / f".{root.name}.staging"
     staging.mkdir(parents=True, exist_ok=True)
-    local = _download_to_temp(url, staging)
+    try:
+        local = _download_to_temp(url, staging)
+    except FetchError:
+        raise
+    except Exception as exc:  # URLError/HTTPError/socket timeouts all land here
+        # Weights are materialized lazily at the first calculator build, which
+        # often happens on a compute node with no outbound network. A bare
+        # URLError there names neither what was being fetched nor what to do.
+        raise FetchError(
+            f"{spec['model']}/{spec['version']}: could not download the weights.\n"
+            f"  url:    {url}\n"
+            f"  target: {targets[0]}\n"
+            f"  cause:  {exc.__class__.__name__}: {exc}\n"
+            f"  If this host has no outbound network (a compute node usually does not),\n"
+            f"  fetch once on a networked host with:\n"
+            f"    python3 scripts/setup_verify.py {spec.get('version') or spec['model']}\n"
+            f"  or copy the file to the target path above, then rerun."
+        ) from exc
     try:
         _install_downloaded_artifact(local, targets, root)
     finally:

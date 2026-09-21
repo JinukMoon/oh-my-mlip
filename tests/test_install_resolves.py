@@ -112,3 +112,22 @@ def test_install_resolves_every_registered_version_name(version: str) -> None:
     `./install.sh <version>`. install.sh resolved only family names, so the
     command the hub itself printed came back as `SKIP ... no recipe`."""
     _assert_resolves(_dry_run([version]), version)
+
+
+def test_bare_install_refuses_and_names_the_all_flag() -> None:
+    """A bare ./install.sh built all twenty envs -- hundreds of GB and hours --
+    with no confirmation and no size estimate."""
+    proc = subprocess.run(["bash", str(INSTALL_SH), "--dry-run"], capture_output=True,
+                          text=True, cwd=str(REPO_ROOT))
+    assert proc.returncode == 2
+    assert "--all" in proc.stderr and "name at least one target" in proc.stderr
+    assert "would create env" not in proc.stdout and "would build env" not in proc.stdout
+
+
+def test_all_flag_still_plans_every_recipe() -> None:
+    proc = subprocess.run(["bash", str(INSTALL_SH), "--dry-run", "--all"], capture_output=True,
+                          text=True, cwd=str(REPO_ROOT))
+    assert proc.returncode == 0
+    planned = sum(1 for ln in proc.stdout.splitlines()
+                  if "would create env" in ln or "would build env" in ln)
+    assert planned == len(_env_names())
