@@ -511,7 +511,7 @@ python3 $OMM/scripts/prepare_grace_weights.py --name GRACE-2L-OAM \
     --target-dir $OMM/models/grace/GRACE-2L-OAM
 #
 # recorded fingerprints — verify with: python3 $OMM/scripts/verify_weights_integrity.py
-#   GRACE-2L-OAM: 446c4e0b7dafe4ac7c094bba2035b0d9bb454cb2f2b3547fdc4b635be85f2123  (102,163,624 B)
+#   GRACE-2L-OAM: b4e5d384e8e3f5222225748f6eed8479c2363cf0022e9ca8dfa4a4f2fe4325ec  (97,295,519 B)
 ```
 
 ### C. ASE calculator

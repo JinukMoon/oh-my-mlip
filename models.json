@@ -215,9 +215,9 @@
     "import": ["from tensorpotential.calculator import TPCalculator"],
     "versions": {
       "GRACE-2L-OAM": {"mlip_name": "GRACE-2L-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "GRACE-2L-OAM", "weights_source_url": "https://gracemaker.readthedocs.io/en/latest/gracemaker/foundation", "validation": "validated_sm89",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "by-name", "weights_source": "GRACE-2L-OAM", "weights_source_url": "https://huggingface.co/AMS-ICAMS-RUB/grace-foundation-models", "validation": "validated_sm89",
         "weights_fetch_command": ["python3", "${OH_MY_MLIP_HOME}/scripts/prepare_grace_weights.py", "--name", "{weights_source}", "--target-dir", "{target_root}"], "weights_cache_env": "GRACE_CACHE",
-        "weights_sha256": "446c4e0b7dafe4ac7c094bba2035b0d9bb454cb2f2b3547fdc4b635be85f2123", "weights_size": 102163624,
+        "weights_sha256": "b4e5d384e8e3f5222225748f6eed8479c2363cf0022e9ca8dfa4a4f2fe4325ec", "weights_size": 97295519,
         "note": "GRACE uses TensorFlow SavedModel format. The weights_fetch_command automatically downloads and prepares the model directory structure. On systems with old glibc, LD_LIBRARY_PATH is adjusted to find required dependencies. TensorFlow may require cuDNN 8.9 compatibility; the environment setup handles this.",
         "inference": ["calc = TPCalculator('${OH_MY_MLIP_HOME}/models/grace/GRACE-2L-OAM')"], "finetune": {"status": "documented", "entrypoint": "gracemaker input.yaml", "selector_kind": "config_key", "selector_path": "potential.finetune_foundation_model", "semantics": "finetune: potential.finetune_foundation_model loads the checkpoint's weights. Ignored when -r/-rl (restart) flags are passed -- those resume optimizer/epoch state instead.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
