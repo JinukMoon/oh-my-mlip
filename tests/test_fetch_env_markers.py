@@ -92,3 +92,16 @@ def test_catbench_report_stops_on_a_missing_interpreter(tmp_path):
                           capture_output=True, text=True)
     assert proc.returncode == 2
     assert "is not there" in proc.stderr and "Traceback" not in proc.stderr
+
+
+def test_fetch_env_refuses_to_start_without_room_for_the_unpacked_env(tmp_path, monkeypatch):
+    home = tmp_path / "hub"
+    home.mkdir()
+    monkeypatch.setattr(fetch.registry, "home", lambda: str(home))
+    monkeypatch.setattr(fetch.registry, "resolve",
+                        lambda m, version=None, **k: {"model": m, "version": version, "env": "alpha", "gated": False})
+    manifest = {"alpha": {"hf_repo": "x/y", "revision": "r", "unpack_size_bytes": 10**18}}
+    with pytest.raises(fetch.FetchError, match="needs .* GB but"):
+        fetch.fetch_env("Alpha", probe=False, manifest=manifest)
+    # the upload placeholder skips the check
+    assert fetch._check_free_space("alpha", home / "envs" / "alpha", "TODO-on-upload") is None

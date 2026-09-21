@@ -829,6 +829,8 @@ def fetch_env(
             f"  or remove {install_dir} and call install_model again."
         )
 
+    _check_free_space(env, install_dir, entry.get("unpack_size_bytes"))
+
     # 3) download the tarball (lazy import).
     try:
         from huggingface_hub import hf_hub_download
@@ -868,6 +870,25 @@ def fetch_env(
     if probe:
         _probe_cuda(env, entry.get("min_driver_version"), py)
     return str(py)
+
+
+def _check_free_space(env: str, install_dir: Path, unpack_size) -> None:
+    """Refuse to start when the unpacked env cannot fit: an unpack that runs out
+    of disk halfway leaves a broken prefix. Skipped while the manifest carries
+    the upload placeholder instead of a size."""
+    try:
+        need = int(unpack_size)
+    except (TypeError, ValueError):
+        return
+    probe = install_dir
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = shutil.disk_usage(probe).free
+    if free < need:
+        raise FetchError(
+            f"{env}: the unpacked env needs {need / 1e9:.1f} GB but {probe} has "
+            f"{free / 1e9:.1f} GB free. Free space, or build locally: {_install_fallback_cmd(env)}"
+        )
 
 
 def _verify_sha256(path: str, expected) -> None:
