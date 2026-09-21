@@ -78,12 +78,17 @@ Weights licenses are read from the record that hosts the checkpoint file oh-my-m
 | Files | Official source | Mirror | Why it is allowed |
 |---|---|---|---|
 | `NequIP-OAM-XL-0.1.nequip.zip`, `NequIP-OAM-L-0.1.nequip.zip`, `Allegro-OAM-L-0.1.nequip.zip` | Zenodo [10.5281/zenodo.18775904](https://doi.org/10.5281/zenodo.18775904) ("NequIP & Allegro Foundation Potentials", Kavanagh, S. R.; MIR Group @ Harvard) | [JinukMoon/oh-my-mlip-mirror-nequip](https://huggingface.co/JinukMoon/oh-my-mlip-mirror-nequip) | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) permits redistribution with attribution; the mirror's model card credits the authors and the record. |
+| `eqnorm-mptrj.pt` | figshare [29153315](https://figshare.com/articles/29153315) ("eqnorm-mptrj ckpt file", Yuzhuo Chen) | [JinukMoon/oh-my-mlip-mirror-eqnorm](https://huggingface.co/JinukMoon/oh-my-mlip-mirror-eqnorm) | The record's license is MIT, which permits redistribution with the copyright notice; the mirror carries the upstream LICENSE text. |
+| `MatRIS_10M_OAM.pth.tar` | figshare [30475253](https://figshare.com/articles/30475253) ("MatRIS-10M checkpoints", Yuanchang Zhou) | [JinukMoon/oh-my-mlip-mirror-matris](https://huggingface.co/JinukMoon/oh-my-mlip-mirror-matris) | The record's license is CC BY 4.0 and the repo's is BSD-3-Clause; both permit redistribution, and the mirror's card credits the authors and carries both notices. |
+| `dpa-4.0.1-pro-mptrj.pt` | figshare [32647224](https://figshare.com/articles/32647224) (DPA-4.0.1-Pro-MPtrj Matbench Discovery submission, Tiancheng Li) | [JinukMoon/oh-my-mlip-mirror-dpa4](https://huggingface.co/JinukMoon/oh-my-mlip-mirror-dpa4) | The record's license is CC BY 4.0; the mirror's card credits the author and the record. Only the checkpoint file is mirrored. |
 
-The files are byte-identical copies, unchanged. `scripts/prepare_nequip_weights.py`
-downloads from Zenodo first and uses the mirror only when Zenodo fails or stays
-slow; whichever source delivers the file, it must match Zenodo's published size
-and MD5 (and the sha256 of the same bytes), and the log names the source used. No
-other weights are mirrored.
+The files are byte-identical copies, unchanged. The official host is always
+tried first (`scripts/prepare_nequip_weights.py` for Zenodo;
+`scripts/prestage_eqnorm_weights.py`, `scripts/prestage_matris_weights.py` and
+the registry's `weights_mirror_url` for figshare), and the mirror is used only
+when it fails or stays slow. Whichever source delivers a file, it must match the
+recorded size and checksums, and the log names the source used. Only the files
+in this table are mirrored.
 
 ## Quick reference: commercial use
 

@@ -426,6 +426,7 @@ def resolve(
           "weights_fetch": str,
           "weights_source": str,
           "weights_source_url": str | None,
+          "weights_mirror_url": str | None,  # byte-identical fallback copy
           "validation": str,
           "note": str | None,
         }
@@ -539,6 +540,7 @@ def resolve(
         "weights_fetch": vinfo.get("weights_fetch", "by-name"),
         "weights_source": vinfo.get("weights_source"),
         "weights_source_url": vinfo.get("weights_source_url"),
+        "weights_mirror_url": vinfo.get("weights_mirror_url"),
         "weights_sha256": vinfo.get("weights_sha256"),
         "weights_size": vinfo.get("weights_size"),
         "weights_fetch_command": vinfo.get("weights_fetch_command"),

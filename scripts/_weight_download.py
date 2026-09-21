@@ -32,6 +32,10 @@ def _load_download_core():
 
 
 _download = _load_download_core()
+
+# Below this rate (bytes/s, averaged over a minute) an official host hands over
+# to the next source in download_first_available.
+FALLBACK_MIN_RATE = 50_000
 DownloadError = _download.DownloadError
 download_resumable = _download.download_resumable
 

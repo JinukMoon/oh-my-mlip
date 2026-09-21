@@ -442,3 +442,94 @@ def test_nequip_compile_env_keeps_an_existing_cuda_home(tmp_path, monkeypatch):
     env = mod.compile_env(tmp_path / "env")
     assert env["CUDA_HOME"] == str(cuda)
     assert str(cuda / "lib64" / "stubs") in env["LIBRARY_PATH"].split(":")
+
+
+# ── figshare-hosted weights: fetch url path (DPA4) and the prestage scripts ──
+def _url_spec(official_url, mirror_url, sha=SHA):
+    return {"model": "DPA4", "version": "DPA-T", "env": "dpa4t", "weights_fetch": "url",
+            "weights_source": official_url, "weights_source_url": official_url,
+            "weights_mirror_url": mirror_url, "weights_size": len(PAYLOAD), "weights_sha256": sha}
+
+
+def test_fetch_url_weights_fall_back_to_the_mirror(tmp_path, monkeypatch):
+    sys.path.insert(0, str(REPO_ROOT))
+    from oh_my_mlip import fetch
+
+    official, mirror = _Server(), _Server()
+    try:
+        monkeypatch.setattr(official.httpd.RequestHandlerClass, "do_GET", _broken(504))
+        monkeypatch.setattr(fetch.registry, "home", lambda: str(tmp_path / "hub"))
+        target = tmp_path / "hub" / "models" / "dpa4t" / "w.pt"
+        fetch._materialize_url_weights(_url_spec(official.url, mirror.url), [target])
+        assert target.read_bytes() == PAYLOAD
+    finally:
+        official.close()
+        mirror.close()
+
+
+def test_fetch_url_weights_reject_a_mirror_with_other_bytes(tmp_path, monkeypatch):
+    sys.path.insert(0, str(REPO_ROOT))
+    from oh_my_mlip import fetch
+
+    official, mirror = _Server(), _Server()
+    try:
+        monkeypatch.setattr(official.httpd.RequestHandlerClass, "do_GET", _broken(404))
+        monkeypatch.setattr(fetch.registry, "home", lambda: str(tmp_path / "hub"))
+        target = tmp_path / "hub" / "models" / "dpa4t" / "w.pt"
+        with pytest.raises(fetch.FetchError, match="sha256 mismatch"):
+            fetch._materialize_url_weights(_url_spec(official.url, mirror.url, sha="0" * 64), [target])
+        assert not target.exists()
+    finally:
+        official.close()
+        mirror.close()
+
+
+def test_dpa4_registry_names_its_mirror():
+    import json
+    spec = json.loads((REPO_ROOT / "models.json").read_text())["DPA4"]["versions"]["DPA-4.0.1-pro-MPtrj"]
+    assert spec["weights_mirror_url"] == (
+        "https://huggingface.co/JinukMoon/oh-my-mlip-mirror-dpa4/resolve/main/dpa-4.0.1-pro-mptrj.pt")
+
+
+@pytest.mark.parametrize("script,key,fname", [
+    ("prestage_eqnorm_weights", "eqnorm-mptrj", "eqnorm-mptrj.pt"),
+    ("prestage_matris_weights", "matris_10m_oam", "MatRIS_10M_OAM.pth.tar"),
+])
+def test_prestage_falls_back_to_the_mirror_and_enforces_the_hash(tmp_path, monkeypatch, script, key, fname):
+    mod = _load(script)
+    official, mirror = _Server(), _Server()
+    try:
+        monkeypatch.setattr(official.httpd.RequestHandlerClass, "do_GET", _broken(504))
+        monkeypatch.setattr(mod, "CACHE_DIR", tmp_path)
+        monkeypatch.setattr(mod, "MIRROR", mirror.url + "?{name}")
+        if script == "prestage_eqnorm_weights":
+            monkeypatch.setitem(mod.WEIGHTS, key, (official.url, SHA, len(PAYLOAD)))
+        else:
+            monkeypatch.setitem(mod.WEIGHTS, key, (official.url, fname))
+            monkeypatch.setitem(mod.PINNED, key, (len(PAYLOAD), SHA))
+        (tmp_path / fname).write_bytes(b"x" * 2_000_000)  # a stale file of the wrong content
+        assert mod.prestage(key) == 0
+        assert (tmp_path / fname).read_bytes() == PAYLOAD
+
+        # a mirror serving other bytes never gets staged
+        (tmp_path / fname).unlink()
+        if script == "prestage_eqnorm_weights":
+            monkeypatch.setitem(mod.WEIGHTS, key, (official.url, "0" * 64, len(PAYLOAD)))
+        else:
+            monkeypatch.setitem(mod.PINNED, key, (len(PAYLOAD), "0" * 64))
+        assert mod.prestage(key) == 1
+        assert not (tmp_path / fname).exists()
+    finally:
+        official.close()
+        mirror.close()
+
+
+def test_prestage_scripts_name_their_mirrors_and_pins():
+    eq = _load("prestage_eqnorm_weights")
+    mt = _load("prestage_matris_weights")
+    assert eq.MIRROR.startswith("https://huggingface.co/JinukMoon/oh-my-mlip-mirror-eqnorm/resolve/main/")
+    assert eq.WEIGHTS["eqnorm-mptrj"][1:] == (
+        "9fd5b97a069e03697e41d2e4c468c5c9b487fc42a2842861ea171a23b9706de5", 21620384)
+    assert mt.MIRROR.startswith("https://huggingface.co/JinukMoon/oh-my-mlip-mirror-matris/resolve/main/")
+    assert mt.PINNED["matris_10m_oam"] == (
+        42273174, "c033abc53601a74f10d9b7fec0f658220c013c3b11d4d405f1d32136d4c2b067")

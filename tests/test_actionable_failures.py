@@ -49,7 +49,7 @@ def test_a_download_failure_names_the_url_target_and_the_prefetch_command(tmp_pa
     }
     target = tmp_path / "models" / "nequix" / "nequix-mp-1.nqx"
     monkeypatch.setattr(fetch, "_download_to_temp",
-                        lambda url, directory: (_ for _ in ()).throw(URLError("Network is unreachable")))
+                        lambda url, directory, **kw: (_ for _ in ()).throw(URLError("Network is unreachable")))
     with pytest.raises(fetch.FetchError) as excinfo:
         fetch._materialize_url_weights(spec, [target])
     message = str(excinfo.value)

@@ -31,6 +31,9 @@ from urllib.parse import urlparse
 from oh_my_mlip import registry
 from oh_my_mlip._download import DownloadError, download_resumable
 
+# Below this rate (bytes/s over a minute) the official host hands over to a mirror.
+FALLBACK_MIN_RATE = 50_000
+
 __all__ = [
     "FetchError",
     "GatedError",
@@ -251,8 +254,32 @@ def _materialize_url_weights(spec: dict, targets: list[Path]) -> None:
     # find the SavedModel).
     staging = root.parent / f".{root.name}.staging"
     staging.mkdir(parents=True, exist_ok=True)
+    # A registry `weights_mirror_url` is a byte-identical copy (license permitting,
+    # see docs/model_licenses.md) used only when the official host fails or stays
+    # slow. When the download IS the inference target, it is checked against the
+    # recorded size and sha256 before it is installed, whichever source sent it.
+    mirror = spec.get("weights_mirror_url")
+    sources = [url] + ([mirror] if mirror else [])
+    direct = len(targets) == 1 and not _derives_its_target(spec)
+    expected_size = spec.get("weights_size") if direct else None
+    expected_sha = spec.get("weights_sha256") if direct else None
+    part_name = targets[0].name if mirror else None  # one partial file across sources
     try:
-        local = _download_to_temp(url, staging)
+        for index, source in enumerate(sources):
+            last = index == len(sources) - 1
+            try:
+                local = _download_to_temp(source, staging, name=part_name,
+                                          min_rate=None if last else FALLBACK_MIN_RATE)
+                _check_download(local, expected_size, expected_sha)
+            except Exception as exc:  # noqa: BLE001 - the next source gets its turn
+                if last:
+                    raise
+                print(f"[oh-my-mlip] {spec['version']}: {source} failed ({exc}); "
+                      f"trying the mirror {sources[index + 1]}", file=sys.stderr, flush=True)
+                continue
+            print(f"[oh-my-mlip] {spec['version']}: weights downloaded from {source}",
+                  file=sys.stderr, flush=True)
+            break
     except FetchError:
         raise
     except Exception as exc:  # URLError/HTTPError/socket timeouts all land here
@@ -430,21 +457,40 @@ def _normalise_download_url(url: str) -> str:
 
 
 def _download_to_temp(url: str, directory: Path, *, timeout: float = 60,
-                      attempts: int = 5) -> Path:
+                      attempts: int = 5, name: str | None = None,
+                      min_rate: float | None = None) -> Path:
     """Download `url` into `directory`, resuming what an earlier attempt left.
 
     The partial file stays in the staging directory between calls; see
-    oh_my_mlip/_download.py for the timeout, in-call retries and Range resume."""
-    parsed_name = Path(urlparse(url).path).name or "weights"
+    oh_my_mlip/_download.py for the timeout, in-call retries and Range resume.
+    `name` fixes the partial file's name (default: the URL's last path part), so
+    a mirror can continue what the official host sent."""
+    parsed_name = name or Path(urlparse(url).path).name or "weights"
     tmp = directory / f".{parsed_name}.download"
     try:
-        download_resumable(url, tmp, label=parsed_name, timeout=timeout, attempts=attempts)
+        download_resumable(url, tmp, label=parsed_name, timeout=timeout, attempts=attempts,
+                           min_rate=min_rate)
     except DownloadError as exc:
         raise FetchError(str(exc)) from exc
     if tmp.stat().st_size == 0:
         tmp.unlink(missing_ok=True)
         raise FetchError(f"downloaded empty weight artifact from {url}")
     return tmp
+
+
+def _check_download(local: Path, size, sha) -> None:
+    """Hold a finished download to the recorded size and sha256; a file that
+    differs is deleted (never resumed) and reported."""
+    if size and local.stat().st_size != int(size):
+        got = local.stat().st_size
+        local.unlink(missing_ok=True)
+        raise FetchError(f"{local.name}: {got} bytes, the registry records {size}")
+    if sha and sha != TODO_MARKER:
+        try:
+            _verify_sha256(str(local), sha)
+        except FetchError:
+            local.unlink(missing_ok=True)
+            raise
 
 
 def _install_downloaded_artifact(local: Path, targets: list[Path], root: Path) -> None:

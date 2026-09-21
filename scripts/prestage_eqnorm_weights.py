@@ -25,16 +25,22 @@ import argparse
 import hashlib
 import os
 import sys
-import tempfile
-import urllib.request
 from pathlib import Path
 
-# variant -> (working ndownloader URL, sha256). Mirrors eqnorm.calculator.url_dict
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _weight_download import FALLBACK_MIN_RATE, download_first_available  # noqa: E402
+
+MIRROR = "https://huggingface.co/JinukMoon/oh-my-mlip-mirror-eqnorm/resolve/main/{name}"
+
+# variant -> (working ndownloader URL, sha256, size). Mirrors eqnorm.calculator.url_dict
 # but uses the subdomain form that returns a real 302 -> S3 instead of 202-blocking.
+# The file is also on a byte-identical mirror (figshare 29153315 is MIT-licensed),
+# used only when figshare fails or stays slow; both are held to this size and hash.
 WEIGHTS = {
     "eqnorm-mptrj": (
         "https://ndownloader.figshare.com/files/55429685",
         "9fd5b97a069e03697e41d2e4c468c5c9b487fc42a2842861ea171a23b9706de5",
+        21620384,
     ),
 }
 CACHE_DIR = Path(os.path.expanduser("~/.cache/eqnorm"))
@@ -52,11 +58,11 @@ def prestage(variant: str) -> int:
     if variant not in WEIGHTS:
         print(f"prestage_eqnorm: unknown variant {variant!r}; known: {list(WEIGHTS)}", file=sys.stderr)
         return 2
-    url, sha = WEIGHTS[variant]
+    url, sha, size = WEIGHTS[variant]
     dest = CACHE_DIR / f"{variant}.pt"
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    if dest.exists() and dest.stat().st_size > 0 and _sha256(dest) == sha:
+    if dest.exists() and dest.stat().st_size == size and _sha256(dest) == sha:
         print(f"prestage_eqnorm: {dest} already present and verified; nothing to do.")
         return 0
     if dest.exists():
@@ -64,27 +70,16 @@ def prestage(variant: str) -> int:
         dest.unlink()
 
     print(f"prestage_eqnorm: downloading {url} -> {dest}")
-    tmp_fd, tmp_name = tempfile.mkstemp(dir=str(CACHE_DIR), suffix=".part")
-    os.close(tmp_fd)
-    tmp = Path(tmp_name)
+    sources = [("figshare", url),
+               ("the oh-my-mlip mirror on Hugging Face", MIRROR.format(name=dest.name))]
     try:
-        with urllib.request.urlopen(url, timeout=120) as resp, tmp.open("wb") as out:
-            while True:
-                chunk = resp.read(1 << 20)
-                if not chunk:
-                    break
-                out.write(chunk)
-        got = _sha256(tmp)
-        if got != sha:
-            tmp.unlink(missing_ok=True)
-            print(f"prestage_eqnorm: sha256 mismatch (got {got}, want {sha}); leaving cache empty.", file=sys.stderr)
-            return 1
-        tmp.replace(dest)
+        used = download_first_available(sources, dest, size=size, sha256=sha,
+                                        label="prestage_eqnorm", min_rate=FALLBACK_MIN_RATE)
     except Exception as exc:  # noqa: BLE001 - non-fatal helper
-        tmp.unlink(missing_ok=True)
-        print(f"prestage_eqnorm: download failed ({exc!r}); the framework will retry on first use.", file=sys.stderr)
+        print(f"prestage_eqnorm: download failed ({exc}); rerun to resume it, or the "
+              "framework will retry on first use.", file=sys.stderr)
         return 1
-    print(f"prestage_eqnorm: staged {dest} ({dest.stat().st_size} B, sha256 OK).")
+    print(f"prestage_eqnorm: staged {dest} ({dest.stat().st_size} B, sha256 OK, from {used}).")
     return 0
 
 

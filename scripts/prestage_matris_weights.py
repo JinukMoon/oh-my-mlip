@@ -10,9 +10,11 @@ package refuses to re-download. See docs/host_requirements.md and the MatRIS
 note in models.json.
 
 This helper pre-stages the exact file the loader expects, from the working
-``ndownloader.figshare.com`` subdomain. We require a plausibly-sized checkpoint
-(>1 MiB), compare against the recorded sha256 below (warn-only), and print the
-computed sha256 for the record.
+``ndownloader.figshare.com`` subdomain. A checkpoint with a recorded size and
+sha256 (below) must match both; it is also on a byte-identical mirror (figshare
+30475253 is CC BY 4.0), used only when figshare fails or stays slow and held to
+the same size and hash. A checkpoint without a record must arrive whole and be
+plausibly sized (>1 MiB).
 Pure stdlib, idempotent, non-fatal by design.
 """
 from __future__ import annotations
@@ -21,9 +23,10 @@ import argparse
 import hashlib
 import os
 import sys
-import tempfile
-import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _weight_download import FALLBACK_MIN_RATE, download, download_first_available  # noqa: E402
 
 # model -> (working ndownloader URL, cache filename). Mirrors MatRIS.model.model
 # .MatRIS.load DOWNLOAD_URLS, but uses the subdomain form that returns a real
@@ -33,12 +36,12 @@ WEIGHTS = {
     "matris_10m_mp": ("https://ndownloader.figshare.com/files/59143058", "MatRIS_10M_MP.pth.tar"),
 }
 
-# Known-good sha256 of the staged checkpoint. WARN-ONLY: a mismatch is logged
-# but does NOT fail the pre-stage, because the upstream figshare file may be legitimately re-published. Models
-# without a recorded fingerprint are skipped (no reference to compare).
-EXPECTED_SHA256 = {
-    "matris_10m_oam": "c033abc53601a74f10d9b7fec0f658220c013c3b11d4d405f1d32136d4c2b067",
+# Recorded (size, sha256) of a checkpoint, enforced: a file that differs is never
+# staged. Models without a record are only checked for a whole, plausible file.
+PINNED = {
+    "matris_10m_oam": (42273174, "c033abc53601a74f10d9b7fec0f658220c013c3b11d4d405f1d32136d4c2b067"),
 }
+MIRROR = "https://huggingface.co/JinukMoon/oh-my-mlip-mirror-matris/resolve/main/{name}"
 CACHE_DIR = Path(os.path.expanduser("~/.cache/matris"))
 MIN_BYTES = 1 << 20  # a real checkpoint is many MiB; guard against 0-byte/202 bodies
 
@@ -50,21 +53,14 @@ def _sha256(path: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
-def _verify_sha_warn(model: str, dest: Path) -> None:
-    """Warn-only sha256 check: logs a warning on mismatch, never fails."""
-    expected = EXPECTED_SHA256.get(model)
-    if not expected:
-        return
-    actual = _sha256(dest)
-    if actual != expected:
-        print(
-            f"prestage_matris: WARNING sha256 mismatch for {dest}: expected "
-            f"{expected[:12]}.. got {actual[:12]}.. (upstream figshare file may "
-            "have been re-published; not failing).",
-            file=sys.stderr,
-        )
-    else:
-        print(f"prestage_matris: sha256 verified ({actual[:12]}..).")
+
+def _present(model: str, dest: Path) -> bool:
+    if not dest.exists():
+        return False
+    if model in PINNED:
+        size, sha = PINNED[model]
+        return dest.stat().st_size == size and _sha256(dest) == sha
+    return dest.stat().st_size >= MIN_BYTES
 
 
 def prestage(model: str) -> int:
@@ -76,42 +72,34 @@ def prestage(model: str) -> int:
     dest = CACHE_DIR / fname
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    if dest.exists() and dest.stat().st_size >= MIN_BYTES:
+    if _present(model, dest):
         print(f"prestage_matris: {dest} already present ({dest.stat().st_size} B); nothing to do.")
-        _verify_sha_warn(model, dest)
         return 0
     if dest.exists():
-        print(f"prestage_matris: {dest} is missing/too-small (0-byte/202 body); re-fetching.")
+        print(f"prestage_matris: {dest} is too small or differs from the record; re-fetching.")
         dest.unlink()
 
     print(f"prestage_matris: downloading {url} -> {dest}")
-    tmp_fd, tmp_name = tempfile.mkstemp(dir=str(CACHE_DIR), suffix=".part")
-    os.close(tmp_fd)
-    tmp = Path(tmp_name)
     try:
-        with urllib.request.urlopen(url, timeout=180) as resp, tmp.open("wb") as out:
-            declared = resp.headers.get("Content-Length")
-            while True:
-                chunk = resp.read(1 << 20)
-                if not chunk:
-                    break
-                out.write(chunk)
-        size = tmp.stat().st_size
-        if declared and declared.isdigit() and size != int(declared):
-            # A connection closed early ends the read loop quietly; never stage the stump.
-            tmp.unlink(missing_ok=True)
-            print(f"prestage_matris: download cut off ({size} of {declared} B); leaving cache empty.", file=sys.stderr)
-            return 1
-        if size < MIN_BYTES:
-            tmp.unlink(missing_ok=True)
-            print(f"prestage_matris: downloaded body too small ({size} B); likely a 202 block, leaving cache empty.", file=sys.stderr)
-            return 1
-        tmp.replace(dest)
+        if model in PINNED:
+            size, sha = PINNED[model]
+            sources = [("figshare", url),
+                       ("the oh-my-mlip mirror on Hugging Face", MIRROR.format(name=fname))]
+            used = download_first_available(sources, dest, size=size, sha256=sha,
+                                            label="prestage_matris", min_rate=FALLBACK_MIN_RATE)
+        else:
+            download(url, dest, label="prestage_matris")
+            used = "figshare"
+            if dest.stat().st_size < MIN_BYTES:
+                dest.unlink()
+                print("prestage_matris: downloaded body too small; likely a 202 block, "
+                      "leaving cache empty.", file=sys.stderr)
+                return 1
     except Exception as exc:  # noqa: BLE001 - non-fatal helper
-        tmp.unlink(missing_ok=True)
-        print(f"prestage_matris: download failed ({exc!r}); the framework will retry on first use.", file=sys.stderr)
+        print(f"prestage_matris: download failed ({exc}); rerun to resume it, or the "
+              "framework will retry on first use.", file=sys.stderr)
         return 1
-    print(f"prestage_matris: staged {dest} ({dest.stat().st_size} B, sha256 {_sha256(dest)}).")
+    print(f"prestage_matris: staged {dest} ({dest.stat().st_size} B, sha256 {_sha256(dest)}, from {used}).")
     return 0
 
 

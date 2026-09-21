@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _weight_download import download_first_available, is_complete  # noqa: E402
+from _weight_download import FALLBACK_MIN_RATE, download_first_available, is_complete  # noqa: E402
 
 # (nequip.net URI, registry version name, extra nequip-compile args,
 #  zenodo package file name, zenodo md5, zenodo size, sha256). nequip.net resolves each
@@ -36,11 +36,10 @@ from _weight_download import download_first_available, is_complete  # noqa: E402
 #     Potentials", CC-BY-4.0, Kavanagh, S. R.; MIR Group @ Harvard), which holds
 #     all three packages;
 #  2. a byte-identical copy on Hugging Face, used only when Zenodo fails or
-#     stays below MIN_RATE (the license permits redistribution with attribution;
+#     stays below FALLBACK_MIN_RATE (the license permits redistribution with attribution;
 #     the mirror's model card credits the authors and the record).
 ZENODO = "https://zenodo.org/api/records/18775904/files/{name}/content"
 MIRROR = "https://huggingface.co/JinukMoon/oh-my-mlip-mirror-nequip/resolve/main/{name}"
-MIN_RATE = 50_000  # bytes/s averaged over a minute; below this, try the mirror
 MODELS = {
     "nequip": [
         ("nequip.net:mir-group/NequIP-OAM-XL:0.1", "NequIP-OAM-XL", ["--modifiers", "enable_OpenEquivariance"],
@@ -153,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  downloading {zip_name} -> {package}", flush=True)
                 try:
                     used = download_first_available(sources, package, size=size, md5=md5,
-                                                    sha256=sha256, label=version, min_rate=MIN_RATE)
+                                                    sha256=sha256, label=version, min_rate=FALLBACK_MIN_RATE)
                     print(f"  {version}: package from {used}", flush=True)
                 except Exception as exc:  # noqa: BLE001 - reported, the other models still run
                     print(f"  {version}: download failed ({exc}); rerun to resume it, or set "
