@@ -58,25 +58,41 @@ _host_arch_cache: Any = _HOST_ARCH_UNSET
 
 
 def detect_host_arch() -> str | None:
-    """Return the host GPU arch as ``"sm<major><minor>"`` (e.g. ``sm86``,
-    ``sm89``) via ``nvidia-smi --query-gpu=compute_cap``, or ``None`` when no
-    GPU / no nvidia-smi / unparseable output. stdlib-only and cached for the
-    process lifetime (this module must import and run on GPU-less hosts)."""
+    """Return the arch of the GPU this process will use as ``"sm<major><minor>"``
+    (e.g. ``sm86``, ``sm89``) via ``nvidia-smi``, or ``None`` when no GPU / no
+    nvidia-smi / unparseable output. stdlib-only and cached for the process
+    lifetime (this module must import and run on GPU-less hosts).
+
+    On a host with GPUs of different archs the first device named by
+    ``CUDA_VISIBLE_DEVICES`` decides (a UUID, or an index as nvidia-smi numbers
+    them, i.e. PCI bus order -- set ``CUDA_DEVICE_ORDER=PCI_BUS_ID`` so CUDA
+    agrees); without it, GPU 0. Reading only the first GPU used to hand a job
+    pinned to another GPU the wrong compiled model."""
     global _host_arch_cache
     if _host_arch_cache is not _HOST_ARCH_UNSET:
         return _host_arch_cache
     arch: str | None = None
     try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+        rows = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index,uuid,compute_cap", "--format=csv,noheader"],
             capture_output=True,
             text=True,
             timeout=10,
         ).stdout.strip().splitlines()
-        if out:
-            m = re.match(r"^(\d+)\.(\d+)$", out[0].strip())
+        gpus = []
+        for row in rows:
+            parts = [part.strip() for part in row.split(",")]
+            m = re.match(r"^(\d+)\.(\d+)$", parts[-1]) if len(parts) == 3 else None
             if m:
-                arch = f"sm{m.group(1)}{m.group(2)}"
+                gpus.append((parts[0], parts[1], f"sm{m.group(1)}{m.group(2)}"))
+        chosen = gpus[0] if gpus else None
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible is not None and gpus:
+            first = visible.split(",")[0].strip()
+            match = [g for g in gpus if first and (g[0] == first or g[1] == first or
+                                                  (first.startswith("GPU-") and g[1].startswith(first)))]
+            chosen = match[0] if match else (None if first in ("", "-1") else chosen)
+        arch = chosen[2] if chosen else None
     except Exception:  # noqa: BLE001 - any failure means "unknown host arch"
         arch = None
     _host_arch_cache = arch

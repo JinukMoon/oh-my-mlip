@@ -169,11 +169,39 @@ def test_detect_host_arch_parses_compute_cap(monkeypatch):
             self.stdout = out
 
     monkeypatch.setattr(reg, "_host_arch_cache", reg._HOST_ARCH_UNSET)
-    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R("8.6\n"))
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R("0, GPU-aaa, 8.6\n"))
     assert reg.detect_host_arch() == "sm86"
     # cached for the process lifetime: a changed mock must NOT change the result
-    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R("8.9\n"))
+    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R("0, GPU-aaa, 8.9\n"))
     assert reg.detect_host_arch() == "sm86"
+
+
+MIXED = "0, GPU-1111-aaaa, 8.6\n1, GPU-2222-bbbb, 8.9\n"
+
+
+@pytest.mark.parametrize("visible,expected", [
+    (None, "sm86"),                 # no pinning: GPU 0
+    ("1", "sm89"),                  # pinned by index
+    ("1,0", "sm89"),                # the first visible device decides
+    ("GPU-2222-bbbb", "sm89"),      # pinned by full UUID
+    ("GPU-2222", "sm89"),           # ... or a UUID prefix, as CUDA accepts
+    ("", None),                     # no visible GPU
+    ("-1", None),
+])
+def test_detect_host_arch_follows_cuda_visible_devices(monkeypatch, visible, expected):
+    """A host with GPUs of different archs: reading only the first GPU gave a job
+    pinned to the other one the wrong compiled .pt2."""
+    class _R:
+        stdout = MIXED
+
+    monkeypatch.setattr(reg, "_host_arch_cache", reg._HOST_ARCH_UNSET)
+    monkeypatch.setattr(reg.subprocess, "run", lambda *a, **k: _R())
+    if visible is None:
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    else:
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", visible)
+    assert reg.detect_host_arch() == expected
 
 
 def test_detect_host_arch_no_gpu_returns_none(monkeypatch):
