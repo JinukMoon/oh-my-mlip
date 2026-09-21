@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 # The exact per-model catbench script. Runs INSIDE the model's own env
@@ -465,7 +466,16 @@ def _safe_component(value: str, what: str) -> str | None:
 def _default_submit_hook(target: Path) -> int:
     """`sbatch <target>` for a SLURM script, `sh <target>` for a local runner."""
     target = Path(target)
-    cmd = ["sbatch", str(target)] if target.name.startswith("run_slurm_") else ["sh", str(target)]
+    if target.name.startswith("run_slurm_"):
+        # The emitted header is minimal; show it before it goes to the scheduler
+        # so nobody submits a wall time or memory request they never saw.
+        header = [line for line in target.read_text().splitlines() if line.startswith("#SBATCH")]
+        print(f"submitting {target} with:\n  " + "\n  ".join(header) + "\n"
+              "  (no --time, --mem, --cpus-per-task or --account: the cluster's defaults apply; "
+              "edit the script and submit it yourself if they do not suit)", file=sys.stderr)
+        cmd = ["sbatch", str(target)]
+    else:
+        cmd = ["sh", str(target)]
     return subprocess.run(cmd).returncode
 
 

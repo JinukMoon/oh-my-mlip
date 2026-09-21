@@ -159,6 +159,17 @@ def decide_verdict(
     return verdict
 
 
+def _known_hint(home: Path) -> str:
+    """The names a user can pass, for an 'unknown model' message."""
+    try:
+        registry = json.loads((home / "models.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "see models.json for the model names"
+    families = sorted(f for f in registry if not f.startswith("_"))
+    return ("families: " + ", ".join(families)
+            + " (or a version name from docs/model_status.md)")
+
+
 def family_versions(model: str, home: Path) -> list[str]:
     """All version keys of the family `model` names (family or version key)."""
     registry = json.loads((home / "models.json").read_text())
@@ -179,7 +190,7 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
     it and so the local-record write is one guarded step."""
     env_name = find_env(version or model, home)
     if env_name is None:
-        return {"pass": False, "reason": f"unknown model: {model}", "version": version}
+        return {"pass": False, "reason": f"unknown model: {model}; {_known_hint(home)}", "version": version}
 
     skew = predict_driver_skew(env_name, home)
     command = [sys.executable, str(home / "run_examples" / "single_point.py"), model, "--json"]
@@ -277,7 +288,7 @@ def main() -> int:
             return 2
         versions = family_versions(args.model, home)
         if not versions:
-            verdict = {"pass": False, "reason": f"unknown model: {args.model}"}
+            verdict = {"pass": False, "reason": f"unknown model: {args.model}; {_known_hint(home)}"}
             print(json.dumps(verdict) if args.json else f"FAIL: {verdict['reason']}")
             return 1
         verdicts = []

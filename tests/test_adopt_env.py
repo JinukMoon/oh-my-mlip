@@ -239,3 +239,26 @@ def test_adoption_and_install_sh_call_the_weight_scripts_the_same_way():
     text = (REPO_ROOT / "install.sh").read_text()
     assert 'python3 "$prestage" ||' in text
     assert '"$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name"' in text
+
+
+def test_an_adoption_can_be_removed_by_the_name_it_was_added_with(tmp_path: Path):
+    """Adoption stores entries by env name but is added by family or version
+    name; `--remove Alpha` used to report 'not adopted'."""
+    home = _home(tmp_path)
+    prefix = _passthrough_env(tmp_path, "alpha_env")
+    env = {"OH_MY_MLIP_HOME": str(home), "PATH": "/usr/bin:/bin"}
+    script = str(REPO_ROOT / "scripts" / "adopt_env.py")
+    assert subprocess.run([sys.executable, script, "Alpha", str(prefix)],
+                          capture_output=True, text=True, env=env).returncode == 0
+    proc = subprocess.run([sys.executable, script, "--remove", "Alpha"],
+                          capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, proc.stderr
+    assert "alpha" not in json.loads((home / "env_map.local.json").read_text())
+
+
+def test_an_unknown_model_lists_the_known_ones(tmp_path: Path):
+    home = _home(tmp_path)
+    proc = subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "adopt_env.py"), "Nope", str(tmp_path)],
+                          capture_output=True, text=True, env={"OH_MY_MLIP_HOME": str(home), "PATH": "/usr/bin:/bin"})
+    assert proc.returncode == 1
+    assert "families: " in proc.stderr and "Alpha" in proc.stderr

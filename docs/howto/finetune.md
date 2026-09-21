@@ -64,7 +64,7 @@ from its upstream default, and the run records which one it was.
     | `--set NAME=VALUE` | any other native setting, by its name in `--show-settings` |
     | `--version MACE-MH-1-OMAT` | start from a specific checkpoint |
     | `--emit-only` | write the dataset, config and command without running |
-    | `--slurm --partition <p>` | also write a SLURM script (nothing is submitted) |
+    | `--slurm --partition <p>` | also write a SLURM script (nothing is submitted). Its header sets only the job name, partition, log files, one task and one GPU; add wall time, memory, CPUs or account if your cluster's defaults do not suit |
     | `--allow-partial-seed` | NequIP/Allegro only: their trainers fix part of the seed internally |
 
     Convert a dataset without training:

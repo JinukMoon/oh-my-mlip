@@ -46,6 +46,7 @@ __all__ = [
 
 TODO_MARKER = "TODO-on-upload"
 SENTINEL_NAME = ".oh-my-mlip-unpacked"
+BUILD_SENTINEL_NAME = ".omm_ready"  # written by install.sh when a local build finished
 _MODEL_PATH_RE = re.compile(r"['\"]([^'\"]*/models/[^'\"]+)['\"]")
 _DIRECT_URL_MARKERS = ("/resolve/", "/raw/", "/ndownloader/", "/api/records/")
 _DIRECT_URL_SUFFIXES = (
@@ -681,6 +682,7 @@ def _check_gated(model: str, version: str | None) -> dict:
             f"license before download:\n    {license_url}\n"
             f"  This repo never redistributes gated weights; they are fetched "
             f"with YOUR Hugging Face token.",
+            file=sys.stderr,
             flush=True,
         )
         resolved = _resolve_token()
@@ -711,6 +713,7 @@ def _print_fallback(env: str, reason: str) -> None:
         f"    {reason}\n"
         f"  Fall back to a local build:\n"
         f"    {_install_fallback_cmd(env)}",
+        file=sys.stderr,
         flush=True,
     )
 
@@ -810,11 +813,21 @@ def fetch_env(
     sentinel = install_dir / SENTINEL_NAME
     py = interpreter_path(env)
 
-    if sentinel.exists() and py.exists():
-        # Already unpacked; just (optionally) re-probe.
+    if (sentinel.exists() or (install_dir / BUILD_SENTINEL_NAME).exists()) and py.exists():
+        # Already unpacked, or built by install.sh; just (optionally) re-probe.
         if probe:
             _probe_cuda(env, entry.get("min_driver_version"), py)
         return str(py)
+    if py.exists():
+        # An env is there but neither marker is: an interrupted install.sh build
+        # or an unpack that failed. Unpacking a tarball over it would mix two
+        # environments, so leave it to the tool that owns it.
+        raise FetchError(
+            f"{install_dir} holds an environment that no install finished "
+            f"(no {BUILD_SENTINEL_NAME} or {SENTINEL_NAME}); not unpacking over it.\n"
+            f"  Repair it with: {_install_fallback_cmd(env)}\n"
+            f"  or remove {install_dir} and call install_model again."
+        )
 
     # 3) download the tarball (lazy import).
     try:
@@ -901,4 +914,12 @@ def _conda_unpack(install_dir: Path) -> None:
     env_python = install_dir / "bin" / "python"
     if not env_python.exists():
         raise FetchError(f"env interpreter missing under {install_dir}/bin")
-    subprocess.run([str(env_python), str(unpack)], check=True, cwd=str(install_dir))
+    proc = subprocess.run([str(env_python), str(unpack)], cwd=str(install_dir),
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()[-20:]
+        raise FetchError(
+            f"conda-unpack failed in {install_dir} (exit {proc.returncode}):\n    "
+            + "\n    ".join(detail)
+            + f"\n  The env is not usable. Build it locally instead: {_install_fallback_cmd(env_python.parent.parent.name)}"
+        )

@@ -54,6 +54,10 @@ def find_family(model: str, registry: dict) -> tuple[str, dict] | None:
     return None
 
 
+def known_names(registry: dict) -> str:
+    return ", ".join(sorted(f for f in registry if not f.startswith("_")))
+
+
 def prepare_weights(home: Path, env_name: str, python: Path) -> None:
     """Run the weight preparation install.sh runs after it builds an env.
 
@@ -109,12 +113,20 @@ def main() -> int:
         return 0
     if args.remove:
         data = load_map(home)
-        if args.remove not in data:
-            print(f"not adopted: {args.remove}", file=sys.stderr)
+        key = args.remove
+        if key not in data:
+            # adoption is added by family, version or env name but stored by env
+            # name; accept the same names on removal
+            registry = json.loads((home / "models.json").read_text(encoding="utf-8"))
+            found = find_family(key, registry)
+            key = found[1]["env"] if found else key
+        if key not in data:
+            print(f"not adopted: {args.remove} (adopted: {', '.join(sorted(data)) or 'none'})",
+                  file=sys.stderr)
             return 1
-        del data[args.remove]
+        del data[key]
         save_map(home, data)
-        print(f"removed adoption: {args.remove}")
+        print(f"removed adoption: {key}")
         return 0
     if not args.model or not args.prefix:
         ap.error("need MODEL and PREFIX (or --list / --remove)")
@@ -122,7 +134,8 @@ def main() -> int:
     registry = json.loads((home / "models.json").read_text(encoding="utf-8"))
     found = find_family(args.model, registry)
     if found is None:
-        print(f"unknown model/env: {args.model}", file=sys.stderr)
+        print(f"unknown model/env: {args.model}; families: {known_names(registry)} "
+              "(or any version or env name in models.json)", file=sys.stderr)
         return 1
     family, spec = found
     env_name = spec["env"]

@@ -51,9 +51,15 @@ Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu,
     | `--only MACE,SevenNet` | frameworks to run |
     | `--all-versions` | every version of each framework (versions marked `"catbench": false` are skipped) |
     | `--d3` | add D3 dispersion (`_D3` is appended to the model name) |
+    | `--calc-num N` | calculator instances per model, all loaded at once (default 3): GPU memory grows with N, so use 1 for large models on a small GPU |
     | `--slurm --emit-only --partition <p>` | write SLURM job scripts without running them |
     | `--arch sm86` | pick the NequIP/Allegro build for a different GPU |
     | `--catbench-version <v>` | refuse to run under any other catbench version |
+
+    The SLURM header sets only the job name, partition, log files, one task and
+    one GPU. Wall time, memory, CPUs and account are left to your cluster's
+    defaults: add them to the scripts in `jobs/` before submitting if those
+    defaults do not suit. `--submit` prints the header it sends.
 
     Leaderboard comparison: `scripts/catbench_leaderboard.py`. Full procedure:
     [`recipes/catbench.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/catbench.md);

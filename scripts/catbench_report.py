@@ -127,6 +127,12 @@ def _reexec_before_catbench_import(args: argparse.Namespace, result_dir: Path) -
     if os.path.realpath(python) == os.path.realpath(sys.executable):
         os.environ[_REEXEC_MARKER] = "1"
         return
+    if not os.access(python, os.X_OK):
+        source = "--python" if args.python else "the registry"
+        print(f"[stop] the catbench interpreter from {source} is not there: {python}\n"
+              f"       install that model's env (./install.sh <model>) or pass --python "
+              f"<env>/bin/python", file=sys.stderr)
+        raise SystemExit(2)
     env = dict(os.environ)
     env[_REEXEC_MARKER] = "1"
     os.execve(python, [python, str(Path(__file__).resolve())] + sys.argv[1:], env)
