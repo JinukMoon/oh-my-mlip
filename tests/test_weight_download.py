@@ -293,3 +293,54 @@ def test_fetch_download_keeps_the_partial_file_when_every_attempt_fails(tmp_path
     with pytest.raises(fetch.FetchError, match="next attempt resumes"):
         fetch._download_to_temp(server.url, tmp_path, attempts=2)
     assert (tmp_path / ".ckpt.download").stat().st_size > 0
+
+
+@pytest.mark.parametrize("code", [504, 503, 429])
+def test_a_busy_server_is_retried(tmp_path, server, monkeypatch, code):
+    # seen live: Zenodo answered 504 Gateway Time-out while under load
+    original = server.httpd.RequestHandlerClass.do_GET
+    calls = []
+
+    def busy_once(handler):
+        calls.append(1)
+        if len(calls) == 1:
+            handler.send_response(code)
+            handler.send_header("Retry-After", "1")
+            handler.send_header("Content-Length", "0")
+            handler.end_headers()
+            return
+        original(handler)
+
+    monkeypatch.setattr(server.httpd.RequestHandlerClass, "do_GET", busy_once)
+    slept = []
+    monkeypatch.setattr(wd._download.time, "sleep", slept.append)
+    dest = tmp_path / "model.ckpt"
+    wd.download(server.url, dest, size=len(PAYLOAD), sha256=SHA)
+    assert dest.read_bytes() == PAYLOAD
+    assert len(calls) == 2 and slept
+
+
+def test_a_missing_file_is_not_retried(tmp_path, server, monkeypatch):
+    calls = []
+
+    def not_found(handler):
+        calls.append(1)
+        handler.send_response(404)
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+
+    monkeypatch.setattr(server.httpd.RequestHandlerClass, "do_GET", not_found)
+    from urllib.error import HTTPError
+    with pytest.raises(HTTPError):
+        wd.download(server.url, tmp_path / "model.ckpt")
+    assert len(calls) == 1
+
+
+def test_retry_after_is_capped():
+    from urllib.error import HTTPError
+    from email.message import Message
+
+    headers = Message()
+    headers["Retry-After"] = "86400"
+    exc = HTTPError("u", 503, "busy", headers, None)
+    assert wd._download._retry_after(exc) == 120

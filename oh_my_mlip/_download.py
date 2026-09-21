@@ -30,32 +30,49 @@ def download_resumable(url: str, part: Path, *, label: str, size: int | None = N
 
     Complete means `size` bytes when the caller knows the size, otherwise the
     length the server declares. Raises DownloadError after `attempts` failed
-    tries; HTTP errors other than a rejected resume offset propagate."""
+    tries. 5xx and 429 answers are retried (honouring Retry-After up to two
+    minutes); other HTTP errors, such as 403 or 404, propagate at once."""
     part.parent.mkdir(parents=True, exist_ok=True)
     cause = ""
     for attempt in range(1, attempts + 1):
+        wait = min(10, 2 * attempt)
         try:
             if _once(url, part, label, size, timeout):
                 return
             cause = "the connection closed before the end of the file"
         except HTTPError as exc:
-            if exc.code != 416 or not part.exists():
-                raise
-            part.unlink()  # the partial file no longer fits what the server holds
-            cause = "the server rejected the resume offset"
-            continue
+            if exc.code == 416 and part.exists():
+                part.unlink()  # the partial file no longer fits what the server holds
+                cause = "the server rejected the resume offset"
+                continue
+            if exc.code != 429 and exc.code < 500:
+                raise  # 401/403/404...: retrying cannot help
+            # 5xx and 429 are the server being busy for a while (a gateway
+            # timeout from a loaded weight host is common); wait and retry.
+            cause = f"HTTP {exc.code} {exc.reason}"
+            wait = max(wait, _retry_after(exc))
         except (OSError, HTTPException) as exc:  # timeouts, resets, IncompleteRead
             cause = f"{exc.__class__.__name__}: {exc}"
         if attempt < attempts:
             have = part.stat().st_size if part.exists() else 0
             print(f"[oh-my-mlip] {label}: interrupted at {have / 1e6:.1f} MB ({cause}); "
-                  f"resuming (attempt {attempt + 1} of {attempts})", file=sys.stderr, flush=True)
-            time.sleep(min(10, 2 * attempt))
+                  f"retrying in {wait:.0f} s (attempt {attempt + 1} of {attempts})",
+                  file=sys.stderr, flush=True)
+            time.sleep(wait)
     have = part.stat().st_size if part.exists() else 0
     raise DownloadError(
         f"download of {url} did not finish after {attempts} attempts ({cause}); "
         f"{have} bytes are kept at {part} and the next attempt resumes them"
     )
+
+
+def _retry_after(exc: HTTPError, cap: float = 120) -> float:
+    """Seconds the server asked us to wait (Retry-After in seconds), capped."""
+    value = exc.headers.get("Retry-After") if exc.headers is not None else None
+    try:
+        return min(cap, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _once(url: str, part: Path, label: str, size: int | None, timeout: float) -> bool:
