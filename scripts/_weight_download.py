@@ -65,7 +65,7 @@ def download(url: str, dest: Path, *, size: int | None = None, sha256: str | Non
                     total = have + int(declared)
             done, last = have, time.time()
             with open(part, "ab" if have else "wb") as fh:
-                while chunk := resp.read(1 << 20):
+                while chunk := resp.read1(1 << 16):
                     fh.write(chunk)
                     done += len(chunk)
                     if time.time() - last > 5:

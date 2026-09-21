@@ -81,3 +81,20 @@ def test_an_ordinary_failed_start_carries_no_oom_hint(monkeypatch):
     with pytest.raises(provider.WorkerError) as info:
         worker.start()
     assert "out-of-memory" not in str(info.value)
+
+
+def test_hub_progress_lines_reach_the_user_while_the_worker_loads(monkeypatch, capfd):
+    # a weight download inside the worker prints progress for minutes before the
+    # handshake; the drain used to keep it for error messages only
+    script = ("import sys\nsys.stderr.write('[oh-my-mlip] w.ckpt: 12.0 / 80.0 MB\\n')\n"
+              "sys.stderr.write('backend chatter\\n')\nsys.stderr.flush()\n"
+              "print('{\"ready\": true}', flush=True)\n[None for _ in sys.stdin]\n")
+    worker = _fake_worker(monkeypatch, script)
+    try:
+        worker.start()
+        worker._stderr_thread.join(timeout=0.5)
+    finally:
+        worker.shutdown()
+    err = capfd.readouterr().err
+    assert "[oh-my-mlip] w.ckpt: 12.0 / 80.0 MB" in err
+    assert "backend chatter" not in err

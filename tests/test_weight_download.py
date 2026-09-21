@@ -161,23 +161,25 @@ def test_pinned_checkpoints_match_hugging_face_lfs_records():
         47176032, "86dd3a804d78ca5d203ebf98747e8f16dff9713ba8950097ceb760b161e19907")
 
 
-def test_fetch_url_download_resumes_after_a_cut(tmp_path, server, capsys):
-    # the url path in oh_my_mlip/fetch.py (figshare-hosted weights) keeps its
-    # partial file in the staging dir and continues it on the next attempt
+def test_fetch_url_download_resumes_after_a_cut(tmp_path, server, capsys, monkeypatch):
+    # the url path in oh_my_mlip/fetch.py (figshare-hosted weights) continues a
+    # cut-off download with a Range request instead of starting over
     sys.path.insert(0, str(REPO_ROOT))
     from oh_my_mlip import fetch
 
+    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
     server.cut_at = 400_000
-    with pytest.raises(Exception):
-        fetch._download_to_temp(server.url, tmp_path)
-    part = tmp_path / ".ckpt.download"
-    assert 0 < part.stat().st_size < len(PAYLOAD)
-
     local = fetch._download_to_temp(server.url, tmp_path)
     assert local.read_bytes() == PAYLOAD
-    assert server.ranges[-1] == "bytes=400000-"
+    assert server.ranges == [None, "bytes=400000-"]
     assert capsys.readouterr().out == "", "progress must stay off stdout (MCP channel)"
 
+    # and a partial file left by an earlier process is continued, not replaced
+    part = tmp_path / ".ckpt.download"
+    part.write_bytes(PAYLOAD[:123_456])
+    local = fetch._download_to_temp(server.url, tmp_path)
+    assert local.read_bytes() == PAYLOAD
+    assert server.ranges[-1] == "bytes=123456-"
 
 def test_md5_is_checked_when_given(tmp_path, server):
     dest = tmp_path / "pkg.zip"
@@ -223,3 +225,40 @@ def test_nequip_package_records_match_zenodo():
         "NequIP-OAM-L-0.1.nequip.zip": ("67144367c710a70a53a8e21acf331980", 78464590),
         "Allegro-OAM-L-0.1.nequip.zip": ("0db7f9b3c3a62e74d78b3fcf2973c462", 80738705),
     }
+
+
+def test_fetch_download_gives_up_on_a_stalled_connection_and_resumes(tmp_path, server, monkeypatch):
+    # a server that sends part of the body and then goes silent used to hang the
+    # read forever: no timeout, no error, no chance to resume
+    sys.path.insert(0, str(REPO_ROOT))
+    from oh_my_mlip import fetch
+
+    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
+    release = threading.Event()
+    original = server.httpd.RequestHandlerClass.do_GET
+
+    def stall_first(handler):
+        if handler.headers.get("Range") is None and not release.is_set():
+            release.set()
+            handler.send_response(200)
+            handler.send_header("Content-Length", str(len(PAYLOAD)))
+            handler.end_headers()
+            handler.wfile.write(PAYLOAD[:200_000])
+            handler.wfile.flush()
+            threading.Event().wait(3)  # silent, connection still open
+            return
+        original(handler)
+
+    monkeypatch.setattr(server.httpd.RequestHandlerClass, "do_GET", stall_first)
+    local = fetch._download_to_temp(server.url, tmp_path, timeout=0.5)
+    assert local.read_bytes() == PAYLOAD
+    assert server.ranges[-1] == "bytes=200000-"
+
+
+def test_fetch_download_keeps_the_partial_file_when_every_attempt_fails(tmp_path, server, monkeypatch):
+    sys.path.insert(0, str(REPO_ROOT))
+    from oh_my_mlip import fetch
+
+    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
+    original = server.httpd.RequestHandlerClass.do_GET
+

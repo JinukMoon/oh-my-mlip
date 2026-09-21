@@ -19,12 +19,14 @@ module imports on a host without them (the unit tests rely on that).
 """
 from __future__ import annotations
 
+import collections
 import os
 import re
 import shutil
 import subprocess
 import sys
 import time
+from http.client import HTTPException
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlparse
@@ -336,12 +338,22 @@ def _materialize_by_name_weights(spec: dict, targets: list[Path]) -> None:
     # argv[0] of "python3"/"python" must resolve to THIS env's interpreter, not PATH
     if cmd and cmd[0] in ("python3", "python"):
         cmd[0] = sys.executable
-    proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "").strip()
+    # Stream the command's output to stderr as it runs: preparing a large
+    # checkpoint can take many minutes, and captured output left the user
+    # looking at nothing. stdout stays clean (it may be a JSON-RPC channel).
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, env=env)
+    tail: collections.deque = collections.deque(maxlen=40)
+    for line in proc.stdout:
+        line = line.rstrip("\n")
+        tail.append(line)
+        print(f"[oh-my-mlip] {line}", file=sys.stderr, flush=True)
+    returncode = proc.wait()
+    if returncode != 0:
+        detail = "\n".join(tail).strip()
         raise FetchError(
             f"{spec['model']}/{spec['version']}: weight fetch command failed "
-            f"with exit code {proc.returncode}: {' '.join(cmd)}\n{detail}"
+            f"with exit code {returncode}: {' '.join(cmd)}\n{detail}"
         )
 
 
@@ -384,56 +396,75 @@ def _normalise_download_url(url: str) -> str:
     return url
 
 
-def _download_to_temp(url: str, directory: Path) -> Path:
+def _download_to_temp(url: str, directory: Path, *, timeout: float = 60,
+                      attempts: int = 5) -> Path:
     """Download `url` into `directory`, resuming what an earlier attempt left.
 
-    Some weight hosts serve a few KiB/s, so a large artifact can take longer than
-    a job or a shell session lives. The partial file stays in the staging
-    directory and the next call continues it with an HTTP Range request (a
-    server that ignores Range gets a fresh download). Progress goes to stderr:
-    stdout may be a JSON-RPC channel."""
+    Some weight hosts serve a few KiB/s and drop or stall connections, so a
+    large artifact can outlive a job or a shell session. Every read has a
+    `timeout`; a stalled, reset or cut-off connection is retried with an HTTP
+    Range request up to `attempts` times in this call, and the partial file stays
+    in the staging directory so the next call continues it (a server that
+    ignores Range gets a fresh download). Progress goes to stderr: stdout may be
+    a JSON-RPC channel."""
     directory.mkdir(parents=True, exist_ok=True)
     parsed_name = Path(urlparse(url).path).name or "weights"
     tmp = directory / f".{parsed_name}.download"
+    cause = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            if _download_once(url, tmp, parsed_name, timeout):
+                break
+            cause = "the connection closed before the declared length"
+        except HTTPError as exc:
+            if exc.code != 416 or not tmp.exists():
+                raise
+            tmp.unlink()  # the partial file no longer fits what the server holds
+            cause = "the server rejected the resume offset"
+            continue
+        except (OSError, HTTPException) as exc:  # timeouts, resets, IncompleteRead
+            cause = f"{exc.__class__.__name__}: {exc}"
+        have = tmp.stat().st_size if tmp.exists() else 0
+        if attempt < attempts:
+            print(f"[oh-my-mlip] {parsed_name}: interrupted at {have / 1e6:.1f} MB ({cause}); "
+                  f"resuming (attempt {attempt + 1} of {attempts})", file=sys.stderr, flush=True)
+            time.sleep(min(30, 2 * attempt))
+    else:
+        have = tmp.stat().st_size if tmp.exists() else 0
+        raise FetchError(
+            f"download of {url} did not finish after {attempts} attempts ({cause}); "
+            f"{have} bytes are kept at {tmp} and the next attempt resumes them"
+        )
+    if tmp.stat().st_size == 0:
+        tmp.unlink(missing_ok=True)
+        raise FetchError(f"downloaded empty weight artifact from {url}")
+    return tmp
+
+
+def _download_once(url: str, tmp: Path, label: str, timeout: float) -> bool:
+    """One request, appended to `tmp`. True when the file is now complete (its
+    size equals the declared length, or no length was declared)."""
     have = tmp.stat().st_size if tmp.exists() else 0
     headers = {"User-Agent": "oh-my-mlip/0.1"}
     if have:
         headers["Range"] = f"bytes={have}-"
-    try:
-        response = urlopen(Request(url, headers=headers))
-    except HTTPError as exc:
-        if exc.code != 416 or not have:
-            raise
-        tmp.unlink()  # the partial file no longer fits what the server holds
-        return _download_to_temp(url, directory)
-    with response:
+    with urlopen(Request(url, headers=headers), timeout=timeout) as response:
         if have and getattr(response, "status", None) != 206:
             have = 0
         declared = response.headers.get("Content-Length")
         total = have + int(declared) if declared and declared.isdigit() else None
         if have:
-            print(f"[oh-my-mlip] resuming {url} at {have / 1e6:.1f} MB", file=sys.stderr, flush=True)
+            print(f"[oh-my-mlip] {label}: resuming at {have / 1e6:.1f} MB", file=sys.stderr, flush=True)
         done, last = have, time.monotonic()
         with open(tmp, "ab" if have else "wb") as fh:
-            while chunk := response.read(1 << 20):
+            while chunk := response.read1(1 << 16):
                 fh.write(chunk)
                 done += len(chunk)
                 if time.monotonic() - last > 10:
                     shown = f" / {total / 1e6:.1f}" if total else ""
-                    print(f"[oh-my-mlip] {parsed_name}: {done / 1e6:.1f}{shown} MB",
-                          file=sys.stderr, flush=True)
+                    print(f"[oh-my-mlip] {label}: {done / 1e6:.1f}{shown} MB", file=sys.stderr, flush=True)
                     last = time.monotonic()
-    got = tmp.stat().st_size
-    if total is not None and got != total:
-        # A connection closed early ends the read loop without an error.
-        raise FetchError(
-            f"download of {url} stopped at {got} of {total} bytes; the partial file "
-            f"is kept at {tmp} and the next attempt resumes it"
-        )
-    if got == 0:
-        tmp.unlink(missing_ok=True)
-        raise FetchError(f"downloaded empty weight artifact from {url}")
-    return tmp
+    return total is None or tmp.stat().st_size == total
 
 
 def _install_downloaded_artifact(local: Path, targets: list[Path], root: Path) -> None:

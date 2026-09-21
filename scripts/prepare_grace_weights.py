@@ -105,7 +105,7 @@ def _download_resumable(url: str, dest: Path, total: int) -> None:
             have = 0
         done, last = have, time.time()
         with open(dest, "ab" if have else "wb") as fh:
-            while chunk := resp.read(1 << 20):
+            while chunk := resp.read1(1 << 16):
                 fh.write(chunk)
                 done += len(chunk)
                 if time.time() - last > 5:

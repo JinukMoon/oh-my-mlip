@@ -20,6 +20,7 @@ import json
 import re
 import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Any, Iterable
@@ -400,7 +401,12 @@ class Worker:
         def _drain() -> None:
             try:
                 for line in stream:
-                    self._stderr_lines.append(line.rstrip("\n"))
+                    line = line.rstrip("\n")
+                    self._stderr_lines.append(line)
+                    if line.startswith("[oh-my-mlip]"):
+                        # the hub's own progress (weight downloads, prepare
+                        # steps) is for the user now, not for an error later
+                        print(line, file=sys.stderr, flush=True)
             except Exception:  # the pipe closes when the worker exits
                 pass
 
