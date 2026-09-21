@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _weight_download import download, is_complete  # noqa: E402
+from _weight_download import download_first_available, is_complete  # noqa: E402
 
 # (nequip.net URI, registry version name, extra nequip-compile args,
 #  zenodo package file name, zenodo md5, zenodo size). nequip.net resolves each
@@ -29,8 +29,17 @@ from _weight_download import download, is_complete  # noqa: E402
 # values. The package is downloaded by this script (resumable, md5-checked) and
 # compiled from the local file: nequip-compile's own download of the URI cannot
 # resume, and zenodo can be slow enough for it to break partway.
-ZENODO = "https://zenodo.org/api/records/{record}/files/{name}/content"
-RECORD = {"nequip": 18775904, "allegro": 16980200}
+#
+# Sources, tried in order and all held to the same size and md5:
+#  1. Zenodo record 10.5281/zenodo.18775904 ("NequIP & Allegro Foundation
+#     Potentials", CC-BY-4.0, Kavanagh, S. R.; MIR Group @ Harvard), which holds
+#     all three packages;
+#  2. a byte-identical copy on Hugging Face, used only when Zenodo fails or
+#     stays below MIN_RATE (the license permits redistribution with attribution;
+#     the mirror's model card credits the authors and the record).
+ZENODO = "https://zenodo.org/api/records/18775904/files/{name}/content"
+MIRROR = "https://huggingface.co/JinukMoon/oh-my-mlip-mirror-nequip/resolve/main/{name}"
+MIN_RATE = 50_000  # bytes/s averaged over a minute; below this, try the mirror
 MODELS = {
     "nequip": [
         ("nequip.net:mir-group/NequIP-OAM-XL:0.1", "NequIP-OAM-XL", ["--modifiers", "enable_OpenEquivariance"],
@@ -122,10 +131,13 @@ def main(argv: list[str] | None = None) -> int:
         if source is None:
             package = target_root / zip_name
             if not args.dry_run and not is_complete(package, size):
-                url = ZENODO.format(record=RECORD[env_name], name=zip_name)
+                sources = [("Zenodo", ZENODO.format(name=zip_name)),
+                           ("the oh-my-mlip mirror on Hugging Face", MIRROR.format(name=zip_name))]
                 print(f"  downloading {zip_name} -> {package}", flush=True)
                 try:
-                    download(url, package, size=size, md5=md5, label=version)
+                    used = download_first_available(sources, package, size=size, md5=md5,
+                                                    label=version, min_rate=MIN_RATE)
+                    print(f"  {version}: package from {used}", flush=True)
                 except Exception as exc:  # noqa: BLE001 - reported, the other models still run
                     print(f"  {version}: download failed ({exc}); rerun to resume it, or set "
                           f"OMM_NEQUIP_ZIP_DIR to a directory holding {zip_name}", file=sys.stderr)

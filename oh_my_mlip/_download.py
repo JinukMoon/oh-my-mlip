@@ -24,20 +24,28 @@ class DownloadError(RuntimeError):
     """The transfer did not complete; the partial file is kept for a resume."""
 
 
+class TooSlow(DownloadError):
+    """The host delivered less than the caller's minimum rate; not retried,
+    since the same host rarely gets faster within minutes."""
+
+
 def download_resumable(url: str, part: Path, *, label: str, size: int | None = None,
-                       timeout: float = 60, attempts: int = 5) -> None:
+                       timeout: float = 60, attempts: int = 5,
+                       min_rate: float | None = None, rate_window: float = 60) -> None:
     """Grow `part` until it holds all of `url`.
 
     Complete means `size` bytes when the caller knows the size, otherwise the
     length the server declares. Raises DownloadError after `attempts` failed
     tries. 5xx and 429 answers are retried (honouring Retry-After up to two
-    minutes); other HTTP errors, such as 403 or 404, propagate at once."""
+    minutes); other HTTP errors, such as 403 or 404, propagate at once. With
+    `min_rate` (bytes/s), a transfer that averages less over `rate_window`
+    seconds raises TooSlow at once, so a caller can switch to another source."""
     part.parent.mkdir(parents=True, exist_ok=True)
     cause = ""
     for attempt in range(1, attempts + 1):
         wait = min(10, 2 * attempt)
         try:
-            if _once(url, part, label, size, timeout):
+            if _once(url, part, label, size, timeout, min_rate, rate_window):
                 return
             cause = "the connection closed before the end of the file"
         except HTTPError as exc:
@@ -75,7 +83,8 @@ def _retry_after(exc: HTTPError, cap: float = 120) -> float:
         return 0.0
 
 
-def _once(url: str, part: Path, label: str, size: int | None, timeout: float) -> bool:
+def _once(url: str, part: Path, label: str, size: int | None, timeout: float,
+          min_rate: float | None = None, rate_window: float = 60) -> bool:
     """One request appended to `part`; True when `part` is now complete."""
     have = part.stat().st_size if part.exists() else 0
     if size and have > size:
@@ -94,10 +103,19 @@ def _once(url: str, part: Path, label: str, size: int | None, timeout: float) ->
         if have:
             print(f"[oh-my-mlip] {label}: resuming at {have / 1e6:.1f} MB", file=sys.stderr, flush=True)
         done, last = have, time.monotonic()
+        window_start, window_bytes = last, 0
         with open(part, "ab" if have else "wb") as fh:
             while chunk := response.read1(1 << 16):
                 fh.write(chunk)
                 done += len(chunk)
+                window_bytes += len(chunk)
+                now = time.monotonic()
+                if min_rate and now - window_start >= rate_window:
+                    rate = window_bytes / (now - window_start)
+                    if rate < min_rate:
+                        raise TooSlow(f"{url} delivered {rate / 1e3:.1f} kB/s over "
+                                      f"{now - window_start:.0f} s, below {min_rate / 1e3:.0f} kB/s")
+                    window_start, window_bytes = now, 0
                 if time.monotonic() - last > 10:
                     shown = f" / {total / 1e6:.1f}" if total else ""
                     print(f"[oh-my-mlip] {label}: {done / 1e6:.1f}{shown} MB", file=sys.stderr, flush=True)

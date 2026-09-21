@@ -229,7 +229,8 @@ def test_nequip_compiles_from_a_package_it_downloaded_itself(tmp_path, server, m
     md5 = hashlib.md5(PAYLOAD).hexdigest()
     monkeypatch.setitem(mod.MODELS, "allegro", [
         ("nequip.net:x/Allegro-T:0.1", "Allegro-T", [], "Allegro-T.nequip.zip", md5, len(PAYLOAD))])
-    monkeypatch.setattr(mod, "ZENODO", server.url + "?{record}{name}")
+    monkeypatch.setattr(mod, "ZENODO", server.url + "?{name}")
+    monkeypatch.setattr(mod, "MIRROR", "http://127.0.0.1:9/unused?{name}")
     monkeypatch.setattr(mod, "host_arch", lambda: "sm00")
     target_root = tmp_path / "models" / "allegro"
     (target_root).mkdir(parents=True)
@@ -344,3 +345,65 @@ def test_retry_after_is_capped():
     headers["Retry-After"] = "86400"
     exc = HTTPError("u", 503, "busy", headers, None)
     assert wd._download._retry_after(exc) == 120
+
+
+
+def _broken(code):
+    def handler(h):
+        h.send_response(code)
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+    return handler
+
+
+def test_a_failing_official_host_hands_over_to_the_mirror(tmp_path, monkeypatch):
+    official, mirror = _Server(), _Server()
+    try:
+        official.cut_at = 250_000  # delivers a quarter, then is down for good
+        first = official.httpd.RequestHandlerClass.do_GET
+        calls = []
+
+        def cut_then_504(h):
+            calls.append(1)
+            (first if len(calls) == 1 else _broken(504))(h)
+
+        monkeypatch.setattr(official.httpd.RequestHandlerClass, "do_GET", cut_then_504)
+        dest = tmp_path / "pkg.zip"
+        used = wd.download_first_available(
+            [("Zenodo", official.url), ("mirror", mirror.url)], dest,
+            size=len(PAYLOAD), md5=hashlib.md5(PAYLOAD).hexdigest(), label="T")
+        assert used == "mirror"
+        assert dest.read_bytes() == PAYLOAD
+        assert mirror.ranges == ["bytes=250000-"], "the mirror resumes the official host's partial file"
+    finally:
+        official.close()
+        mirror.close()
+
+
+def test_a_mirror_serving_other_bytes_is_rejected(tmp_path, monkeypatch):
+    official, mirror = _Server(), _Server()
+    try:
+        monkeypatch.setattr(official.httpd.RequestHandlerClass, "do_GET", _broken(404))
+        dest = tmp_path / "pkg.zip"
+        with pytest.raises(wd.DownloadError, match="md5"):
+            wd.download_first_available(
+                [("Zenodo", official.url), ("mirror", mirror.url)], dest,
+                size=len(PAYLOAD), md5="0" * 32, label="T")
+        assert not dest.exists()
+    finally:
+        official.close()
+        mirror.close()
+
+
+def test_a_host_below_the_minimum_rate_is_given_up_at_once(tmp_path, server):
+    calls_before = len(server.ranges)
+    with pytest.raises(wd._download.TooSlow):
+        wd._download.download_resumable(server.url, tmp_path / ".x.download", label="T",
+                                        min_rate=1e15, rate_window=0)
+    assert len(server.ranges) - calls_before == 1, "a slow host is not retried"
+
+
+def test_nequip_packages_come_from_the_cited_record_then_the_mirror():
+    mod = _load("prepare_nequip_weights")
+    assert "records/18775904/" in mod.ZENODO
+    assert mod.MIRROR.startswith("https://huggingface.co/JinukMoon/oh-my-mlip-mirror-nequip/resolve/main/")

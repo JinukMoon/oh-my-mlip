@@ -1,9 +1,10 @@
 # Model & framework licenses
 
 `oh-my-mlip` is an **MIT-licensed installer / orchestrator**. It does **not**
-redistribute any framework's source code or model weights — every framework is
-installed from its own official channel (PyPI / GitHub / Hugging Face / Zenodo)
-and every weight is downloaded from its upstream host. **Each one stays under its
+redistribute any framework's source code — every framework is installed from its
+own official channel (PyPI / GitHub / Hugging Face / Zenodo) — and every weight
+is downloaded from its upstream host first. The one exception is a fallback
+mirror for a few CC-BY-4.0 weights, described [below](#fallback-mirror). **Each one stays under its
 own upstream license, which you must comply with** — especially for commercial
 use.
 
@@ -69,9 +70,20 @@ Weights licenses are taken from the Hugging Face license tag of the repository t
 - **Training-data terms ≠ model terms.** CHGNet (MPtrj) and others were trained on
   datasets with their own terms of use; that constrains re-training/redistributing
   the *data*, not normal use of the released model.
-- **`oh-my-mlip` never redistributes weights or framework code** — gated weights
-  (UMA, eSEN) are fetched on first run with *your* token after *you* accept the
-  upstream license. See [gated_models.md](gated_models.md).
+- **`oh-my-mlip` never redistributes framework code or gated weights** — gated
+  weights (UMA, eSEN) are fetched on first run with *your* token after *you*
+  accept the upstream license. See [gated_models.md](gated_models.md).
+
+## Fallback mirror
+
+| Files | Official source | Mirror | Why it is allowed |
+|---|---|---|---|
+| `NequIP-OAM-XL-0.1.nequip.zip`, `NequIP-OAM-L-0.1.nequip.zip`, `Allegro-OAM-L-0.1.nequip.zip` | Zenodo [10.5281/zenodo.18775904](https://doi.org/10.5281/zenodo.18775904) ("NequIP & Allegro Foundation Potentials", Kavanagh, S. R.; MIR Group @ Harvard) | [JinukMoon/oh-my-mlip-mirror-nequip](https://huggingface.co/JinukMoon/oh-my-mlip-mirror-nequip) | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) permits redistribution with attribution; the mirror's model card credits the authors and the record. |
+
+The files are byte-identical copies, unchanged. `scripts/prepare_nequip_weights.py`
+downloads from Zenodo first and uses the mirror only when Zenodo fails or stays
+slow; whichever source delivers the file, it must match Zenodo's published size
+and MD5, and the log names the source used. No other weights are mirrored.
 
 ## Quick reference: commercial use
 

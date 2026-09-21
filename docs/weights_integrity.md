@@ -6,9 +6,12 @@ of the exact checkpoint that validation ran against**: `weights_sha256` (+
 the weight file they fetched from an official channel is **byte-identical** to the
 one we validated — not a silently re-uploaded or diverged file.
 
-This repo never hosts weights. Every checkpoint comes from its official channel
-(HF, Zenodo, figshare, GitHub release). The fingerprint is the bridge between
-"the official source" and "the thing oh-my-mlip validated."
+Every checkpoint comes from its official channel (HF, Zenodo, figshare, GitHub
+release). For CC-BY-4.0 weights whose official host is unreliable, a
+byte-identical mirror is used only as a fallback, and it is held to the same
+recorded size and checksum (see
+[model licenses](model_licenses.md#fallback-mirror)). The fingerprint is the
+bridge between "the official source" and "the thing oh-my-mlip validated."
 
 ## What the check means
 

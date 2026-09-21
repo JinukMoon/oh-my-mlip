@@ -75,5 +75,7 @@ Each guide ends with the commands to run a workflow yourself.
   and verified builds are recorded as exact lock files in `envs/locks/`.
 - **Every procedure is a file.** Job scripts, training commands and reports
   are written to disk before they run, so you can rerun them without an agent.
-- **Weights are never hosted here.** They come from each framework's official
-  channel; gated models use your own Hugging Face login.
+- **Weights come from each framework's official channel**; gated models use
+  your own Hugging Face login. For CC-BY-4.0 weights whose official host is
+  unreliable, a byte-identical, checksum-verified mirror is used only as a
+  fallback (see [model licenses](model_licenses.md#fallback-mirror)).
