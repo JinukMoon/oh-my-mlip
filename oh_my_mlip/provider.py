@@ -406,7 +406,7 @@ class Worker:
             while not stop.wait(interval):
                 grown = _tree_bytes(caches) - baseline
                 detail = (f"{grown / 1e6:.0f} MB downloaded into the model caches so far"
-                          if grown > 0 else "no download seen in the model caches")
+                          if grown > 0 else "no download seen in the model caches yet: connecting or preparing")
                 print(f"[oh-my-mlip] {self.model}: still loading after "
                       f"{time.monotonic() - started:.0f} s ({detail})", file=sys.stderr, flush=True)
 
