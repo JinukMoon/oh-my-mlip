@@ -98,3 +98,32 @@ def test_hub_progress_lines_reach_the_user_while_the_worker_loads(monkeypatch, c
     err = capfd.readouterr().err
     assert "[oh-my-mlip] w.ckpt: 12.0 / 80.0 MB" in err
     assert "backend chatter" not in err
+
+
+def test_a_slow_load_reports_that_it_is_still_loading(monkeypatch, tmp_path, capfd):
+    """Frameworks download their own weights before the handshake; a 2.9 GB
+    checkpoint left the user looking at nothing for half an hour."""
+    cache = tmp_path / "fairchem"
+    cache.mkdir()
+    monkeypatch.setattr(provider, "_model_cache_dirs", lambda: [cache])
+    monkeypatch.setattr(provider, "HEARTBEAT_SECONDS", 0.2)
+    script = (f"import time\nopen({str(cache / 'w.pt')!r}, 'wb').write(b'x' * 3_000_000)\n"
+              "time.sleep(1.0)\nprint('{\"ready\": true}', flush=True)\n"
+              "import sys\n[None for _ in sys.stdin]\n")
+    worker = _fake_worker(monkeypatch, script)
+    try:
+        worker.start()
+    finally:
+        worker.shutdown()
+    err = capfd.readouterr().err
+    assert "[oh-my-mlip] Fake: still loading after" in err
+    assert "3 MB downloaded into the model caches so far" in err
+
+
+def test_model_cache_dirs_count_nested_directories_once(monkeypatch, tmp_path):
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hf" / "hub"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    dirs = provider._model_cache_dirs()
+    assert (tmp_path / "hf").resolve() in dirs
+    assert (tmp_path / "hf" / "hub").resolve() not in dirs

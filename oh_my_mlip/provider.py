@@ -22,6 +22,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -112,6 +113,35 @@ def _killed_hint(model: str, returncode: int | None) -> str:
         "`journalctl -k` for 'Out of memory'). Free memory, run on a machine with "
         "more RAM, or choose a smaller variant of the same family."
     )
+
+
+HEARTBEAT_SECONDS = 30.0  # how often a loading worker reports that it is still loading
+
+
+def _model_cache_dirs() -> list[Path]:
+    """Directories frameworks download weights into: env.sh's overrides when set,
+    else each framework's native cache under ~/.cache."""
+    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    dirs = [os.environ.get(var) for var in
+            ("HF_HOME", "HF_HUB_CACHE", "FAIRCHEM_CACHE_DIR", "TORCH_HOME", "CACHED_PATH_CACHE_ROOT")]
+    dirs += [str(base / name) for name in
+             ("huggingface", "fairchem", "torch", "cached_path", "mace", "matris", "tace",
+              "eqnorm", "grace", "mattersim")]
+    paths = {Path(d).expanduser().resolve() for d in dirs if d}
+    # a directory inside another listed one (HF_HUB_CACHE in HF_HOME) is counted once
+    return sorted(p for p in paths if not any(q != p and q in p.parents for q in paths))
+
+
+def _tree_bytes(roots: list[Path]) -> int:
+    total = 0
+    for root in roots:
+        for dirpath, _dirs, files in os.walk(root):
+            for name in files:
+                try:
+                    total += os.lstat(os.path.join(dirpath, name)).st_size
+                except OSError:
+                    pass
+    return total
 
 
 class DeviceUnavailableError(RuntimeError):
@@ -332,7 +362,11 @@ class Worker:
                 _env_not_installed_msg(self.model, self.spec["env"], self._python_exe)
             ) from exc
         self._start_stderr_drain()
-        line = self._proc.stdout.readline()
+        stop_heartbeat = self._start_load_heartbeat()
+        try:
+            line = self._proc.stdout.readline()
+        finally:
+            stop_heartbeat.set()
         if not line:
             err = self._read_stderr()
             code = self._exit_code()
@@ -353,6 +387,31 @@ class Worker:
                 f"{handshake.get('error')}"
             )
         return self
+
+    def _start_load_heartbeat(self, interval: float | None = None) -> threading.Event:
+        """Say every `interval` seconds that the worker is still loading.
+
+        Until the handshake the user sees nothing: most frameworks download
+        their weights themselves on first use (fairchem, mace, orb, ...), outside
+        the hub's own progress output, and a multi-GB checkpoint can take many
+        minutes. The heartbeat reports the elapsed time and how much the model
+        caches have grown, so a download reads as progress rather than a hang."""
+        interval = HEARTBEAT_SECONDS if interval is None else interval
+        stop = threading.Event()
+        caches = _model_cache_dirs()
+        baseline = _tree_bytes(caches)
+        started = time.monotonic()
+
+        def _beat() -> None:
+            while not stop.wait(interval):
+                grown = _tree_bytes(caches) - baseline
+                detail = (f"{grown / 1e6:.0f} MB downloaded into the model caches so far"
+                          if grown > 0 else "no download seen in the model caches")
+                print(f"[oh-my-mlip] {self.model}: still loading after "
+                      f"{time.monotonic() - started:.0f} s ({detail})", file=sys.stderr, flush=True)
+
+        threading.Thread(target=_beat, daemon=True, name=f"omm-heartbeat-{self.model}").start()
+        return stop
 
     def _exit_code(self) -> int | None:
         """The child's exit status once its stdout has closed, or None if it is
