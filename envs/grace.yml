@@ -22,6 +22,7 @@
 name: grace
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   - python=3.11.11
   - pip

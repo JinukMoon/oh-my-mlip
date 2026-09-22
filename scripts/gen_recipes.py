@@ -83,7 +83,11 @@ def pin_block(env: str) -> list[str]:
     d = yaml.safe_load(ymlp.read_text())
     conda = [x for x in d["dependencies"] if isinstance(x, str)]
     pipsec = next((x["pip"] for x in d["dependencies"] if isinstance(x, dict)), [])
-    channels = " ".join(f"-c {c}" for c in d.get("channels", []))
+    # `nodefaults` is an environment-file keyword; on the command line the same
+    # thing is --override-channels.
+    listed = d.get("channels", [])
+    channels = " ".join((["--override-channels"] if "nodefaults" in listed else [])
+                        + [f"-c {c}" for c in listed if c != "nodefaults"])
     idx = [p for p in pipsec if p.startswith("-")]
     pkgs = [p for p in pipsec if not p.startswith("-")]
 

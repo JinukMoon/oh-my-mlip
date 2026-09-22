@@ -301,7 +301,7 @@ if command -v nvcc >/dev/null 2>&1; then
   NVCC_OK=1
 fi
 
-echo "oh-my-mlip install (fallback / build-from-recipe)"
+echo "oh-my-mlip install (build from recipe)"
 echo "  OH_MY_MLIP_HOME = $OH_MY_MLIP_HOME"
 echo "  recipes dir     = $ENVS_DIR"
 echo "  targets         = ${TARGETS[*]}"
@@ -470,6 +470,10 @@ install_one() {
         return 1
       fi
       echo "  creating env '$env_name' from lock $lock_conda + $lock_pip ..."
+      if grep -q "repo.anaconda.com" "$lock_conda"; then
+        echo "  note: this lock fetches $(grep -c "repo.anaconda.com" "$lock_conda") package(s) from Anaconda's defaults channel" >&2
+        echo "        (repo.anaconda.com), whose terms of service apply; the recipe build does not use it." >&2
+      fi
       "$CONDA_BIN" create --yes --prefix "$prefix" --file "$lock_conda" || {
         echo "  conda create from lock FAILED for '$env_name' — no sentinel written." >&2
         return 1

@@ -15,7 +15,7 @@ CONDA_BIN="$(command -v conda || true)"
 PIP="$PREFIX/bin/pip"
 
 echo "== equflash sidecar [0] base env (python 3.12.13 + cuda-nvcc 12.6 + ase) =="
-"$CONDA_BIN" create --yes --prefix "$PREFIX" -c conda-forge -c nvidia \
+"$CONDA_BIN" create --yes --prefix "$PREFIX" --override-channels -c conda-forge -c nvidia \
   python=3.12.13 "cuda-nvcc=12.6.*" ase pip
 
 echo "== equflash sidecar [1] pass 1: torch + PyG + cueq + GGNN =="

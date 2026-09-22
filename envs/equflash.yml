@@ -41,6 +41,7 @@ name: equflash
 channels:
   - conda-forge
   - nvidia
+  - nodefaults
 dependencies:
   - python=3.12.13
   - pip

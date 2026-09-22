@@ -21,6 +21,7 @@ name: tace
 channels:
   - conda-forge
   - nvidia
+  - nodefaults
 dependencies:
   - python=3.11.15
   - pip

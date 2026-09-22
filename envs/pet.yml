@@ -22,6 +22,7 @@ name: pet
 channels:
   - conda-forge
   - nvidia
+  - nodefaults
 dependencies:
   - python=3.11.14
   - pip

@@ -14,7 +14,7 @@ PIP="$PREFIX/bin/pip"
 SHA="65f8ea9330459e0106867d1c694aec4139c6cb19"
 
 echo "== alphanet [0] base env (python 3.11.13 + cuda-nvcc 12.1 + ase) =="
-"$CONDA_BIN" create --yes --prefix "$PREFIX" -c conda-forge -c nvidia \
+"$CONDA_BIN" create --yes --prefix "$PREFIX" --override-channels -c conda-forge -c nvidia \
   python=3.11.13 "cuda-nvcc=12.1.*" ase pip || { echo CREATE_FAILED; exit 11; }
 
 echo "== alphanet [1] torch 2.1.2+cu121 stack + lightning + numpy<2 =="

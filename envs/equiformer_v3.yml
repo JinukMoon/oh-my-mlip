@@ -28,6 +28,7 @@ name: equiformer_v3
 channels:
   - conda-forge
   - nvidia
+  - nodefaults
 dependencies:
   - python=3.11.15
   - pip

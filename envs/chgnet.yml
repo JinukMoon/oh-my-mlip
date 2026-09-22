@@ -23,6 +23,7 @@ name: chgnet
 channels:
   - conda-forge
   - nvidia
+  - nodefaults
 dependencies:
   - python=3.11.13
   - pip
