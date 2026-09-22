@@ -45,3 +45,22 @@ def test_no_new_lock_uses_the_defaults_channel():
     offending = {lock.name.split(".")[0] for lock in (ENVS / "locks").glob("*.conda.txt")
                  if "repo.anaconda.com" in lock.read_text()}
     assert offending <= LOCKS_PENDING_REGENERATION, sorted(offending - LOCKS_PENDING_REGENERATION)
+
+
+def test_locks_carry_the_build_tool_pins_their_recipe_declares():
+    """`pip freeze` hides pip/setuptools/wheel, so locks built from one dropped
+    the older setuptools several recipes pin on purpose (their framework imports
+    pkg_resources, removed in setuptools 81). A replay then installed conda's
+    newer setuptools alone and failed at import."""
+    import re
+    missing = []
+    for recipe in sorted(ENVS.glob("*.yml")):
+        pins = [line.strip().lstrip("- ").strip()
+                for line in recipe.read_text().splitlines()
+                if re.match(r"^\s*-\s*(setuptools|pip|wheel)==\S+$", line)]
+        lock = ENVS / "locks" / f"{recipe.stem}.pip.txt"
+        if not pins or not lock.is_file() or recipe.stem in LOCKS_PENDING_REGENERATION:
+            continue  # replaced wholesale by the regenerated lock
+        have = lock.read_text()
+        missing += [f"{lock.name}: {pin}" for pin in pins if pin not in have]
+    assert not missing, missing

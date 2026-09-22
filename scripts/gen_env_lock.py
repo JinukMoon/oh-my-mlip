@@ -3,7 +3,9 @@
 
 Inputs are the inventory files a setup_sweep --fresh-root cycle preserves:
   <inventory>/<env>.conda_explicit.txt   (conda list --explicit)
-  <inventory>/<env>.pip_freeze.txt       (pip freeze)
+  <inventory>/<env>.pip_freeze.txt       (pip freeze --all; a plain `pip freeze`
+                                         hides pip/setuptools/wheel, which the
+                                         recipe's own pins then supply)
 Outputs (consumed by `OMM_USE_LOCK=1 ./install.sh <env>`):
   envs/locks/<env>.conda.txt   the @EXPLICIT package URL list, verbatim
   envs/locks/<env>.pip.txt     index/find-links lines + every pip pin, installed
@@ -48,6 +50,33 @@ def index_lines(env: str, envs_dir: Path) -> list[str]:
     for line in found:
         line = "--find-links " + line[3:] if line.startswith("-f ") else line
         if line not in out:
+            out.append(line)
+    return out
+
+
+BUILD_TOOLS = ("setuptools", "pip", "wheel")
+
+
+def build_tool_pins(env: str, envs_dir: Path, already: list[str]) -> list[str]:
+    """Build-tool pins the recipe's pip block installs (setuptools / pip / wheel).
+
+    `pip freeze` hides these three unless it is run with --all, so a lock built
+    from a plain freeze silently dropped them. That matters: several recipes pin
+    an older setuptools on purpose because their framework imports
+    pkg_resources, which setuptools 81 removed, and conda supplies a newer one.
+    A replay then installed the conda setuptools with nothing on top and failed
+    at import (reported for uma: "No module named 'pkg_resources'")."""
+    recipe = envs_dir / f"{env}.yml"
+    if not recipe.is_file():
+        return []
+    have = {re.split(r"[=<>!\[ ]", line.strip(), 1)[0].lower() for line in already}
+    out = []
+    for raw in recipe.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("- "):
+            line = line[2:].strip()
+        m = re.match(r"^(setuptools|pip|wheel)==(\S+)$", line)
+        if m and m.group(1) not in have:
             out.append(line)
     return out
 
@@ -105,7 +134,11 @@ def main(argv: list[str] | None = None) -> int:
     ]
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / f"{args.env}.conda.txt").write_text("\n".join(header) + "\n" + conda_text, encoding="utf-8")
-    pip_lines = header + ["# installed with: pip install --no-deps -r <this file>"] + index_lines(args.env, REPO / "envs") + pins
+    # build tools first: a replay installs this file top to bottom with --no-deps,
+    # and a package that imports pkg_resources at install time needs them present.
+    tools = build_tool_pins(args.env, REPO / "envs", pins)
+    pip_lines = (header + ["# installed with: pip install --no-deps -r <this file>"]
+                 + index_lines(args.env, REPO / "envs") + tools + pins)
     (args.out_dir / f"{args.env}.pip.txt").write_text("\n".join(pip_lines) + "\n", encoding="utf-8")
     n_conda = sum(1 for line in conda_text.splitlines() if line.startswith("http"))
     print(f"{args.env}: conda {n_conda} packages, pip {len(pins)} pins -> {args.out_dir}")

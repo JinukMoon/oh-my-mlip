@@ -4,6 +4,7 @@
 # replay: OMM_USE_LOCK=1 ./install.sh mattersim
 # installed with: pip install --no-deps -r <this file>
 --extra-index-url https://download.pytorch.org/whl/cu124
+setuptools==75.8.0
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3
 aioitertools==0.13.0
