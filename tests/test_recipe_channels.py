@@ -13,14 +13,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENVS = REPO_ROOT / "envs"
 
-# Locks recorded before the recipes carried `nodefaults`: each still fetches
-# libffi and libglib from repo.anaconda.com and must be regenerated from a build
-# of the current recipe. Remove an env from this set once its lock is rebuilt;
-# no other lock may reference the defaults channel.
-LOCKS_PENDING_REGENERATION = {
-    "allegro", "alphanet", "chgnet", "deepmd", "eqnorm", "fairchemv1",
-    "mace", "nequip", "nequix", "orb", "sevennet", "uma",
-}
+# Locks that still reference the defaults channel and await regeneration from a
+# build of the current recipe. Empty since 2026-09-23, when the twelve locks
+# recorded before `nodefaults` were rebuilt; no lock may reference that channel.
+LOCKS_PENDING_REGENERATION: set[str] = set()
 
 
 def test_every_recipe_excludes_the_defaults_channel():
