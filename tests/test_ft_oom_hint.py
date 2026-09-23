@@ -52,3 +52,13 @@ def test_at_batch_size_one_the_hint_does_not_suggest_a_bigger_batch(tmp_path, ca
     ft_run.run_training(sh, batch_size=1)
     err = capfd.readouterr().err
     assert "already 1" in err and "for example 4" not in err
+
+
+def test_a_silent_grace_crash_after_the_xla_compile_names_jit_compile(tmp_path, capfd):
+    sh = _script(tmp_path, "echo 'I0000 device_compiler.h:188] Compiled cluster using XLA!' >&2\nkill -SEGV $$\n")
+    rc = ft_run.run_training(sh, batch_size=4, family="GRACE")
+    assert rc != 0
+    assert "--set jit_compile=false" in capfd.readouterr().err
+    # other families, or a crash with a traceback, get no such hint
+    ft_run.run_training(sh, batch_size=4, family="MACE")
+    assert "jit_compile" not in capfd.readouterr().err

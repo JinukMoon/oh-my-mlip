@@ -2797,13 +2797,13 @@ def main() -> int:
         return 0
 
     print(f"[ft_run] executing {sh_path}")
-    return run_training(sh_path, batch_size=ctx.batch_size)
+    return run_training(sh_path, batch_size=ctx.batch_size, family=family)
 
 
 _OOM_MARKERS = ("CUDA out of memory", "OutOfMemoryError", "RESOURCE_EXHAUSTED", "CUBLAS_STATUS_ALLOC_FAILED")
 
 
-def run_training(sh_path: Path, *, batch_size: int | None) -> int:
+def run_training(sh_path: Path, *, batch_size: int | None, family: str | None = None) -> int:
     """Run the generated script, passing its stderr straight through (raw
     chunks, so progress bars still redraw) while keeping the tail. A run that
     dies of GPU memory gets told which knob to turn: official batch sizes are
@@ -2823,6 +2823,12 @@ def run_training(sh_path: Path, *, batch_size: int | None) -> int:
         else:
             advice = "Rerun with a smaller --batch-size (for example 1 or 4), or on a GPU with more memory."
         print(f"[ft_run] training ran out of GPU memory with {current}{_gpu_total()}. {advice}", file=sys.stderr)
+    elif rc != 0 and family == "GRACE" and b"Compiled cluster using XLA" in tail and b"Traceback" not in tail:
+        # the process died inside the XLA-compiled train step, printing nothing:
+        # seen as signal 11 on a WSL host (RTX 4060 Ti, driver 610) with jit_compile on
+        print("[ft_run] GRACE training stopped right after XLA compiled the train step, with no "
+              "error message: XLA-compiled training crashed on this host. Rerun with "
+              "--set jit_compile=false (gracemaker's -nj).", file=sys.stderr)
     return rc
 
 
