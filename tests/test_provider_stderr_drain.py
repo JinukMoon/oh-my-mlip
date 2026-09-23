@@ -92,9 +92,13 @@ def test_hub_progress_lines_reach_the_user_while_the_worker_loads(monkeypatch, c
     worker = _fake_worker(monkeypatch, script)
     try:
         worker.start()
-        worker._stderr_thread.join(timeout=0.5)
     finally:
+        drain = worker._stderr_thread
         worker.shutdown()
+    # the worker has exited, so its stderr is closed and the drain ends on its
+    # own; a fixed short join raced the drain on a loaded machine
+    drain.join(timeout=30)
+    assert not drain.is_alive()
     err = capfd.readouterr().err
     assert "[oh-my-mlip] w.ckpt: 12.0 / 80.0 MB" in err
     assert "backend chatter" not in err
