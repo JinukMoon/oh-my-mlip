@@ -210,7 +210,8 @@ class Log:
 
     def __call__(self, msg: str) -> None:
         line = f"[distill_verify] {msg}"
-        print(line, flush=True)
+        # progress goes to stderr so that `--json` leaves stdout one JSON line
+        print(line, file=sys.stderr, flush=True)
         with open(self.path, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
 

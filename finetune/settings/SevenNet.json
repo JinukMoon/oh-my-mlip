@@ -4,7 +4,7 @@
   "entrypoint": "sevenn_preset fine_tune > input.yaml && sevenn train input.yaml",
   "stress": {
     "supported": true,
-    "how_enabled": "Via data.data_format_args if data contains stress; custom stress key is negated on ingest (dataload.py:343). Loss weight controlled by train.stress_weight in YAML config."
+    "how_enabled": "Via data.data_format_args if data contains stress; custom stress key is negated on ingest (dataload.py:343). Loss weight controlled by train.stress_loss_weight in YAML config."
   },
   "runnable_as_pinned": "yes",
   "settings": [
@@ -230,7 +230,7 @@
       "training_source": null
     },
     {
-      "name": "train.lr",
+      "name": "train.optim_param.lr",
       "where": "config_key",
       "meaning": "Learning rate for optimizer",
       "type": "float",
@@ -247,24 +247,7 @@
       "training_source": null
     },
     {
-      "name": "train.energy_weight",
-      "where": "config_key",
-      "meaning": "Loss weight for energy term",
-      "type": "float",
-      "category": "loss",
-      "knob": "energy_weight",
-      "related_knob": null,
-      "default": null,
-      "default_required": false,
-      "default_note": "not in fine_tune.yaml preset; likely determined by loss function configuration",
-      "default_source": null,
-      "ft_value": null,
-      "ft_source": null,
-      "training_value": null,
-      "training_source": null
-    },
-    {
-      "name": "train.force_weight",
+      "name": "train.force_loss_weight",
       "where": "config_key",
       "meaning": "Loss weight for forces term",
       "type": "float",
@@ -281,7 +264,7 @@
       "training_source": null
     },
     {
-      "name": "train.stress_weight",
+      "name": "train.stress_loss_weight",
       "where": "config_key",
       "meaning": "Loss weight for stress/virial term",
       "type": "float",

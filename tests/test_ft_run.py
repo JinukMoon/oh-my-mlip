@@ -553,8 +553,22 @@ def test_designated_checkpoint_glob_matches_the_builders_own_layout(tmp_path):
 
 
 # ── M9: SevenNet emit is hermetic; the preset is read by a prestage in-env ────
-def test_sevennet_builder_defers_preset_to_prestage_and_seeds(tmp_path):
+def _fake_sevenn(monkeypatch, checkpoint_config: dict) -> None:
+    """The prestage runs in the SevenNet env and reads the checkpoint's own
+    config through sevenn; the test env has no sevenn, so provide both calls."""
+    import types
+    pkg, util, const = types.ModuleType("sevenn"), types.ModuleType("sevenn.util"), types.ModuleType("sevenn._const")
+    util.load_checkpoint = lambda name: types.SimpleNamespace(config=dict(checkpoint_config))
+    const.DEFAULT_E3_EQUIVARIANT_MODEL_CONFIG = {"cutoff": 5.0, "lmax": 2, "is_parity": False, "use_oeq": False}
+    pkg.util, pkg._const = util, const
+    for name, mod in (("sevenn", pkg), ("sevenn.util", util), ("sevenn._const", const)):
+        monkeypatch.setitem(sys.modules, name, mod)
+
+
+def test_sevennet_builder_defers_preset_to_prestage_and_seeds(tmp_path, monkeypatch):
     import json
+    _fake_sevenn(monkeypatch, {"cutoff": 6.0, "lmax": 3, "is_parity": True, "use_oeq": True,
+                               "use_modality": True, "chemical_species": ["X", "H"]})
     ctx = _ctx("SevenNet-MF-OMPA", tmp_path)
     spec = ft_run.build_sevennet(ctx)      # no sevenn_preset binary needed here
     _materialize(spec)
@@ -588,6 +602,11 @@ def test_sevennet_builder_defers_preset_to_prestage_and_seeds(tmp_path):
     assert cfg["train"]["random_seed"] == 7 and cfg["train"]["epoch"] == 100 and cfg["train"]["per_epoch"] == 1
     assert cfg["data"]["batch_size"] == 4 and cfg["train"]["continue"]["checkpoint"] == "7net-mf-ompa"
     assert "load_mpa_validset_path" not in cfg["data"] and "load_validset_path" in cfg["data"]
+    # architecture comes from the checkpoint (sevenn loads its weights without
+    # reconciling the two); acceleration choices and species do not
+    assert cfg["model"]["cutoff"] == 6.0 and cfg["model"]["lmax"] == 3 and cfg["model"]["is_parity"] is True
+    assert cfg["model"].get("use_oeq") is None and "chemical_species" not in cfg["model"]
+    assert cfg["train"]["use_modality"] is True and "use_modality" not in cfg["model"]
 
 
 def test_uma_builder_runs_upstream_generator_then_fairchem(tmp_path):
@@ -696,14 +715,16 @@ def test_nequix_builder_uses_nqx_header_config_and_offline_wandb(tmp_path):
     assert ft_run.SEED_CONTROL["Nequix"][0] == "none"
 
 
-def test_sevennet_omni_uses_generic_preset_and_plain_paths(tmp_path):
+def test_sevennet_omni_uses_generic_preset_and_modal_paths(tmp_path):
+    """7net-omni is multi-modal like MF-OMPA (use_modality True, 13 modalities);
+    its data is labelled with the modality the inference line uses (mpa)."""
     import json
     ctx = _ctx("SevenNet-Omni", tmp_path)
     spec = ft_run.build_sevennet(ctx)
     assert "PRESET = 'fine_tune'" in spec.extra_files[ctx.out / "sevennet_prestage.py"]
     patch = json.loads(spec.config_text)
-    assert patch["data.load_trainset_path"] == [ctx.dataset_paths["train"]]
-    assert patch["data.load_validset_path"] == [ctx.dataset_paths["valid"]]
+    assert patch["data.load_trainset_path"] == [{"data_modality": "mpa", "file_list": [{"file": ctx.dataset_paths["train"]}]}]
+    assert patch["data.load_validset_path"][0]["file_list"][0]["file"] == ctx.dataset_paths["valid"]
 
 
 # ── M2: --seed reaches every builder's own trainer knob ──────────────────────
@@ -1040,3 +1061,35 @@ def test_ft_run_json_marks_whether_each_setting_reached_the_builder(tmp_path, mo
     assert unapplied, "every declared setting looked applied -- the read tracking is not wired"
     # a run only survives when nothing the USER set went unread (see the refusal above)
     assert all(settings[n]["origin"] != "user" for n in unapplied)
+
+
+# ── SevenNet: learning rate and loss weights reach sevenn under its own keys ──
+def test_sevennet_writes_lr_and_loss_weights_only_under_sevenn_keys(tmp_path):
+    """The builder wrote train.lr / train.force_weight / train.stress_weight,
+    which sevenn ignores ("Unexpected train keys ... will be ignored"), while
+    ft_run.json recorded them as applied; MF-OMPA trained with its preset's lr
+    0.0002 and the record said 0.004. sevenn reads train.optim_param.lr,
+    train.force_loss_weight and train.stress_loss_weight (sevenn/_keys.py)."""
+    import json
+    ctx = _ctx("SevenNet-MF-OMPA", tmp_path)
+    patch = json.loads(ft_run.build_sevennet(ctx).config_text)
+    stale = {"train.lr", "train.force_weight", "train.stress_weight", "train.energy_weight"}
+    assert not stale & set(patch)
+    # nothing set by the user: the variant's own preset keeps its official values
+    assert not {"train.optim_param.lr", "train.force_loss_weight", "train.stress_loss_weight"} & set(patch)
+    # the generic preset's test-set path (./sevenn_data/mydata.pt) is removed
+    assert patch["data.load_testset_path"] is None
+
+    knobs = {"lr": 0.001, "force_weight": 2.0}
+    settings, origins = ft_settings.resolve_settings("SevenNet", user_knobs=knobs)
+    ctx.settings, ctx.settings_origins = settings, origins
+    patch = json.loads(ft_run.build_sevennet(ctx).config_text)
+    assert patch["train.optim_param.lr"] == 0.001 and patch["train.force_loss_weight"] == 2.0
+    assert "train.stress_loss_weight" not in patch
+
+
+def test_sevennet_settings_declare_only_keys_sevenn_reads():
+    import json
+    names = {s["name"] for s in json.loads((REPO_ROOT / "finetune" / "settings" / "SevenNet.json").read_text())["settings"]}
+    assert {"train.optim_param.lr", "train.force_loss_weight", "train.stress_loss_weight"} <= names
+    assert not {"train.lr", "train.force_weight", "train.stress_weight", "train.energy_weight"} & names

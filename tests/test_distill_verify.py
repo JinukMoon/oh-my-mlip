@@ -626,8 +626,11 @@ def test_cli_subprocess_exit_code_and_json_line(prod, monkeypatch):
                            "--python", str(prod.fake_python), "--lmp-bin", str(prod.fake_lmp), "--json"],
                           capture_output=True, text=True, env=env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    last = json.loads(proc.stdout.strip().splitlines()[-1])
+    # --json leaves stdout exactly one JSON line; the progress log goes to stderr
+    assert len(proc.stdout.strip().splitlines()) == 1, proc.stdout
+    last = json.loads(proc.stdout)
     assert last["state"] == "passed" and last["report"] == str(prod.work / "verify" / "distill_verify.json")
+    assert "[distill_verify]" in proc.stderr
 
 
 def test_bootstrap_verify_command_matches_cli(prod):

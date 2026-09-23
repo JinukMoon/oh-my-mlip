@@ -501,7 +501,9 @@ _SEVENNET_PRESET = {
 # a plain list raises `TypeError: ... is not dict or str` deep in
 # sevenn.train.modal_dataset. Versions absent
 # here use the plain non-modal preset and need no modality name.
-_SEVENNET_MODALITY = {"SevenNet-MF-OMPA": "mpa"}
+# Both checkpoints are multi-modal; fine-tune data is labelled with the modality
+# the registry's inference line uses (modal='mpa').
+_SEVENNET_MODALITY = {"SevenNet-MF-OMPA": "mpa", "SevenNet-Omni": "mpa"}
 
 
 def _sevenn_modal_path(modality: str, path: str) -> list:
@@ -548,8 +550,59 @@ for dotted, value in json.loads(PATCH.read_text()).items():
     else:
         node[parts[-1]] = value
 
+# sevenn builds the model from this config and loads the checkpoint's weights
+# into it without reconciling the two (scripts/processing_continue.py
+# processing_continue_v2: "Skips model compatibility"). A variant with no preset
+# of its own (SevenNet-Omni uses the generic fine_tune.yaml: cutoff 5, lmax 2,
+# no parity) must therefore take its architecture and modality settings from the
+# checkpoint itself, or the weights do not fit.
+from sevenn import util as _util
+from sevenn._const import DEFAULT_E3_EQUIVARIANT_MODEL_CONFIG as _ARCH
+
+_ckpt = _util.load_checkpoint(cfg["train"]["continue"]["checkpoint"])
+_cp = _ckpt.config
+# A checkpoint saved with the FlashTP backend (7net-omni) is rebuilt with it by
+# sevenn's continue path (checkpoint.build_model() with no arguments), which
+# fails without the flashTP package: the saved weights do not fit the fallback
+# layout. build_model(enable_flash=False) converts the backend itself, so the
+# fine-tune starts from a converted copy written next to the config.
+if _cp.get("use_flash_tp"):
+    try:
+        import flashTP  # noqa: F401
+    except ImportError:
+        import torch as _torch
+        _model = _ckpt.build_model(enable_flash=False)
+        _raw = _torch.load(_ckpt._checkpoint_path, map_location="cpu", weights_only=False)
+        _raw["config"] = dict(_raw["config"], use_flash_tp=False)
+        _raw["model_state_dict"] = _model.state_dict()
+        _converted = CONFIG.parent / "foundation_noflash.pth"
+        _torch.save(_raw, _converted)
+        cfg["train"]["continue"]["checkpoint"] = str(_converted)
+        _cp = _util.load_checkpoint(str(_converted)).config
+        print(f"[sevennet_prestage] checkpoint uses FlashTP, which is not installed; "
+              f"fine-tuning from a backend-converted copy {{_converted}}")
+# architecture keys (sevenn's own model-config list) and the modality switches;
+# acceleration choices stay as the preset/host sets them
+_skip = {{"use_oeq", "use_flash_tp", "cuequivariance_config", "conv_denominator"}}
+_keys = (set(_ARCH) - _skip) | {{"use_modality", "use_modal_wise_shift", "use_modal_wise_scale"}}
+model = cfg.setdefault("model", {{}})
+synced = []
+for key in sorted(_keys):
+    if key not in _cp:
+        continue
+    # a key the preset lacks goes where sevenn reads it (mf_ompa_fine_tune.yaml's
+    # layout: use_modality under train, the modal-wise shift/scale under data)
+    default_home = {{"use_modality": "train", "use_modal_wise_shift": "data",
+                    "use_modal_wise_scale": "data"}}.get(key, "model")
+    home = next((s for s in ("model", "train", "data") if key in (cfg.get(s) or {{}})), default_home)
+    node = cfg.setdefault(home, {{}})
+    if node.get(key, object()) != _cp[key]:
+        node[key] = _cp[key]
+        synced.append(key)
+
 CONFIG.write_text(yaml.safe_dump(cfg, sort_keys=False))
-print(f"[sevennet_prestage] preset={{PRESET}} patched_keys={{len(json.loads(PATCH.read_text()))}} -> {{CONFIG}}")
+print(f"[sevennet_prestage] preset={{PRESET}} patched_keys={{len(json.loads(PATCH.read_text()))}} "
+      f"synced_from_checkpoint={{synced}} -> {{CONFIG}}")
 '''
 
 
@@ -560,10 +613,6 @@ def sevennet_patch(ctx: Context) -> dict:
     # Read resolved settings by native name from ctx.settings
     train_epoch = ctx.settings.get("train.epoch", 100)
     batch_size = ctx.settings.get("data.batch_size", 4)
-    train_lr = ctx.settings.get("train.lr", 0.004)
-    train_energy_weight = ctx.settings.get("train.energy_weight")
-    train_force_weight = ctx.settings.get("train.force_weight", 1.0)
-    train_stress_weight = ctx.settings.get("train.stress_weight")
 
     patch: dict = {
         "train.continue.checkpoint": foundation,
@@ -578,20 +627,25 @@ def sevennet_patch(ctx: Context) -> dict:
         "train.per_epoch": 1,
         # every preset ships its own random_seed (1 or 777); --seed replaces it
         "train.random_seed": int(ctx.seed),
-        "train.lr": float(train_lr),
     }
-    # Add energy and force weights if they are resolved
-    if train_energy_weight is not None:
-        patch["train.energy_weight"] = float(train_energy_weight)
-    if train_force_weight is not None:
-        patch["train.force_weight"] = float(train_force_weight)
-    if train_stress_weight is not None:
-        patch["train.stress_weight"] = float(train_stress_weight)
+    # Learning rate and loss weights, by sevenn's own keys (sevenn/_keys.py:
+    # optim_param.lr, force_loss_weight, stress_loss_weight; there is no energy
+    # weight). Written only when the user set them: each variant's own preset
+    # already carries its official values (mf_ompa_fine_tune.yaml's lr is
+    # 0.0002, the generic fine_tune.yaml's 0.004), and writing the generic
+    # file's value over it would change the run while claiming the official one.
+    for name in ("train.optim_param.lr", "train.force_loss_weight", "train.stress_loss_weight"):
+        if ctx.settings_origins.get(name) == "user":
+            patch[name] = float(ctx.settings.get(name))
 
     modality = _SEVENNET_MODALITY.get(ctx.version)
     valid = ctx.dataset_paths.get("valid")
     if modality:
         patch["data.load_trainset_path"] = _sevenn_modal_path(modality, str(ctx.dataset_paths["train"]))
+        # the modal file-list reader takes no ase index argument; the generic
+        # preset's `data_format_args: {index: ':'}` makes it fail
+        # (SevenNetGraphDataset._read_dict), as mf_ompa_fine_tune.yaml's {} does not
+        patch["data.data_format_args"] = {}
         # The preset names its validation set `load_<modality>_validset_path`, but
         # checkpoint_best.pth is written only for a loader named `validset`
         # (sevenn/scripts/processing_epoch.py best_metric_loader_key default;
@@ -605,6 +659,10 @@ def sevennet_patch(ctx: Context) -> dict:
         if valid:
             patch["data.load_validset_path"] = [str(valid)]
     patch["data.batch_size"] = int(batch_size)
+    # The generic fine_tune.yaml (SevenNet-Omni's preset) names a test set,
+    # ./sevenn_data/mydata.pt, that no fine-tune has; sevenn refuses to start
+    # when it is missing. The converted dataset has no test split.
+    patch["data.load_testset_path"] = None
     for k, v in (ctx.finetune.get("variant_args") or {}).items():
         patch[k] = v
     return patch
