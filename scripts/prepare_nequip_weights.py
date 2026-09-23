@@ -118,6 +118,29 @@ def compile_env(prefix: Path) -> dict:
     return env
 
 
+def fetch_package(version: str, target_root: Path) -> Path:
+    """The verified model package for `version`, downloaded if absent: an
+    OMM_NEQUIP_ZIP_DIR copy when set, else <target_root>/<zip> from Zenodo with
+    the mirror as fallback, resumable and checked against size, md5 and sha256.
+    The fine-tune prestage (scripts/ft_run.py) uses this too, so both paths share
+    one download and one integrity check."""
+    env_name = next(env for env, rows in MODELS.items() if any(r[1] == version for r in rows))
+    _uri, _v, _extra, zip_name, md5, size, sha256 = next(r for r in MODELS[env_name] if r[1] == version)
+    zip_dir = os.environ.get("OMM_NEQUIP_ZIP_DIR")
+    local = local_package(zip_dir, zip_name, md5) if zip_dir else None
+    if local:
+        return Path(local)
+    package = Path(target_root) / zip_name
+    if not is_complete(package, size):
+        sources = [("Zenodo", ZENODO.format(name=zip_name)),
+                   ("the oh-my-mlip mirror on Hugging Face", MIRROR.format(name=zip_name))]
+        print(f"  downloading {zip_name} -> {package}", flush=True)
+        used = download_first_available(sources, package, size=size, md5=md5, sha256=sha256,
+                                        label=version, min_rate=FALLBACK_MIN_RATE)
+        print(f"  {version}: package from {used}", flush=True)
+    return package
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--target-root", required=True, help="$OH_MY_MLIP_HOME/models/<env> (env name = basename)")
@@ -143,23 +166,16 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run and out.is_file() and out.stat().st_size > 0:
             print(f"  {version}: {out} already present, kept")
             continue
-        source = local_package(zip_dir, zip_name, md5) if zip_dir else None
-        if source is None:
-            package = target_root / zip_name
-            if not args.dry_run and not is_complete(package, size):
-                sources = [("Zenodo", ZENODO.format(name=zip_name)),
-                           ("the oh-my-mlip mirror on Hugging Face", MIRROR.format(name=zip_name))]
-                print(f"  downloading {zip_name} -> {package}", flush=True)
-                try:
-                    used = download_first_available(sources, package, size=size, md5=md5,
-                                                    sha256=sha256, label=version, min_rate=FALLBACK_MIN_RATE)
-                    print(f"  {version}: package from {used}", flush=True)
-                except Exception as exc:  # noqa: BLE001 - reported, the other models still run
-                    print(f"  {version}: download failed ({exc}); rerun to resume it, or set "
-                          f"OMM_NEQUIP_ZIP_DIR to a directory holding {zip_name}", file=sys.stderr)
-                    failed += 1
-                    continue
-            source = str(package)
+        if args.dry_run:
+            source = local_package(zip_dir, zip_name, md5) if zip_dir else str(target_root / zip_name)
+        else:
+            try:
+                source = str(fetch_package(version, target_root))
+            except Exception as exc:  # noqa: BLE001 - reported, the other models still run
+                print(f"  {version}: download failed ({exc}); rerun to resume it, or set "
+                      f"OMM_NEQUIP_ZIP_DIR to a directory holding {zip_name}", file=sys.stderr)
+                failed += 1
+                continue
         cmd = [str(compiler), source, str(out), "--mode", "aotinductor", "--device", "cuda", "--target", "ase", *extra]
         if args.dry_run:
             print(" ".join(cmd))

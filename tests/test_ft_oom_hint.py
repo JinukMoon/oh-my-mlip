@@ -44,3 +44,11 @@ def test_ft_sweep_takes_a_batch_size():
     proc = subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "ft_sweep.py"), "--help"],
                           capture_output=True, text=True)
     assert "--batch-size" in proc.stdout
+
+
+def test_at_batch_size_one_the_hint_does_not_suggest_a_bigger_batch(tmp_path, capfd, monkeypatch):
+    monkeypatch.setattr(ft_run, "_gpu_total", lambda: " on a 24 GB GPU")
+    sh = _script(tmp_path, "echo 'torch.OutOfMemoryError: CUDA out of memory.' >&2\nexit 1\n")
+    ft_run.run_training(sh, batch_size=1)
+    err = capfd.readouterr().err
+    assert "already 1" in err and "for example 4" not in err

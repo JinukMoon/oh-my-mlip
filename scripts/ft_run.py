@@ -1029,18 +1029,30 @@ import shutil
 import yaml
 
 MODEL_ID = {model_id!r}
+VERSION = {version!r}
 PACKAGE = pathlib.Path({package!r})
 TEMPLATE = pathlib.Path({template!r})
 CONFIG = pathlib.Path({config!r})
+HUB_SCRIPTS = {hub_scripts!r}
 
-if not PACKAGE.exists():
-    from nequip.model.saved_models.load_utils import _get_model_file_path
-    PACKAGE.parent.mkdir(parents=True, exist_ok=True)
-    with _get_model_file_path(MODEL_ID) as fetched:
-        shutil.copyfile(fetched, PACKAGE)
-    print(f"[nequip_prestage] fetched {{MODEL_ID}} -> {{PACKAGE}}")
-else:
+if PACKAGE.exists():
     print(f"[nequip_prestage] using existing package {{PACKAGE}}")
+else:
+    # The hub's own verified download (resumable, size/md5/sha256-checked, Zenodo
+    # then mirror; scripts/prepare_nequip_weights.py) rather than nequip's loader,
+    # which restarts from zero on every dropped connection.
+    import sys
+    sys.path.insert(0, HUB_SCRIPTS)
+    import prepare_nequip_weights as _prep
+    try:
+        PACKAGE = _prep.fetch_package(VERSION, PACKAGE.parent)
+        print(f"[nequip_prestage] verified package {{PACKAGE}}")
+    except StopIteration:   # a model the hub has no package record for
+        from nequip.model.saved_models.load_utils import _get_model_file_path
+        PACKAGE.parent.mkdir(parents=True, exist_ok=True)
+        with _get_model_file_path(MODEL_ID) as fetched:
+            shutil.copyfile(fetched, PACKAGE)
+        print(f"[nequip_prestage] fetched {{MODEL_ID}} -> {{PACKAGE}}")
 
 from nequip.model import ModelFromPackage
 model = ModelFromPackage(str(PACKAGE))
@@ -1172,7 +1184,8 @@ def build_nequip_framework(ctx: Context) -> CommandSpec:
     config_path = ctx.out / "config.yaml"
     prestage_path = ctx.out / "nequip_prestage.py"
     prestage_text = _NEQUIP_PRESTAGE.format(
-        model_id=model_id, package=str(package), template=str(template_path), config=str(config_path),
+        model_id=model_id, version=ctx.version, package=str(package), template=str(template_path),
+        config=str(config_path), hub_scripts=str(_SCRIPTS_DIR),
     )
     argv = [entrypoint_bin(ctx.resolved, "nequip-train"), "-cp", str(ctx.out), "-cn", "config.yaml"]
     return CommandSpec(
@@ -2804,8 +2817,12 @@ def run_training(sh_path: Path, *, batch_size: int | None) -> int:
     rc = proc.wait()
     if rc != 0 and any(marker.encode() in tail for marker in _OOM_MARKERS):
         current = f"batch size {batch_size}" if batch_size else "the framework's official batch size"
-        print(f"[ft_run] training ran out of GPU memory with {current}{_gpu_total()}. Rerun with a "
-              f"smaller --batch-size (for example 4), or on a GPU with more memory.", file=sys.stderr)
+        if batch_size == 1:
+            advice = ("The batch size is already 1: run on a GPU with more free memory (a GPU "
+                      "shared with other jobs may have less free than its size).")
+        else:
+            advice = "Rerun with a smaller --batch-size (for example 1 or 4), or on a GPU with more memory."
+        print(f"[ft_run] training ran out of GPU memory with {current}{_gpu_total()}. {advice}", file=sys.stderr)
     return rc
 
 
@@ -2816,6 +2833,43 @@ def _gpu_total() -> str:
         return f" on a {int(out[0]) / 1024:.0f} GB GPU" if out else ""
     except (OSError, ValueError, subprocess.SubprocessError):
         return ""
+
+
+_EMISSION_FLAGS = {"--emit-only", "--slurm", "--submit"}
+_VALUE_FLAGS_REWRITTEN = {"--dataset", "--out", "--seed", "--partition"}
+
+
+def rematerialize_argv(version: str, *, dataset: Path, out: Path, seed: int, partial_seed: bool,
+                       model_arg: str | None = None, argv: list[str] | None = None) -> list[str]:
+    """The ft_run.py command that re-materializes this run: every option the
+    user passed, as passed (--max-steps, --lr, --set, the loss weights, ...),
+    with --dataset/--out made absolute, the seed that was used pinned, and
+    --emit-only so a rerun writes artifacts without training. Built from the
+    actual argv: listing only some options left out, for example, the
+    --max-steps a DeePMD run needs, so the record could not reproduce it."""
+    raw = list(sys.argv[1:] if argv is None else argv)
+    kept: list[str] = []
+    i = 0
+    while i < len(raw):
+        tok = raw[i]
+        name = tok.split("=", 1)[0]
+        if name in _EMISSION_FLAGS:
+            i += 1
+            continue
+        if name in _VALUE_FLAGS_REWRITTEN:
+            i += 1 if "=" in tok else 2
+            continue
+        kept.append(tok)
+        i += 1
+    # the model the user named (a family or version) becomes the resolved version
+    if model_arg in kept:
+        kept[kept.index(model_arg)] = version
+    else:
+        kept.insert(0, version)
+    tail = ["--dataset", str(dataset), "--out", str(out), "--seed", str(seed)]
+    if partial_seed and "--allow-partial-seed" not in kept:
+        tail.append("--allow-partial-seed")
+    return [sys.executable, str(_SCRIPTS_DIR / "ft_run.py"), *kept, *tail, "--emit-only"]
 
 
 def run_record(args, *, version: str, family: str, resolved: dict, out: Path, dataset: Path,
@@ -2831,21 +2885,8 @@ def run_record(args, *, version: str, family: str, resolved: dict, out: Path, da
     hub-owned inputs it names by absolute path (models/<env>/... foundation
     weights, prestage caches) are re-created by install.sh and the prestage
     steps, not by the .sh -- after a fresh_root cleanup use `rematerialize`."""
-    # Build rematerialize argv from what was actually used
-    rematerialize = [
-        sys.executable, str(_SCRIPTS_DIR / "ft_run.py"), version,
-        "--dataset", str(dataset), "--out", str(out),
-        "--device", args.device, "--split", str(args.split), "--seed", str(seed),
-    ]
-    # Add epochs/batch-size if they came from CLI (not defaults)
-    if args.epochs is not None:
-        rematerialize.extend(["--epochs", str(args.epochs)])
-    if args.batch_size is not None:
-        rematerialize.extend(["--batch-size", str(args.batch_size)])
-    rematerialize.extend([
-        *(["--allow-partial-seed"] if seed_scope != "native" else []),
-        "--emit-only",
-    ])
+    rematerialize = rematerialize_argv(version, dataset=dataset, out=out, seed=seed,
+                                       partial_seed=seed_scope != "native", model_arg=args.model)
     result = {
         "schema": "ft_run.json/1",
         "family": family, "version": version,

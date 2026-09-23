@@ -1093,3 +1093,20 @@ def test_sevennet_settings_declare_only_keys_sevenn_reads():
     names = {s["name"] for s in json.loads((REPO_ROOT / "finetune" / "settings" / "SevenNet.json").read_text())["settings"]}
     assert {"train.optim_param.lr", "train.force_loss_weight", "train.stress_loss_weight"} <= names
     assert not {"train.lr", "train.force_weight", "train.stress_weight", "train.energy_weight"} & names
+
+
+def test_rematerialize_keeps_every_option_the_user_passed():
+    """The record listed only dataset/out/device/split/seed/epochs/batch; a
+    DeePMD run's --max-steps (required) and --lr were lost, so replaying the
+    record refused with "training length is not set"."""
+    argv = ft_run.rematerialize_argv(
+        "DPA-3.1-3M-FT", dataset=Path("/d/t.extxyz"), out=Path("/o"), seed=0, partial_seed=False,
+        model_arg="DeePMD",
+        argv=["DeePMD", "--dataset", "t.extxyz", "--out", "rel", "--max-steps", "100", "--lr", "0.001",
+              "--set", "loss.start_pref_e=0.1", "--slurm", "--partition", "gpu", "--emit-only"])[2:]
+    assert argv[0] == "DPA-3.1-3M-FT"
+    for pair in (["--max-steps", "100"], ["--lr", "0.001"], ["--set", "loss.start_pref_e=0.1"],
+                 ["--dataset", "/d/t.extxyz"], ["--out", "/o"], ["--seed", "0"]):
+        i = argv.index(pair[0])
+        assert argv[i:i + 2] == pair
+    assert argv.count("--emit-only") == 1 and "--slurm" not in argv and "--partition" not in argv
