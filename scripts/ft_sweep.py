@@ -368,6 +368,7 @@ def sweep(env: str, home: Path, ledger_path: Path, dataset: Path, out_root: Path
           audit: dict, campaign_id: str | None, manifest_sha256: str | None,
           epochs: int = 2, device: str = "cuda", min_free_gib: float = 5.0,
           ft_run_cmd: list[str] | None = None, ft_verify_cmd: list[str] | None = None,
+          batch_size: int | None = None,
           ckpt_glob: str | None = None) -> list[dict]:
     common = {"env": env, "campaign_id": campaign_id, "manifest_sha256": manifest_sha256}
     ledger = Ledger(ledger_path, common)
@@ -410,6 +411,9 @@ def sweep(env: str, home: Path, ledger_path: Path, dataset: Path, out_root: Path
         base = ft_run_cmd or [sys.executable, str(home / "scripts" / "ft_run.py")]
         train = base + [version, "--dataset", str(dataset), "--out", str(out),
                         "--epochs", str(epochs), "--device", device]
+        if batch_size is not None:
+            # some official batch sizes (ORB: 100) do not fit a 16 GB GPU
+            train += ["--batch-size", str(batch_size)]
         train_started = time.time() - 1.0  # 1 s slack for coarse mtime resolution
         rc, out_text, err = run(train, home)
         sh = out / f"finetune_{version}.sh"
@@ -525,6 +529,8 @@ def main() -> int:
     ap.add_argument("--manifest-sha256", default=None)
     ap.add_argument("--epochs", type=int, default=2)
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
+    ap.add_argument("--batch-size", type=int, default=None,
+                    help="passed to ft_run.py for every variant (default: each framework's official value)")
     ap.add_argument("--min-free-gib", type=float, default=5.0, help="measured free-space floor, GiB (2^30)")
     ap.add_argument("--ckpt-glob", default=None)
     ap.add_argument("--ft-run-cmd", default=None, help="TEST ONLY")
@@ -539,7 +545,7 @@ def main() -> int:
                  epochs=args.epochs, device=args.device, min_free_gib=args.min_free_gib,
                  ft_run_cmd=args.ft_run_cmd.split() if args.ft_run_cmd else None,
                  ft_verify_cmd=args.ft_verify_cmd.split() if args.ft_verify_cmd else None,
-                 ckpt_glob=args.ckpt_glob)
+                 ckpt_glob=args.ckpt_glob, batch_size=args.batch_size)
     for r in rows:
         print(f"  {r['variant']:<24} {r['state']}")
     print(json.dumps({"ft_sweep": True, "env": args.env, "ledger": str(args.ledger),

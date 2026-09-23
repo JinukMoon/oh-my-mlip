@@ -2726,7 +2726,38 @@ def main() -> int:
         return 0
 
     print(f"[ft_run] executing {sh_path}")
-    return subprocess.run(["bash", str(sh_path)]).returncode
+    return run_training(sh_path, batch_size=ctx.batch_size)
+
+
+_OOM_MARKERS = ("CUDA out of memory", "OutOfMemoryError", "RESOURCE_EXHAUSTED", "CUBLAS_STATUS_ALLOC_FAILED")
+
+
+def run_training(sh_path: Path, *, batch_size: int | None) -> int:
+    """Run the generated script, passing its stderr straight through (raw
+    chunks, so progress bars still redraw) while keeping the tail. A run that
+    dies of GPU memory gets told which knob to turn: official batch sizes are
+    set for data-centre GPUs (ORB's is 100) and do not fit a 16 GB card."""
+    proc = subprocess.Popen(["bash", str(sh_path)], stderr=subprocess.PIPE)
+    tail = b""
+    while chunk := proc.stderr.read1(1 << 16):
+        sys.stderr.buffer.write(chunk)
+        sys.stderr.buffer.flush()
+        tail = (tail + chunk)[-(1 << 16):]
+    rc = proc.wait()
+    if rc != 0 and any(marker.encode() in tail for marker in _OOM_MARKERS):
+        current = f"batch size {batch_size}" if batch_size else "the framework's official batch size"
+        print(f"[ft_run] training ran out of GPU memory with {current}{_gpu_total()}. Rerun with a "
+              f"smaller --batch-size (for example 4), or on a GPU with more memory.", file=sys.stderr)
+    return rc
+
+
+def _gpu_total() -> str:
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=10).stdout.split()
+        return f" on a {int(out[0]) / 1024:.0f} GB GPU" if out else ""
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return ""
 
 
 def run_record(args, *, version: str, family: str, resolved: dict, out: Path, dataset: Path,

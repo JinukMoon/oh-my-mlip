@@ -70,7 +70,9 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
     python scripts/distill_verify.py --work ./distill --json
     ```
 
-    `--mode fixture` (at most 3 rounds) only exercises the loop.
+    `--mode fixture` (at most 3 rounds) only exercises the loop: even a passing
+    fixture says nothing about the student's accuracy. Use `--mode production`
+    for a student you will use.
 
     Full procedure:
     [`recipes/distill.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/distill.md).

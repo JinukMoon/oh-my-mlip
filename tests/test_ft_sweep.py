@@ -526,3 +526,20 @@ def test_classify_is_pure_and_distinguishes_blocked_from_unsupported():
     ns = {"finetune": {"status": "not-supported", "evidence": ["u"]}}
     assert fts.classify("V", ns, {}, token_missing=True) == {
         "action": "record", "state": "unsupported", "citation": "u", "reason": "not-supported"}
+
+
+def test_batch_size_reaches_every_ft_run_call(tmp_path, monkeypatch):
+    """ORB's official batch size (100) does not fit a 16 GB GPU; the sweep had
+    no way to pass a smaller one except a test-only command override."""
+    monkeypatch.setenv("HF_TOKEN", "hf_fake-token-for-gating-only")
+    home = _home(tmp_path)
+    dataset = tmp_path / "demo.traj"
+    dataset.write_text("")
+    argv_log = tmp_path / "argv.log"
+    recorder = FT_RUN.replace('variant="$1"; shift', f'echo "$@" >> {argv_log}\nvariant="$1"; shift', 1)
+    fts.sweep("fam", home, tmp_path / "ft.jsonl", dataset, tmp_path / "out", audit={},
+              campaign_id="c1", manifest_sha256=None, epochs=1, device="cuda",
+              ft_run_cmd=[_script(tmp_path / "fake_ft_run.sh", recorder)],
+              ft_verify_cmd=[_script(tmp_path / "fake_ft_verify.sh", FT_VERIFY)], batch_size=4)
+    calls = argv_log.read_text().splitlines()
+    assert calls and all(line.endswith("--batch-size 4") for line in calls)
