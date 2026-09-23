@@ -1544,3 +1544,25 @@ def test_acceptance_records_the_engines_boundary_contract(accepted):
     assert acc["witness_scope"]["witness_boundary"].startswith("p p f")
     assert acc["budget"]["wallclock_enforcement"]["attribution"] == db.WALLCLOCK_ATTRIBUTION
     assert "unknown which" in acc["budget"]["wallclock_enforcement"]["rc_rule"]
+
+
+# ── the pool a production run gets when none is typed ────────────────────────
+def _acc_args(tmp_path, mode, *extra):
+    return db.parse_args(["--teacher", "MACE-MPA-0", "--structure", str(tmp_path / "s.vasp"),
+                          "--work", str(tmp_path / "w"), "--repo", str(tmp_path), "--acceptance",
+                          "--mode", mode, "--energy-mae-max", "10", "--force-mae-max", "100",
+                          "--target-ps", "3", "--max-iter", "3" if mode == "production" else "2",
+                          "--no-progress-limit", "2", *extra])
+
+
+def test_production_defaults_to_a_pool_that_can_meet_an_accuracy_gate(tmp_path):
+    """The 20-frame demo pool trained a student with eV/atom energy errors
+    (held-out E_MAE 1770 meV/atom, MACE-MPA-0 on Cu(111), 2026-09-23); 1200
+    frames gave 8.5 meV/atom under the same targets."""
+    prod = _acc_args(tmp_path, "production")
+    assert (prod.pool_steps, prod.pool_save_every) == (db.PRODUCTION_POOL_STEPS, db.PRODUCTION_POOL_SAVE_EVERY)
+    assert prod.pool_steps // prod.pool_save_every >= 1000
+    fixture = _acc_args(tmp_path, "fixture")
+    assert (fixture.pool_steps, fixture.pool_save_every) == (db.TEACHER_MD_STEPS, db.TEACHER_MD_SAVE_EVERY)
+    typed = _acc_args(tmp_path, "production", "--pool-steps", "400", "--pool-save-every", "4")
+    assert (typed.pool_steps, typed.pool_save_every) == (400, 4)

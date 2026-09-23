@@ -72,7 +72,10 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
 
     `--mode fixture` (at most 3 rounds) only exercises the loop: even a passing
     fixture says nothing about the student's accuracy. Use `--mode production`
-    for a student you will use.
+    for a student you will use. Production seeds the pool with a longer teacher
+    MD by default (`--pool-steps 6000 --pool-save-every 5`, about 1200 frames);
+    the quick demo's 20 frames are too few for the student's energies to meet an
+    accuracy target.
 
     Full procedure:
     [`recipes/distill.md`](https://github.com/JinukMoon/oh-my-mlip/blob/main/recipes/distill.md).

@@ -103,6 +103,8 @@ python3 $OMM/scripts/ft_run.py MACE-MPA-0 --dataset <your-dataset> --out ft_mace
 ```bash
 # LICENCE: ASL -- https://github.com/ACEsuit/mace-foundations
 #   Disclosed to users — oh-my-mlip is MIT and redistributes no
+# BLOCKED -- ft_run.py exits 3 until:
+#   - mace-torch at the pinned commit 100a2914 (2025-11-07) fails in mace/tools/scripts_utils.py remove_pt_head with a state_dict size mismatch for the MH-1 checkpoint (checkpoint 128 channels, rebuilt model 512; e.g. interactions.0.linear_up.weight), reproduced 2026-09-23 with --foundation_model=mh-1 --foundation_head=omat_pbe. The MACE maintainers answered the same error on 2025-12-03 as fixed on their main branch (huggingface.co/mace-foundations/mace-mh-1/discussions/1); a newer mace-torch pin is needed before this fine-tune can run.
 python3 $OMM/scripts/ft_run.py MACE-MH-1-OMAT --dataset <your-dataset> --out ft_mace-mh-1-omat
 ```
 
@@ -111,6 +113,8 @@ python3 $OMM/scripts/ft_run.py MACE-MH-1-OMAT --dataset <your-dataset> --out ft_
 ```bash
 # LICENCE: ASL -- https://github.com/ACEsuit/mace-foundations
 #   Disclosed to users — oh-my-mlip is MIT and redistributes no
+# BLOCKED -- ft_run.py exits 3 until:
+#   - mace-torch at the pinned commit 100a2914 (2025-11-07) fails in mace/tools/scripts_utils.py remove_pt_head with a state_dict size mismatch for the MH-1 checkpoint (checkpoint 128 channels, rebuilt model 512; e.g. interactions.0.linear_up.weight), reproduced 2026-09-23 with --foundation_model=mh-1 --foundation_head=omat_pbe. The MACE maintainers answered the same error on 2025-12-03 as fixed on their main branch (huggingface.co/mace-foundations/mace-mh-1/discussions/1); a newer mace-torch pin is needed before this fine-tune can run.
 python3 $OMM/scripts/ft_run.py MACE-MH-1-OC20 --dataset <your-dataset> --out ft_mace-mh-1-oc20
 ```
 
@@ -119,8 +123,8 @@ python3 $OMM/scripts/ft_run.py MACE-MH-1-OC20 --dataset <your-dataset> --out ft_
 | variant | status | runnable_as_installed | licence |
 |---|---|---|---|
 | `MACE-MPA-0` | documented | True | — |
-| `MACE-MH-1-OMAT` | documented | True | ASL |
-| `MACE-MH-1-OC20` | documented | True | ASL |
+| `MACE-MH-1-OMAT` | documented | False | ASL |
+| `MACE-MH-1-OC20` | documented | False | ASL |
 
 ---
 

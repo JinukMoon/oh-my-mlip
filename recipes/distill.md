@@ -70,8 +70,10 @@ part is choosing the values:
    a separate command outside the bound, and the plan says so. Omitting
    the flag means an unbounded, operator-supervised run, and the plan
    says so.
-4. **Split** — the AL pool (`--pool-steps`, `--pool-save-every`) and the
-   held-out set: a separate teacher MD (`--heldout-seed`, which must
+4. **Split** — the AL pool (`--pool-steps`, `--pool-save-every`; with
+   `--mode production` they default to 6000 steps saved every 5, i.e. about
+   1200 frames, because the 20-frame demo pool trains a student whose
+   energies miss any accuracy gate) and the held-out set: a separate teacher MD (`--heldout-seed`, which must
    differ from the pool's seed, `--heldout-steps`, `--heldout-save-every`)
    or the user's own frames (`--heldout-file`) relabelled by the same
    teacher. A generated held-out set drops its frame 0 (the shared

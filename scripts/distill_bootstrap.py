@@ -172,6 +172,13 @@ DEFAULT_LMP_BIN = str(
 # directly (it is a plain, rerunnable shell script, not a hidden default).
 TEACHER_MD_STEPS = 200
 TEACHER_MD_SAVE_EVERY = 10
+# A production run's pool when none is typed: the 20 frames above train a student
+# whose forces are fine but whose energies are off by eV/atom, so it fails any
+# accuracy gate (measured 2026-09-23, MACE-MPA-0 on Cu(111): held-out E_MAE
+# 1770 meV/atom with 20 frames, 8.5 meV/atom with 1200). The quick demo and a
+# fixture keep the small pool: they exercise the loop, they claim no accuracy.
+PRODUCTION_POOL_STEPS = 6000
+PRODUCTION_POOL_SAVE_EVERY = 5
 
 # D/scripts/teacher_md.py seeds its Langevin MD from $TEACHER_SEED (default
 # 42). The AL pool is seeded with that default; the held-out trajectory MUST
@@ -447,9 +454,11 @@ def parse_args(argv=None) -> argparse.Namespace:
                           "(TERM to the whole process group, KILL %d s later); exhaustion is "
                           "unmet(budget:wallclock). Refused on a host without GNU timeout." % WALLCLOCK_GRACE_S)
     acc.add_argument("--pool-steps", type=int, default=None,
-                     help="teacher MD steps seeding the AL pool (default %d)" % TEACHER_MD_STEPS)
+                     help="teacher MD steps seeding the AL pool (default %d with --mode production, else %d)"
+                          % (PRODUCTION_POOL_STEPS, TEACHER_MD_STEPS))
     acc.add_argument("--pool-save-every", type=int, default=None,
-                     help="save interval of the pool MD (default %d)" % TEACHER_MD_SAVE_EVERY)
+                     help="save interval of the pool MD (default %d with --mode production, else %d)"
+                          % (PRODUCTION_POOL_SAVE_EVERY, TEACHER_MD_SAVE_EVERY))
     acc.add_argument("--heldout-file", type=Path, default=None,
                      help="user frames (ase-readable) to relabel with the teacher as the held-out set; "
                           "default: a separate teacher MD trajectory with --heldout-seed")
@@ -477,6 +486,8 @@ def parse_args(argv=None) -> argparse.Namespace:
         if typed:
             ap.error(", ".join(typed) + " belong(s) to the acceptance proposal and would be ignored without "
                      "--acceptance; add --acceptance (with every target) or drop the flag(s)")
+    if args.mode == "production":
+        acceptance_defaults.update(pool_steps=PRODUCTION_POOL_STEPS, pool_save_every=PRODUCTION_POOL_SAVE_EVERY)
     for attr, default in acceptance_defaults.items():
         if getattr(args, attr) is None:
             setattr(args, attr, default)
