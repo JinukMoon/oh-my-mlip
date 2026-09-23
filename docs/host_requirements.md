@@ -61,5 +61,8 @@ approximate Linux minimums for each CUDA build.
 - **Loading `UMA-m-1p1-*` dies with no error message:** the checkpoint (11.2 GB)
   is loaded into host RAM first, and the kernel's out-of-memory killer ends the
   process (exit code 137). Use a machine with 32 GB or more, or a `UMA-s-*` model.
+- **GRACE fine-tuning on WSL crashes right after `Compiled cluster using XLA`**
+  (segmentation fault, no Python traceback): rerun with
+  `--set jit_compile=false`. Native Linux runs the default (`jit_compile=true`).
 - **Gated models** (UMA, eSEN) need your own Hugging Face login — see
   [Hugging Face token](hf_token.md).
