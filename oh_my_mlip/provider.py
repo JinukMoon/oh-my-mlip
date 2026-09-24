@@ -347,6 +347,10 @@ class Worker:
         escape from ``Popen``. This makes the README/AGENTS "actionable message,
         not a traceback" promise true for ``run()`` / ``Worker`` too.
         """
+        # measure the caches before the child exists, so bytes it fetches
+        # right away count as download progress instead of the baseline
+        caches = _model_cache_dirs()
+        baseline = _tree_bytes(caches)
         try:
             self._proc = self._popen(
                 self._build_cmd(),
@@ -362,7 +366,7 @@ class Worker:
                 _env_not_installed_msg(self.model, self.spec["env"], self._python_exe)
             ) from exc
         self._start_stderr_drain()
-        stop_heartbeat = self._start_load_heartbeat()
+        stop_heartbeat = self._start_load_heartbeat(caches=caches, baseline=baseline)
         try:
             line = self._proc.stdout.readline()
         finally:
@@ -388,7 +392,8 @@ class Worker:
             )
         return self
 
-    def _start_load_heartbeat(self, interval: float | None = None) -> threading.Event:
+    def _start_load_heartbeat(self, interval: float | None = None, *, caches: list | None = None,
+                              baseline: int | None = None) -> threading.Event:
         """Say every `interval` seconds that the worker is still loading.
 
         Until the handshake the user sees nothing: most frameworks download
@@ -398,8 +403,8 @@ class Worker:
         caches have grown, so a download reads as progress rather than a hang."""
         interval = HEARTBEAT_SECONDS if interval is None else interval
         stop = threading.Event()
-        caches = _model_cache_dirs()
-        baseline = _tree_bytes(caches)
+        caches = _model_cache_dirs() if caches is None else caches
+        baseline = _tree_bytes(caches) if baseline is None else baseline
         started = time.monotonic()
 
         def _beat() -> None:
