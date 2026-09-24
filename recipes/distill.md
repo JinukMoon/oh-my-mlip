@@ -58,12 +58,14 @@ part is choosing the values:
 1. **Accuracy targets** — `--energy-mae-max` (meV per atom) and
    `--force-mae-max` (meV per Å) on the held-out set, chosen for this task;
    the parser has no default for either. Leave the energy target a margin:
-   the engine keeps the student checkpoint with the best *force* error, and
-   the energy error of that checkpoint depends on which epoch it happened to
-   be, so a near-identical pool can move the held-out energy MAE by several
-   times while the force MAE stays put. A run on identical inputs repeats;
-   one that barely passes the energy target may not pass on a slightly
-   different pool.
+   the engine keeps the student checkpoint with the lowest
+   `E_MAE/student.select_energy_scale + F_MAE/student.select_force_scale`
+   on its validation split (engines before that change kept the best
+   *force* error alone), yet the energy error still moves between
+   force-equivalent epochs, so a near-identical pool can shift the held-out
+   energy MAE while the force MAE stays put. A run on identical inputs
+   repeats; one that barely passes the energy target may not pass on a
+   slightly different pool.
 2. **Stability target** — `--target-ps` of stable student MD at the
    stated conditions. The engine fixes the student MD temperature inside
    its own code; it is not a config key, and the plan says so.

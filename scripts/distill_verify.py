@@ -538,18 +538,25 @@ def final_model(run_dir: Path, status: dict, log: Log) -> dict:
         if not Path(out[key]).is_file():
             log(f"  final {key} {out[key]} missing")
             out[key] = None
-    out["train_log_best_f_mae_mev_per_a"] = _trainer_best_f(Path(out["train_log"]))
+    out["train_log_best_f_mae_mev_per_a"], out["train_log_kept_e_mae_mev_per_atom"] = _trainer_kept(Path(out["train_log"]))
     log(f"  final student: round {n}, bin={out['bin']}, pt={out['pt']}")
     return out
 
 
-def _trainer_best_f(train_log: Path) -> float | None:
-    """The engine's own `best F_MAE: X meV/A` line -- cited as evidence of the
-    run, NOT used as the held-out metric (it is the pool's random split)."""
+def _trainer_kept(train_log: Path) -> tuple[float | None, float | None]:
+    """The engine's own validation MAEs for the model it kept -- cited as
+    evidence of the run, NOT used as the held-out metric (they are the pool's
+    random split). Engines that pick by energy and force print `kept model:
+    E_MAE X meV/atom, F_MAE Y meV/A`; older ones pick by force alone and print
+    only `best F_MAE: Y meV/A`."""
     if not train_log.is_file():
-        return None
-    m = re.findall(r"best F_MAE:\s*([0-9.]+)\s*meV/A", train_log.read_text(encoding="utf-8", errors="ignore"))
-    return float(m[-1]) if m else None
+        return None, None
+    text = train_log.read_text(encoding="utf-8", errors="ignore")
+    kept = re.findall(r"kept model: E_MAE\s*([0-9.]+)\s*meV/atom, F_MAE\s*([0-9.]+)\s*meV/A", text)
+    if kept:
+        return float(kept[-1][1]), float(kept[-1][0])
+    m = re.findall(r"best F_MAE:\s*([0-9.]+)\s*meV/A", text)
+    return (float(m[-1]) if m else None), None
 
 
 # ── 4. held-out independence ─────────────────────────────────────────────────

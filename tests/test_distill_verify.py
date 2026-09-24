@@ -260,6 +260,7 @@ def test_production_passed(prod, monkeypatch, capsys):
     assert report["heldout"]["leak"] is False and report["heldout"]["n_overlap"] == 0
     assert report["final_model"]["round"] == 1
     assert report["final_model"]["train_log_best_f_mae_mev_per_a"] == 81.0  # cited, not gating
+    assert report["final_model"]["train_log_kept_e_mae_mev_per_atom"] is None  # force-only engine log
     # the --json line is the last stdout line and carries the state
     last = capsys.readouterr().out.strip().splitlines()[-1]
     assert json.loads(last)["state"] == "passed"
@@ -1165,3 +1166,14 @@ def test_parse_pe_reads_first_row_after_header():
     text = "LAMMPS\n   Step         PotEng\n      0  -112.5\n      1  -113\nLoop time"
     assert dv._parse_pe(text) == -112.5
     assert dv._parse_pe("no table here") is None
+
+
+def test_trainer_kept_reads_both_engine_log_formats(tmp_path):
+    import distill_verify as dv
+    new = tmp_path / "new.log"
+    new.write_text("Ep 5: E=3.3 F=6.34 (kept)\n\nkept model: E_MAE 3.30 meV/atom, F_MAE 6.34 meV/A  in 149s\n")
+    assert dv._trainer_kept(new) == (6.34, 3.30)
+    old = tmp_path / "old.log"
+    old.write_text("best F_MAE: 5.94 meV/A  in 149s\n")
+    assert dv._trainer_kept(old) == (5.94, None)
+    assert dv._trainer_kept(tmp_path / "missing.log") == (None, None)
