@@ -607,10 +607,13 @@ def _assert_bound_marker(work: Path, *, state: str, rc: int, limit_s: int) -> di
     assert attempt["run_script_sha256"] == marker["run_script_sha256"] == approved == db._sha256(work / "run_distill.sh")
     assert marker["state"] == state and marker["returncode"] == rc
     assert marker["limit_s"] == attempt["limit_s"] == limit_s and marker["grace_s"] == db.WALLCLOCK_GRACE_S
-    assert marker["elapsed_s"] == marker["ended_epoch_s"] - marker["started_epoch_s"] >= 0
+    # elapsed_s is measured on the boot-time clock, the epoch stamps on the wall
+    # clock: they agree to within the verifier's slack, not to the second
+    import distill_verify as dv
+    assert marker["elapsed_s"] >= 0
+    assert abs(marker["elapsed_s"] - (marker["ended_epoch_s"] - marker["started_epoch_s"])) <= dv.MTIME_SLACK_S
     assert marker["covers"] == db.WALLCLOCK_COVERS
     # the supervisor's attribution token is the one the verifier recomputes
-    import distill_verify as dv
     assert marker["attribution"] == dv.wallclock_attribution(rc, marker["elapsed_s"], limit_s)
     assert marker["attribution"] in db.WALLCLOCK_ATTRIBUTION
     return marker

@@ -999,6 +999,11 @@ if [ -z "${{OMM_DISTILL_ATTEMPT:-}}" ]; then
     ATTEMPT_FILE={_q(w['attempt'])}
     mkdir -p "$(dirname "$MARKER")"
     ATTEMPT="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    # elapsed comes from the boot-time clock: the wall clock can be stepped
+    # back by time sync (WSL does this under load), which once turned a 2 s
+    # timeout into elapsed_s 0; the epoch stamps stay wall-clock for the record
+    _omm_mono() {{ if [ -r /proc/uptime ]; then cut -d. -f1 /proc/uptime; else date +%s; fi; }}
+    START_M=$(_omm_mono)
     START_S=$(date +%s)
     START_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     SELF_SHA=$(sha256sum "$SELF" | cut -d ' ' -f 1)
@@ -1011,7 +1016,7 @@ if [ -z "${{OMM_DISTILL_ATTEMPT:-}}" ]; then
     RC=$?
     set -e
     END_S=$(date +%s)
-    ELAPSED_S=$(( END_S - START_S ))
+    ELAPSED_S=$(( $(_omm_mono) - START_M ))
     if [ "$RC" -eq 124 ]; then
         STATE=exhausted; WHY=timeout_term
     elif [ "$RC" -eq 137 ] && [ "$ELAPSED_S" -ge {w['limit_s']} ]; then
