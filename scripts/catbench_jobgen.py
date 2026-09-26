@@ -119,6 +119,10 @@ def _render_body(spec: dict, jobfile: Path, workdir: Path) -> str:
     # extension at first use and shells out to `ninja`, which is installed only in the
     # env. env_run is exported after this, so its overrides still win.
     lines.append(f'export PATH="{Path(spec["python"]).resolve().parent}${{PATH:+:$PATH}}"')
+    # catbench prints its per-reaction progress ([i/N] <reaction>) to stdout;
+    # redirected to a file or a SLURM log that stays block-buffered, so the log
+    # would sit empty until the run ends
+    lines.append("export PYTHONUNBUFFERED=1")
     for key, value in spec.get("env_run", {}).items():
         lines.append(f'export {key}="{value}"')
     lines.append(f'exec "{spec["python"]}" "{Path(jobfile).resolve()}"')

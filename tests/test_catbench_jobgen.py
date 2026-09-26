@@ -108,7 +108,7 @@ def test_runner_sh_no_export_for_mace(tmp_path):
     assert spec["env_run"] == {}
     # the env's bin on PATH is not an env_run export; it is always written
     exports = [ln for ln in text.splitlines() if ln.startswith("export ")]
-    assert exports == [_path_export(spec)]
+    assert exports == [_path_export(spec), "export PYTHONUNBUFFERED=1"]
 
 
 def test_runner_sh_export_count_matches_env_run(tmp_path):
@@ -116,7 +116,7 @@ def test_runner_sh_export_count_matches_env_run(tmp_path):
     jobfile = tmp_path / "jobs" / f"catbench_{spec['version']}.py"
     text = catbench_jobgen.render_runner_sh(spec, jobfile, tmp_path)
     export_lines = [ln for ln in text.splitlines() if ln.startswith("export ")]
-    assert len(export_lines) == len(spec["env_run"]) + 1          # + the PATH line
+    assert len(export_lines) == len(spec["env_run"]) + 2          # + the PATH and PYTHONUNBUFFERED lines
 
 
 def _path_export(spec: dict) -> str:
