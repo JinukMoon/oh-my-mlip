@@ -304,7 +304,99 @@ def check_adsorption_json(path: Path, load=None) -> dict:
     return rec
 
 
-def fetch_dataset(name: str, workdir: Path, get_benchmark=None, catbench_version: str | None = None) -> dict:
+def _zenodo_entry(name: str) -> dict | None:
+    """Upstream's own Zenodo listing for `name` ({url, md5, size}), or None when
+    `name` is not on the record or this catbench does not expose the listing."""
+    try:
+        from catbench.adsorption.data.zenodo import _zenodo_latest_files
+    except ImportError:
+        return None
+    try:
+        return _zenodo_latest_files().get(name)
+    except Exception:  # the listing itself is a network call; the fallback is get_benchmark
+        return None
+
+
+def _md5(path: Path) -> str:
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def download_leaderboard_copy(name: str, target: Path, entry: dict) -> bool:
+    """Try catbench.org's gzip copy of `name` first: upstream serves the same
+    datasets there (catbench zenodo.py, source 2), and it is several times
+    smaller and far faster than Zenodo. It is accepted only when the unpacked
+    file has exactly the size and md5 Zenodo lists; otherwise False, and the
+    caller downloads from Zenodo."""
+    import gzip
+    import shutil
+    if not entry.get("md5"):
+        return False
+    try:
+        from catbench.adsorption.data.zenodo import _LEADERBOARD_BASE as base
+    except ImportError:
+        base = "https://catbench.org/benchmark"
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip._download import download_resumable
+    gz = target.with_name(target.name + ".gz.part")
+    part = target.with_name(target.name + ".cdn.part")     # never the Zenodo resume file
+    url = f"{base}/{name}.json.gz"
+    print(f"Downloading {name} from the catbench.org copy ({url}), checked against Zenodo's md5", flush=True)
+    try:
+        download_resumable(url, gz, label=f"{name} (catbench.org)")
+        with gzip.open(gz, "rb") as src, part.open("wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 20)
+    except Exception as exc:
+        print(f"  catbench.org copy not usable ({exc.__class__.__name__}: {exc}); using Zenodo", flush=True)
+        gz.unlink(missing_ok=True)
+        part.unlink(missing_ok=True)
+        return False
+    gz.unlink(missing_ok=True)
+    size = entry.get("size")
+    if (size and part.stat().st_size != size) or _md5(part) != entry["md5"]:
+        print("  catbench.org copy differs from the Zenodo file (size or md5); using Zenodo", flush=True)
+        part.unlink()
+        return False
+    print(f"MD5 verified against Zenodo: {entry['md5']}", flush=True)
+    os.replace(part, target)
+    target.with_name(target.name + ".part").unlink(missing_ok=True)   # an earlier Zenodo attempt is moot
+    return True
+
+
+def download_zenodo(name: str, target: Path, entry: dict) -> None:
+    """Fetch a Zenodo benchmark file with the hub's resumable downloader and
+    verify upstream's size and md5 before the file appears at `target`.
+
+    catbench's own downloader restarts from zero and deletes the partial file
+    when a connection drops, which on a slow link to Zenodo can fail a 95 MB
+    file every time. Here the partial file `<target>.part` survives a failure
+    and the next run resumes it."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip._download import download_resumable
+    part = target.with_name(target.name + ".part")
+    size = entry.get("size")
+    print(f"Downloading {name} from Zenodo ({(size or 0) / 1e6:.1f} MB), resumable: {part}", flush=True)
+    # Zenodo drops long transfers often; every attempt resumes the kept bytes,
+    # so a generous count costs nothing but a few waits
+    download_resumable(entry["url"], part, label=name, size=size, attempts=20)
+    if size and part.stat().st_size != size:
+        raise RuntimeError(f"{part} holds {part.stat().st_size} bytes, Zenodo lists {size}; "
+                           f"delete it and fetch again")
+    if entry.get("md5"):
+        got = _md5(part)
+        if got != entry["md5"]:
+            part.unlink()
+            raise RuntimeError(f"md5 of the downloaded {name} is {got}, Zenodo lists {entry['md5']}; "
+                               f"the file was removed, fetch again")
+        print(f"MD5 verified: {entry['md5']}", flush=True)
+    os.replace(part, target)
+
+
+def fetch_dataset(name: str, workdir: Path, get_benchmark=None, catbench_version: str | None = None,
+                  zenodo_entry=None, leaderboard_copy=None) -> dict:
     """Fetch `name` through upstream `get_benchmark` into `<workdir>/raw_data/`
     and write the provenance record next to it. A file that already exists is
     never replaced (upstream's own default) and is reported as pre-existing;
@@ -317,17 +409,37 @@ def fetch_dataset(name: str, workdir: Path, get_benchmark=None, catbench_version
     target = workdir / "raw_data" / f"{name}{_SUFFIX}"
     prov_path = workdir / "raw_data" / f"{name}_adsorption.provenance.json"
     pre_existing = target.is_file()
-    if get_benchmark is None:
+    real = get_benchmark is None
+    if real:
         from catbench.adsorption.data.zenodo import get_benchmark as _gb
         get_benchmark = _gb
+        zenodo_entry = _zenodo_entry
+        leaderboard_copy = download_leaderboard_copy
+    if leaderboard_copy is None:
+        leaderboard_copy = lambda name, target, entry: False
+    failure = None
+    source = None
     if not pre_existing:
         workdir.mkdir(parents=True, exist_ok=True)
-        cwd = os.getcwd()
-        os.chdir(workdir)                       # upstream resolves raw_data/ against cwd
+        entry = zenodo_entry(name) if zenodo_entry else None
         try:
-            get_benchmark(name)
-        finally:
-            os.chdir(cwd)
+            if entry and entry.get("url"):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if leaderboard_copy(name, target, entry):
+                    source = "catbench.org copy, size and md5 equal to catbench's Zenodo listing"
+                else:
+                    source = "zenodo (resumable download; url, size and md5 from catbench's Zenodo listing)"
+                    download_zenodo(name, target, entry)
+            else:
+                source = "catbench get_benchmark"
+                cwd = os.getcwd()
+                os.chdir(workdir)                       # upstream resolves raw_data/ against cwd
+                try:
+                    get_benchmark(name)
+                finally:
+                    os.chdir(cwd)
+        except Exception as exc:  # network failures surface as a message, not a traceback
+            failure = f"{exc.__class__.__name__}: {exc}"
     rec = {
         "dataset": name, "get_benchmark_arg": name, "path": str(target), "utc": utc_now(),
         "pre_existing": pre_existing, "fetched": (not pre_existing) and target.is_file(),
@@ -336,8 +448,17 @@ def fetch_dataset(name: str, workdir: Path, get_benchmark=None, catbench_version
         "size_bytes": target.stat().st_size if target.is_file() else None,
         "provenance": str(prov_path), "provenance_written": False,
     }
+    if source:
+        rec["source"] = source
     if not target.is_file():
-        rec["error"] = f"get_benchmark({name!r}) returned without writing {target}"
+        if failure:
+            part = target.with_name(target.name + ".part")
+            kept = (f" {part.stat().st_size / 1e6:.1f} MB are kept in {part}; running the same command again "
+                    f"resumes from there." if part.is_file() else " Run the same command again to retry.")
+            why = ("the connection kept dropping" if "did not finish after" in failure else failure)
+            rec["error"] = f"downloading {name} failed ({why}).{kept}"
+        else:
+            rec["error"] = f"get_benchmark({name!r}) returned without writing {target}"
         return rec
     if prov_path.exists():
         try:
@@ -387,6 +508,8 @@ def _run_file_mode(args) -> int:
         return 2
     if args.json:
         print(json.dumps(rec, indent=2, sort_keys=True))
+    elif rec.get("error") and not rec.get("sha256"):
+        pass                                     # the [stop] line below says what happened
     else:
         state = "pre-existing (not replaced)" if rec["pre_existing"] else ("fetched" if rec["fetched"] else "MISSING")
         print(f"{rec['path']}: {state}; sha256 {rec['sha256']}; catbench {have}; provenance {rec['provenance']}"

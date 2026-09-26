@@ -297,3 +297,87 @@ def test_wrong_interpreter_without_catbench_exits_2(monkeypatch, tmp_path, capsy
     assert "catbench-bearing env interpreter" in capsys.readouterr().err
     assert cd.main(["--fetch", "FG_dataset", "--workdir", str(tmp_path)]) == 2
     assert not (tmp_path / "raw_data").exists()
+
+
+def test_a_zenodo_fetch_resumes_after_a_drop_and_verifies_md5(tmp_path, monkeypatch):
+    import hashlib
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip import _download
+    payload = b'{"rxn": {"raw": {}}}' * 50
+    entry = {"url": "https://zenodo.example/files/x/content", "size": len(payload),
+             "md5": hashlib.md5(payload).hexdigest()}
+    calls = []
+
+    def fake_download(url, part, *, label, size=None, **kw):
+        calls.append(part.stat().st_size if part.exists() else 0)
+        if len(calls) == 1:                      # first run: the link drops halfway
+            part.write_bytes(payload[:300])
+            raise _download.DownloadError("did not finish; the next attempt resumes them")
+        with part.open("ab") as f:              # second run resumes from what was kept
+            f.write(payload[part.stat().st_size:])
+
+    monkeypatch.setattr(_download, "download_resumable", fake_download)
+    work = tmp_path / "work"
+    never = lambda name: pytest.fail("get_benchmark must not run for a Zenodo file")
+    rec = cd.fetch_dataset("Big", work, get_benchmark=never, zenodo_entry=lambda n: entry)
+    part = work / "raw_data" / "Big_adsorption.json.part"
+    assert "error" in rec and "0.0 MB are kept" in rec["error"] and "resumes" in rec["error"]
+    assert part.stat().st_size == 300 and not (work / "raw_data" / "Big_adsorption.json").exists()
+    rec2 = cd.fetch_dataset("Big", work, get_benchmark=never, zenodo_entry=lambda n: entry)
+    assert calls == [0, 300] and rec2["fetched"] and "error" not in rec2 and not part.exists()
+    assert (work / "raw_data" / "Big_adsorption.json").read_bytes() == payload
+    assert rec2["source"].startswith("zenodo (resumable")
+
+
+def test_a_zenodo_file_with_the_wrong_md5_never_becomes_the_dataset(tmp_path, monkeypatch):
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip import _download
+    monkeypatch.setattr(_download, "download_resumable",
+                        lambda url, part, *, label, size=None, **kw: part.write_bytes(b"x" * 10))
+    entry = {"url": "https://zenodo.example/c", "size": 10, "md5": "0" * 32}
+    rec = cd.fetch_dataset("Bad", tmp_path, get_benchmark=lambda n: None, zenodo_entry=lambda n: entry)
+    assert "md5" in rec["error"] and not (tmp_path / "raw_data" / "Bad_adsorption.json").exists()
+    assert not (tmp_path / "raw_data" / "Bad_adsorption.json.part").exists()
+
+
+def test_the_catbench_org_copy_is_used_only_when_it_matches_zenodo(tmp_path, monkeypatch):
+    import gzip
+    import hashlib
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip import _download
+    payload = b'{"rxn": {"raw": {}}}' * 40
+    entry = {"url": "https://zenodo.example/c", "size": len(payload), "md5": hashlib.md5(payload).hexdigest()}
+    served = {"body": gzip.compress(payload)}
+    monkeypatch.setattr(_download, "download_resumable",
+                        lambda url, part, *, label, size=None, **kw: part.write_bytes(served["body"]))
+    target = tmp_path / "raw_data" / "X_adsorption.json"
+    target.parent.mkdir()
+    assert cd.download_leaderboard_copy("X", target, entry) is True
+    assert target.read_bytes() == payload and not list(target.parent.glob("*.part"))
+    target.unlink()
+    served["body"] = gzip.compress(payload + b" ")          # a different file on the CDN
+    assert cd.download_leaderboard_copy("X", target, entry) is False
+    assert not target.exists() and not list(target.parent.glob("*.part"))
+    assert cd.download_leaderboard_copy("X", target, {**entry, "md5": None}) is False   # nothing to check against
+
+
+def test_fetch_prefers_a_verified_leaderboard_copy_and_otherwise_uses_zenodo(tmp_path, monkeypatch):
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip import _download
+    entry = {"url": "https://zenodo.example/c", "size": 3, "md5": None}
+
+    def copy_ok(name, target, e):
+        target.write_bytes(b"abc")
+        return True
+    rec = cd.fetch_dataset("A", tmp_path / "a", get_benchmark=lambda n: None, zenodo_entry=lambda n: entry,
+                           leaderboard_copy=copy_ok)
+    assert rec["fetched"] and rec["source"].startswith("catbench.org copy")
+    monkeypatch.setattr(_download, "download_resumable",
+                        lambda url, part, *, label, size=None, **kw: part.write_bytes(b"abc"))
+    rec2 = cd.fetch_dataset("B", tmp_path / "b", get_benchmark=lambda n: None, zenodo_entry=lambda n: entry,
+                            leaderboard_copy=lambda name, target, e: False)
+    assert rec2["fetched"] and rec2["source"].startswith("zenodo (resumable")
