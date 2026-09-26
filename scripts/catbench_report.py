@@ -138,24 +138,59 @@ def _reexec_before_catbench_import(args: argparse.Namespace, result_dir: Path) -
     os.execve(python, [python, str(Path(__file__).resolve())] + sys.argv[1:], env)
 
 
-def _write_mae_table(out_dir: Path, main_data: list[dict]) -> None:
+def _load_dataset_record(result_dir: Path) -> dict | None:
+    """result/omm_dataset.json, written by catbench_quickstart.py --max-reactions:
+    which reactions of which dataset this result covers."""
+    import json
+    path = result_dir / "omm_dataset.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def subset_note(record: dict | None) -> str | None:
+    if not record or not record.get("subset"):
+        return None
+    return (f"Subset: {record['reactions']} of {record['of']} reactions of {record['source_tag']} "
+            f"({record.get('selection', 'first N sorted reaction ids')}). A quick check, not the full benchmark: "
+            f"compare these numbers only with runs over the same subset.")
+
+
+def _mae_cell(value) -> str:
+    """catbench leaves a class's MAE at NaN when no reaction fell into it."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "n/a"
+    return "0 reactions in this class" if v != v else f"{v:.4f}"
+
+
+def _write_mae_table(out_dir: Path, main_data: list[dict], record: dict | None = None) -> None:
     csv_path = out_dir / "mae_table.csv"
     with csv_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=_COLUMNS)
         writer.writeheader()
         for row in main_data:
-            writer.writerow({k: row.get(k) for k in _COLUMNS})
+            # an empty class (NaN MAE) is an empty cell, not the string "nan"
+            writer.writerow({k: ("" if isinstance(row.get(k), float) and row.get(k) != row.get(k) else row.get(k))
+                             for k in _COLUMNS})
 
     md_path = out_dir / "mae_table.md"
     header = ["MLIP", "MAE_total (eV)", "MAE_normal (eV)", "MAE_single (eV)", "ADwT (%)", "AMDwT (%)", "N"]
     lines = ["| " + " | ".join(header) + " |", "|" + "|".join(["---"] * len(header)) + "|"]
     for row in main_data:
         lines.append(
-            "| {} | {:.4f} | {:.4f} | {:.4f} | {:.2f} | {:.2f} | {} |".format(
-                row["MLIP_name"], row["MAE_total"], row["MAE_normal"],
-                row["MAE_single"], row["ADwT"], row["AMDwT"], row["Num_total"],
+            "| {} | {} | {} | {} | {:.2f} | {:.2f} | {} |".format(
+                row["MLIP_name"], _mae_cell(row["MAE_total"]), _mae_cell(row["MAE_normal"]),
+                _mae_cell(row["MAE_single"]), row["ADwT"], row["AMDwT"], row["Num_total"],
             )
         )
+    note = subset_note(record)
+    if note:
+        lines += ["", note]
     md_path.write_text("\n".join(lines) + "\n")
 
 
@@ -277,20 +312,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[stop] AdsorptionAnalysis produced no rows from {result_dir}", file=sys.stderr)
         return 2
 
-    _write_mae_table(out_dir, main_data)
+    record = _load_dataset_record(result_dir)
+    _write_mae_table(out_dir, main_data, record)
     _write_mae_plot(out_dir, main_data, plt)
     sh_path = _write_run_report_sh(out_dir, sys.executable, result_dir, invocation_cwd, expected, args.catbench_version)
     # Provenance the comparison step needs: which catbench produced these rows.
     (out_dir / "report_meta.json").write_text(json.dumps({
         "catbench_version": catbench.__version__, "python": sys.executable,
         "result_dir": str(result_dir), "models": [row["MLIP_name"] for row in main_data],
-        "expected_models": expected,
+        "expected_models": expected, "dataset": record,
     }, indent=2) + "\n")
 
     print(f"wrote {out_dir / 'mae_table.md'}")
     print(f"wrote {out_dir / 'mae_table.csv'}")
     print(f"wrote {out_dir / 'mae_comparison.png'}")
     print(f"wrote {sh_path} (rerun to reproduce)")
+    if subset_note(record):
+        print(subset_note(record))
     return 0
 
 

@@ -79,3 +79,26 @@ def test_capture_excel_wrapper_forwards_every_upstream_argument():
 def test_argparse_accepts_the_recipe_flags():
     a = cr._parse_args(["--result", "r", "--out", "o", "--expect-models", "A,B", "--catbench-version", "1.1.4", "--python", "/p"])
     assert a.expect_models == "A,B" and a.catbench_version == "1.1.4" and a.python == "/p"
+
+
+def test_mae_table_names_an_empty_class_and_labels_a_subset(tmp_path: Path):
+    import catbench_report as cr
+    rows = [{"MLIP_name": "M", "MAE_total": 1.2333, "MAE_normal": float("nan"), "MAE_single": 5.305,
+             "ADwT": 64.41, "AMDwT": 57.14, "Num_total": 10}]
+    record = {"subset": True, "reactions": 10, "of": 45130, "source_tag": "MamunHighT2019",
+              "selection": "the first 10 reaction ids of MamunHighT2019 in sorted order"}
+    cr._write_mae_table(tmp_path, rows, record)
+    md = (tmp_path / "mae_table.md").read_text()
+    assert "| M | 1.2333 | 0 reactions in this class | 5.3050 |" in md and "nan" not in md
+    assert "Subset: 10 of 45130 reactions of MamunHighT2019" in md and "not the full benchmark" in md
+    assert "1.2333,,5.305" in (tmp_path / "mae_table.csv").read_text()   # empty class: empty cell
+    cr._write_mae_table(tmp_path, rows, None)
+    assert "Subset" not in (tmp_path / "mae_table.md").read_text()
+
+
+def test_dataset_record_is_read_from_the_result_folder(tmp_path: Path):
+    import json
+    import catbench_report as cr
+    assert cr._load_dataset_record(tmp_path) is None
+    (tmp_path / "omm_dataset.json").write_text(json.dumps({"subset": True, "reactions": 3, "of": 9, "source_tag": "x"}))
+    assert cr.subset_note(cr._load_dataset_record(tmp_path)).startswith("Subset: 3 of 9 reactions of x")

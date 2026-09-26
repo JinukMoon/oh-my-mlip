@@ -37,6 +37,12 @@ exec), then executes the `.sh` (never `python -c`). Extra flags:
                           fired together with --emit-only)
   --catbench-version V   approved catbench pin (guard inside each job +
                           jobs/catbench_<MLIP>.meta.json)
+  --max-reactions N      benchmark only the first N reaction ids of TAG (sorted,
+                          so every run picks the same N): written as
+                          raw_data/<TAG>_first<N>_adsorption.json and recorded in
+                          result/omm_dataset.json, which catbench_report.py
+                          prints as "subset N of M" -- a quick check, not the
+                          published benchmark
   --regenerate           a rerun executes the job files already on disk; if
                           their content would change it stops instead of
                           overwriting — this flag replaces them explicitly
@@ -64,6 +70,93 @@ from oh_my_mlip import RegistryError, list_models, list_versions, resolve  # noq
 import catbench_jobgen  # noqa: E402
 
 SUFFIX = "_adsorption.json"
+DATASET_RECORD = "omm_dataset.json"          # result/<this>: which reactions the run covers
+DATASET_SCHEMA = "oh-my-mlip.catbench.dataset/1"
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _refs(node) -> set:
+    """Every string value under a `ref` key -- the _structures ids a reaction uses."""
+    out: set = set()
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "ref" and isinstance(value, str):
+                out.add(value)
+            else:
+                out |= _refs(value)
+    elif isinstance(node, list):
+        for value in node:
+            out |= _refs(value)
+    return out
+
+
+def make_subset(tag: str, n: int, workdir: Path) -> tuple[str, dict]:
+    """Write raw_data/<tag>_first<n>_adsorption.json: the first `n` reaction ids
+    of raw_data/<tag>_adsorption.json in sorted order, with only the
+    `_structures` entries those reactions reference. Deterministic, so every
+    run of the same n benchmarks the same reactions. Returns the new tag and the
+    record written to result/omm_dataset.json."""
+    raw = workdir / "raw_data"
+    source = raw / f"{tag}{SUFFIX}"
+    data = json.loads(source.read_text(encoding="utf-8"))
+    reactions = sorted(k for k in data if not k.startswith("_"))
+    total = len(reactions)
+    if n >= total:
+        return tag, {"schema": DATASET_SCHEMA, "benchmark": tag, "source_tag": tag,
+                     "source_sha256": _sha256(source), "reactions": total, "of": total, "subset": False}
+    keep = reactions[:n]
+    subset = {k: data[k] for k in keep}
+    structures = data.get("_structures")
+    if isinstance(structures, dict):
+        used = set().union(*(_refs(data[k]) for k in keep))
+        subset["_structures"] = {k: v for k, v in structures.items() if k in used}
+    for key, value in data.items():                     # any other shared block, untouched
+        if key.startswith("_") and key != "_structures":
+            subset[key] = value
+    sub_tag = f"{tag}_first{n}"
+    target = raw / f"{sub_tag}{SUFFIX}"
+    text = json.dumps(subset)
+    if target.exists() and target.read_text(encoding="utf-8") != text:
+        print(f"[stop] {target} exists with different content; it was not written by this subset of "
+              f"{source.name}. Move it away or use a new work folder.", file=sys.stderr)
+        raise SystemExit(2)
+    if not target.exists():
+        target.write_text(text, encoding="utf-8")
+    return sub_tag, {"schema": DATASET_SCHEMA, "benchmark": sub_tag, "source_tag": tag,
+                     "source_sha256": _sha256(source), "reactions": n, "of": total, "subset": True,
+                     "selection": f"the first {n} reaction ids of {tag} in sorted order",
+                     "reaction_ids": keep}
+
+
+def check_dataset_record(workdir: Path, record: dict | None) -> None:
+    """result/ holds one dataset: a run over a different subset (or the full set
+    after a subset) would mix into the same report, so it stops instead."""
+    path = workdir / "result" / DATASET_RECORD
+    if not path.is_file():
+        earlier = [p.name for p in path.parent.iterdir() if p.is_dir()] if path.parent.is_dir() else []
+        if earlier and record.get("subset"):
+            print(f"[stop] result/ already holds runs ({', '.join(sorted(earlier))}) with no dataset record, "
+                  f"i.e. of a full dataset; a subset would mix into them. Use a new work folder.",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        return
+    old = json.loads(path.read_text(encoding="utf-8"))
+    if old.get("benchmark") != record["benchmark"]:
+        print(f"[stop] result/ already holds a run of {old.get('benchmark')!r} "
+              f"({old.get('reactions')} of {old.get('of')} reactions of {old.get('source_tag')!r}); "
+              f"this run is {record['benchmark']!r}. Use a new work folder so the report covers one dataset.",
+              file=sys.stderr)
+        raise SystemExit(2)
 
 
 def catbench_excluded(version: str | None, registry: dict | None = None) -> bool:
@@ -314,6 +407,9 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
                      help="dispatch via catbench_jobgen.submit() instead of running the local .sh here")
     ap.add_argument("--catbench-version", default=None,
                      help="approved catbench version; each job guards on it and records it in jobs/*.meta.json")
+    ap.add_argument("--max-reactions", type=int, default=None, metavar="N",
+                     help="benchmark only the first N reaction ids of TAG (sorted, the same N every run); "
+                          "the report labels it a subset")
     ap.add_argument("--regenerate", action="store_true",
                      help="replace existing job files whose content would change (a rerun never does this silently)")
     args = ap.parse_args(argv)
@@ -329,7 +425,27 @@ def main(argv: list[str] | None = None, *, submit_hook=None) -> int:
         print("[stop] no models selected.")
         return 2
     fetcher = None if args.no_fetch else (lambda: _fetch_python(models, args.arch))
+    if args.max_reactions is not None and args.max_reactions < 1:
+        print("[stop] --max-reactions must be at least 1.", file=sys.stderr)
+        return 2
     tag = _discover_tag(args.tag, fetcher)
+    record = None
+    source = Path.cwd() / "raw_data" / f"{tag}{SUFFIX}"
+    if args.max_reactions is None:
+        if source.is_file():
+            total = sum(1 for k in json.loads(source.read_text(encoding="utf-8")) if not k.startswith("_"))
+            record = {"schema": DATASET_SCHEMA, "benchmark": tag, "source_tag": tag,
+                      "source_sha256": _sha256(source), "reactions": total, "of": total, "subset": False}
+    else:
+        tag, record = make_subset(tag, args.max_reactions, Path.cwd())
+        if record["subset"]:
+            print(f"  subset    : first {record['reactions']} of {record['of']} reactions of "
+                  f"{record['source_tag']} (sorted ids) -> raw_data/{tag}{SUFFIX}")
+        else:
+            print(f"  subset    : --max-reactions {args.max_reactions} covers all {record['of']} reactions; "
+                  f"running the full dataset")
+    if record is not None:
+        check_dataset_record(Path.cwd(), record)
 
     print(f"  benchmark : {tag}")
     print(f"  models    : {models}")

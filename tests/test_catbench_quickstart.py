@@ -143,3 +143,64 @@ def test_all_versions_skips_catbench_false_and_passes_arch(monkeypatch):
 
     # an explicit pin still runs a "catbench": false version (the user named it)
     assert [s["version"] for s in qs._resolve_versions_for("UMA", {"UMA": "UMA-s-1p2-OC25"})] == ["UMA-s-1p2-OC25"]
+
+
+def _dataset(n: int) -> dict:
+    data = {f"rxn{i:02d}": {"raw": {"star": {"stoi": -1, "ref": f"s{i}"}, "gas": {"stoi": -1, "ref": "g"}},
+                            "ref_ads_eng": float(i)} for i in range(n)}
+    data["_structures"] = {**{f"s{i}": f"slab{i}" for i in range(n)}, "g": "gas"}
+    return data
+
+
+def test_max_reactions_writes_a_deterministic_subset_with_only_its_structures(monkeypatch, tmp_path, capsys):
+    qs, work = _prepared(monkeypatch, tmp_path)
+    full = _dataset(12)
+    (work / "raw_data" / "demo_adsorption.json").write_text(json.dumps(full))
+    assert qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "3"]) == 0
+    assert "first 3 of 12 reactions of demo" in capsys.readouterr().out
+    sub = json.loads((work / "raw_data" / "demo_first3_adsorption.json").read_text())
+    assert sorted(k for k in sub if not k.startswith("_")) == ["rxn00", "rxn01", "rxn02"]
+    assert sub["_structures"] == {"s0": "slab0", "s1": "slab1", "s2": "slab2", "g": "gas"}
+    record = json.loads((work / "result" / "omm_dataset.json").read_text())
+    assert (record["benchmark"], record["reactions"], record["of"], record["subset"]) == ("demo_first3", 3, 12, True)
+    meta = json.loads((work / "jobs" / "catbench_MACE-MPA-0.meta.json").read_text()) \
+        if (work / "jobs" / "catbench_MACE-MPA-0.meta.json").exists() else None
+    job = (work / "jobs" / "catbench_MACE-MPA-0.py").read_text()
+    assert "demo_first3" in job and (meta is None or meta["benchmark"] == "demo_first3")
+
+
+def test_max_reactions_at_or_above_the_total_runs_the_full_set(monkeypatch, tmp_path, capsys):
+    qs, work = _prepared(monkeypatch, tmp_path)
+    (work / "raw_data" / "demo_adsorption.json").write_text(json.dumps(_dataset(4)))
+    assert qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "9"]) == 0
+    assert "covers all 4 reactions" in capsys.readouterr().out
+    assert not (work / "raw_data" / "demo_first9_adsorption.json").exists()
+    record = json.loads((work / "result" / "omm_dataset.json").read_text())
+    assert (record["benchmark"], record["reactions"], record["of"], record["subset"]) == ("demo", 4, 4, False)
+
+
+def test_a_subset_never_joins_results_that_carry_no_record(monkeypatch, tmp_path, capsys):
+    qs, work = _prepared(monkeypatch, tmp_path)
+    (work / "raw_data" / "demo_adsorption.json").write_text(json.dumps(_dataset(12)))
+    (work / "result" / "MACE-MPA-0").mkdir(parents=True)          # an earlier full run, before records existed
+    with pytest.raises(SystemExit) as info:
+        qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "3"])
+    assert info.value.code == 2 and "no dataset record" in capsys.readouterr().err
+
+
+def test_a_result_folder_never_mixes_two_datasets(monkeypatch, tmp_path, capsys):
+    qs, work = _prepared(monkeypatch, tmp_path)
+    (work / "raw_data" / "demo_adsorption.json").write_text(json.dumps(_dataset(12)))
+    assert qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "3"]) == 0
+    for argv in (["demo", "--only", "MACE", "--emit-only", "--max-reactions", "5"],
+                 ["demo", "--only", "MACE", "--emit-only"]):
+        with pytest.raises(SystemExit) as info:
+            qs.main(argv)
+        assert info.value.code == 2
+        assert "result/ already holds a run of 'demo_first3'" in capsys.readouterr().err
+    assert qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "3"]) == 0   # same subset reruns
+
+
+def test_max_reactions_below_one_is_refused(monkeypatch, tmp_path, capsys):
+    qs, work = _prepared(monkeypatch, tmp_path)
+    assert qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "0"]) == 2

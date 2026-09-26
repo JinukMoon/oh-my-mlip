@@ -36,19 +36,24 @@ Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu,
 
 ??? note "Run it yourself"
 
+    A first run (a 1 MB dataset, 10 reactions, one model: minutes, not hours):
+
     ```bash
-    python3 scripts/catbench_datasets.py --list          # published datasets
     mkdir my_benchmark && cd my_benchmark
-    python <repo>/run_examples/catbench_quickstart.py <TAG> --only MACE,SevenNet
+    python <repo>/run_examples/catbench_quickstart.py ComerGeneralized2024 --only MACE --max-reactions 10
     python <repo>/scripts/catbench_report.py --result ./result --out ./report
     ```
 
-    A `<TAG>` not yet in `raw_data/` is downloaded first (a Zenodo benchmark,
-    otherwise CatHub).
+    The full benchmark drops `--max-reactions`; pick the dataset and models
+    with `python3 scripts/catbench_datasets.py --list`. A dataset's download
+    size says little about its run time: a small file of large molecules can
+    take hours, so try a subset first. A `<TAG>` not yet in `raw_data/` is
+    downloaded first (a Zenodo benchmark, otherwise CatHub).
 
     | Option | Effect |
     |---|---|
     | `--only MACE,SevenNet` | frameworks to run |
+    | `--max-reactions N` | only the first N reaction ids (sorted, so the same N every run); the report marks it "Subset: N of M" |
     | `--all-versions` | every version of each framework (versions marked `"catbench": false` are skipped) |
     | `--d3` | add D3 dispersion (`_D3` is appended to the model name) |
     | `--calc-num N` | calculator instances per model, all loaded at once (default 3): GPU memory grows with N, so use 1 for large models on a small GPU |
