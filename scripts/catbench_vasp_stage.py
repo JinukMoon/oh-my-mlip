@@ -303,18 +303,23 @@ def validate_coeff(coeff_setting: dict, proposal: dict) -> list[str]:
 def coeff_warnings(coeff_setting: dict) -> list[str]:
     """Not errors -- upstream accepts these -- but the sign that silently ruins
     a dataset. Upstream sums `energy_ref * stoi`, and the convention subtracts
-    the gas terms, so a gas coefficient is normally negative: "H2gas": 0.5
-    instead of -0.5 shifts every adsorption energy in that reaction."""
+    the gas terms the adsorbate is made from, so "H2gas": 0.5 instead of -0.5
+    shifts every adsorption energy in that reaction. A positive term is right
+    for a gas the reaction releases (OH* = adslab - slab - H2O + 1/2 H2), so it
+    is flagged only when no gas term in that reaction is consumed."""
     out = []
     for rxn, coeffs in (coeff_setting or {}).items():
         if not isinstance(coeffs, dict):
             continue
-        for key, val in coeffs.items():
-            if key in ("slab", "adslab") or isinstance(val, bool):
-                continue
-            if isinstance(val, (int, float)) and val > 0:
-                out.append(f"{rxn}: gas coefficient {key!r} is positive ({val}); the convention subtracts gas "
-                           f"terms, so this is usually {-val}. Confirm the sign before staging.")
+        gas = {k: v for k, v in coeffs.items()
+               if k not in ("slab", "adslab") and isinstance(v, (int, float)) and not isinstance(v, bool)}
+        if any(v < 0 for v in gas.values()):
+            continue
+        for key, val in gas.items():
+            if val > 0:
+                out.append(f"{rxn}: gas coefficient {key!r} is positive ({val}) and no gas term is consumed; "
+                           f"the convention subtracts the gas the adsorbate is made from, so this is usually "
+                           f"{-val}. Confirm the sign before staging.")
     return out
 
 

@@ -838,5 +838,7 @@ def test_a_positive_gas_coefficient_is_warned_about(tree: Path, tmp_path: Path):
     assert len(warnings) == 1
     assert "H2gas" in warnings[0] and "-0.5" in warnings[0] and warnings[0].startswith("H:")
     assert st.coeff_warnings(COEFF) == []          # the correct signs say nothing
+    # a released gas is positive by right: H2O -> OH* + 1/2 H2 (the how-to's example)
+    assert st.coeff_warnings({"OH": {"slab": -1, "adslab": 1, "H2Ogas": -1, "H2gas": 0.5}}) == []
     rec = st.stage(tree, tmp_path / "dest", "pt_h", flipped, "/usr/bin/python3")
     assert rec["ok"] and rec["warnings"] == warnings
