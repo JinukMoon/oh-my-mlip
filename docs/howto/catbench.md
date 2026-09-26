@@ -36,11 +36,11 @@ Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu,
 
 ??? note "Run it yourself"
 
-    A first run (a 1 MB dataset, 10 reactions, one model: minutes, not hours):
+    A first run (20 small-adsorbate reactions, one model: a few minutes):
 
     ```bash
     mkdir my_benchmark && cd my_benchmark
-    python <repo>/run_examples/catbench_quickstart.py ComerGeneralized2024 --only MACE --max-reactions 10
+    python <repo>/run_examples/catbench_quickstart.py MamunHighT2019 --only MACE --max-reactions 20
     python <repo>/scripts/catbench_report.py --result ./result --out ./report
     ```
 
