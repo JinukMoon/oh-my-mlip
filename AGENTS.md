@@ -447,7 +447,10 @@ For each target:
    `ready`, go to step 4 and stop when verification passes; otherwise continue
    (`install.sh` repairs a partial env instead of duplicating it).
 1. **Install:** `install.sh <model>` with `OH_MY_MLIP_HOME` exported; keep stdout
-   and stderr.
+   and stderr. A first build takes 30 to 120 minutes. Wait for it to exit
+   before ending your turn: in a one-shot session (`claude -p`, `codex exec`)
+   ending the turn ends the session, which kills an install left running in
+   the background and leaves a half-built env.
 2. **Guardrail:** save the attempt's stderr to a file as-is, then run
    `scripts/setup_guardrail.py gate --state <state-file> --ceiling-gb 30
    --stderr-file <stderr-file>`. Read its JSON verdict (the exit code is always
