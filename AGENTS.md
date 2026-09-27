@@ -350,6 +350,16 @@ built on the user's machine:
 The agent classifies each failure here and picks the strategy.
 `scripts/setup_guardrail.py` only decides when to stop (see below).
 
+**Where a recovery may look.** Wheels, archives and weights come from the
+network, the clone (`$OH_MY_MLIP_HOME`), the env being built, and the caches the
+tools use on their own (pip and conda read theirs; framework weight caches are
+resolved by `oh_my_mlip/fetch.py`). Never search the user's other folders for a
+file a download could not fetch: not Downloads, not other conda envs, not
+personal caches or home directories, and never copy from them. A network
+failure is handled by the rows below and the stop rules at the end of this
+section; when those do not get the file, stop and report which file and which
+host were blocked.
+
 ### RETRYABLE — try a different strategy, then continue
 
 | Error | Recovery |
