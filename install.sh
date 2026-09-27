@@ -47,6 +47,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export OH_MY_MLIP_HOME="${OH_MY_MLIP_HOME:-$SCRIPT_DIR}"
 ENVS_DIR="$OH_MY_MLIP_HOME/envs"
 
+# pip gives up on a wheel after 5 resumes of a dropped download; a CUDA wheel
+# is several hundred MB, and on a flaky link that failed a first SevenNet
+# build after an hour. Every pip pass (conda env create and the sidecars)
+# inherits these; a value the user already set wins.
+export PIP_RESUME_RETRIES="${PIP_RESUME_RETRIES:-50}"
+export PIP_RETRIES="${PIP_RETRIES:-10}"
+export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
+
 DRY_RUN=0
 STATUS=0
 WITH_ACCEL=0
