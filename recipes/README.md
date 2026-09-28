@@ -64,9 +64,10 @@ Consequences the recipes enforce:
    different flag — is a reviewed change to the owner file, followed by a
    rebuild through the same chain. Nothing is installed, upgraded or edited
    inside an env by hand to make a verdict pass. The one listed exception is
-   the `pypi.nvidia.com` recovery in `AGENTS.md §8`: it installs the exact
-   `nvidia-*` pins torch declares, from pypi.org instead of an unreachable
-   host, and then `install.sh` finishes the build as usual.
+   the `pypi.nvidia.com` recovery in `AGENTS.md §8`, owned by
+   `scripts/install_nvidia_wheels.py`: it installs the exact `nvidia-*` pins
+   torch declares, from pypi.org instead of an unreachable host, and then
+   `install.sh` finishes the build as usual.
 2. **Host and architecture conditions are branches inside the owner
    files** (driver below the recipe's CUDA runtime, `nvcc` absent, an
    arch-pinned compiled artifact, a gated download). The recipe names the

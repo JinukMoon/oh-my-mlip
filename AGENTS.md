@@ -376,7 +376,7 @@ host were blocked.
 | **Wrong GPU architecture** (a `.pt2` compiled for another GPU) | Compile for this GPU with the prepare script (§6). Rename the mismatched file rather than deleting it first. |
 | **Network error or partial download** (connection reset, incomplete archive or `.nequip.zip`) | Delete the partial file and fetch again, so the retry does not resume a corrupt download. |
 | **Leftover files from a failed download** (a `tmp.tar.gz` or an empty or partial directory under `$OH_MY_MLIP_HOME/models/<framework>/` makes the weights look present, or makes every run download again; a complete copy may already be in the framework's own cache such as `~/.cache/<framework>/`) | Remove only the leftovers under `models/<framework>/` (never the framework's own cache), then let `fetch.ensure_weights` run again. Do not write your own path-searching resolver: weight locations belong to `oh_my_mlip/fetch.py`. |
-| **`pypi.nvidia.com` unreachable** (torch `+cuNNN` envs pull `nvidia-*` wheels through that host; when it times out, every torch env fails in the pip step, although the same wheels are on pypi.org) | Install those wheels from pypi.org into the partial env, then run `install.sh` again. Take the exact pins from `https://pypi.org/pypi/torch/<X.Y.Z>/json` (`requires_dist`) and install them with the env's pip and `--index-url https://pypi.org/simple`. A `ConnectTimeout` to pypi.nvidia.com in `pip install --dry-run` identifies this case. |
+| **`pypi.nvidia.com` unreachable** (torch `+cuNNN` envs pull `nvidia-*` wheels through that host; when it times out, every torch env fails in the pip step, although the same wheels are on pypi.org) | Run `python3 scripts/install_nvidia_wheels.py <env>` (add `--dry-run` to see the pins first): it installs the exact `nvidia-*` pins torch declares on pypi.org into the partial env, and refuses when PyPI's pins belong to a different CUDA build than the recipe's. Then run `install.sh <env>` again, as it prints. A `ConnectTimeout` to pypi.nvidia.com in `pip install --dry-run` identifies this case. |
 
 ### HALT AND REPORT — do not retry; give the user an actionable message
 
@@ -487,12 +487,14 @@ For each target:
    echo $! > "$L/install_<env>.pid"
    ```
 
-   Then poll with short calls (a `sleep` of a minute or so each, or the host's
-   own background-task facility): the install succeeded when
-   `envs/<env>/.omm_ready` exists and the pid has exited; it failed when the
-   pid has exited without it (read the log). Keep the session open until
-   then: in a one-shot session (`claude -p`, `codex exec`) ending the turn
-   ends the session and kills the build.
+   Then poll it yourself with short foreground calls, each well inside the
+   tool's time limit (for example `sleep 60; kill -0 $(cat <pid file>)`): the
+   install succeeded when `envs/<env>/.omm_ready` exists and the pid has
+   exited; it failed when the pid has exited without it (read the log). Do
+   not end your turn to wait for a background notification: in a one-shot
+   session (`claude -p`, `codex exec`) the session ends with the turn and
+   nothing wakes it again, so `setup_verify` never runs. The `nohup` launch
+   keeps the build itself alive either way.
    - A tool call that times out or is killed while you wait is not an install
      error. Do not re-run `install.sh` and do not give that output to
      `setup_guardrail.py`; keep polling. `install.sh` refuses a second build

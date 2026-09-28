@@ -32,7 +32,7 @@ python3 scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on the GPU
 | HTTP 401 or 403 when downloading UMA or eSEN | license not accepted, or the token belongs to another account | accept the license and run `hf auth login`; see [Gated models](gated_models.md) |
 | `EOFError: Ran out of input` or "... does not exist" when a model loads | an empty or partial weight file from an interrupted download | remove the leftovers under `models/<framework>/` and run again; the weights are fetched again |
 | NequIP or Allegro fails to load on a different GPU | the compiled `.pt2` is for another GPU architecture | compile for this GPU; see [Accelerators](compile.md) |
-| pip times out on `pypi.nvidia.com` | that host is unreachable from your network | install the `nvidia-*` wheels from pypi.org into the env, then run `install.sh` again (details in `AGENTS.md` §8) |
+| pip times out on `pypi.nvidia.com` | that host is unreachable from your network | `python3 scripts/install_nvidia_wheels.py <env>` installs the same `nvidia-*` wheels from pypi.org; then run `./install.sh <env>` again |
 | D3 is unavailable | no `nvcc` (CUDA toolkit) | install a CUDA toolkit and run `install.sh` again; the models themselves still run |
 
 ## Update
