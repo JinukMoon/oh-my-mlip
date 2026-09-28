@@ -85,11 +85,8 @@ def detect_host_arch() -> str | None:
         return _host_arch_cache
     arch: str | None = None
     try:
-        smi = nvidia_smi()
-        if smi is None:
-            raise FileNotFoundError("nvidia-smi")
         rows = subprocess.run(
-            [smi, "--query-gpu=index,uuid,compute_cap", "--format=csv,noheader"],
+            [nvidia_smi() or "nvidia-smi", "--query-gpu=index,uuid,compute_cap", "--format=csv,noheader"],
             capture_output=True,
             text=True,
             timeout=10,
