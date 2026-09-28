@@ -23,11 +23,24 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
   with `scripts/build_lammps_nnmtp.sh`;
 - **an onthefly-distill checkout**.
 
+## What the engine fixes
+
+Know these before you plan a run; changing them means changing the engine,
+not a setting:
+
+- **Student MD** — Langevin thermostat at 300 K (NVT-like, time step 0.5 fs).
+  Another temperature or ensemble is not an option of the current engine.
+- **Boundaries** — the input must be fully periodic (a slab keeps its vacuum
+  along z inside the cell), and the teacher labels are computed periodic. The
+  student MD and the final LAMMPS check run with `boundary p p f` and
+  reflecting walls in z, with the atoms marked `FixAtoms` held fixed. The plan
+  states this split; it is the engine's design, not reconciled.
+
 ## What it asks you
 
 - the teacher variant;
-- how the student will be used — temperature, ensemble, MD length; the
-  stability target is set from this;
+- how the student will be used — mainly the MD length you need it to stay
+  stable for; the stability target is set from this;
 - a quick trial run or a production run that must meet accuracy and stability
   targets;
 - where LAMMPS and the onthefly-distill checkout are.
