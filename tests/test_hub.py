@@ -50,6 +50,24 @@ def test_install_sh_and_survey_refuse_a_plugin_cache_home(tmp_path):
     assert r.returncode == 2 and "~/.oh-my-mlip" in r.stderr
 
 
+def _path_without_conda(tmp_path: Path) -> str:
+    """A PATH with every system tool except conda/mamba: CI runners ship a conda
+    in /usr/bin, so /usr/bin:/bin alone does not simulate "conda not on PATH"."""
+    bindir = tmp_path / "sysbin"
+    bindir.mkdir()
+    for d in ("/usr/local/bin", "/usr/bin", "/bin"):
+        if not Path(d).is_dir():
+            continue
+        for tool in Path(d).iterdir():
+            if tool.name in ("conda", "mamba", "micromamba") or (bindir / tool.name).exists():
+                continue
+            try:
+                (bindir / tool.name).symlink_to(tool)
+            except OSError:
+                pass
+    return str(bindir)
+
+
 def _fake_conda(root: Path) -> Path:
     bindir = root / "miniconda3" / "bin"
     bindir.mkdir(parents=True)
@@ -60,7 +78,7 @@ def _fake_conda(root: Path) -> Path:
 
 
 def test_status_needs_no_conda(tmp_path):
-    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(REPO)}
+    env = {"HOME": str(tmp_path), "PATH": _path_without_conda(tmp_path), "OH_MY_MLIP_HOME": str(REPO)}
     r = subprocess.run(["bash", str(REPO / "install.sh"), "--status", "mace"], env=env,
                        capture_output=True, text=True)
     assert r.returncode == 0 and "[--status]" in r.stdout
@@ -73,14 +91,14 @@ def test_a_conda_off_path_is_found_and_used(tmp_path):
     shutil.copytree(REPO, hub_copy, ignore=shutil.ignore_patterns(".git", "envs", "models", ".sweep"))
     (hub_copy / "envs").mkdir()
     shutil.copy(REPO / "envs" / "mace.yml", hub_copy / "envs" / "mace.yml")
-    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(hub_copy)}
+    env = {"HOME": str(tmp_path), "PATH": _path_without_conda(tmp_path), "OH_MY_MLIP_HOME": str(hub_copy)}
     r = subprocess.run(["bash", str(hub_copy / "install.sh"), "mace"], env=env, capture_output=True, text=True)
     assert f"conda is installed at {conda} but is not on PATH" in r.stderr
     assert (tmp_path / "conda.calls").read_text().startswith("fake-conda ")   # the found binary did the work
 
 
 def test_no_conda_anywhere_names_where_it_looked(tmp_path):
-    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(REPO)}
+    env = {"HOME": str(tmp_path), "PATH": _path_without_conda(tmp_path), "OH_MY_MLIP_HOME": str(REPO)}
     r = subprocess.run(["bash", str(REPO / "install.sh"), "mace"], env=env, capture_output=True, text=True)
     assert r.returncode == 1 and "~/miniconda3" in r.stderr and "Miniforge or Miniconda" in r.stderr
 
@@ -95,3 +113,14 @@ def test_survey_accepts_a_variant_and_refuses_an_unknown_name():
     r = subprocess.run([sys.executable, str(REPO / "scripts" / "setup_survey.py"), "--table", "NotAModel"],
                        env=env, capture_output=True, text=True)
     assert r.returncode == 2 and "NotAModel" in r.stderr and "MACE" in r.stderr and "fits" not in r.stdout
+
+
+def test_a_symlink_into_the_plugin_cache_is_refused_too(tmp_path):
+    real = tmp_path / ".claude" / "plugins" / "cache" / "m" / "oh-my-mlip" / "sha"
+    real.mkdir(parents=True)
+    link = tmp_path / "hub"
+    link.symlink_to(real)
+    env = dict(os.environ, OH_MY_MLIP_HOME=str(link))
+    r = subprocess.run(["bash", str(REPO / "install.sh"), "--status", "mace"], env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and "plugin cache, not a hub" in r.stderr
