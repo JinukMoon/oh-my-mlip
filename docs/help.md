@@ -44,6 +44,14 @@ python3 scripts/setup_verify.py <model> --json   # re-check the models you use
 
 If an env recipe changed, `./install.sh <env>` updates that env.
 
+With the Claude Code plugin, update the plugin too; it stays on its installed
+version until you do:
+
+```
+/plugin marketplace update oh-my-mlip
+/plugin update oh-my-mlip@oh-my-mlip
+```
+
 ## Remove an env and free disk
 
 ```bash
