@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _setup_common import load_local_env_map as load_map  # noqa: E402
-from _setup_common import resolve_home  # noqa: E402
+from _setup_common import refuse_plugin_copy, resolve_home  # noqa: E402
 
 MAP_NAME = "env_map.local.json"
 
@@ -104,6 +104,7 @@ def main() -> int:
     args = ap.parse_args()
 
     home = resolve_home()
+    refuse_plugin_copy(home)
     if args.list:
         data = load_map(home)
         if not data:

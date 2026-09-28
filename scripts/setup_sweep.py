@@ -107,7 +107,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fresh_root  # noqa: E402
-from _setup_common import load_local_env_map, resolve_home, utc_now  # noqa: E402
+from _setup_common import load_local_env_map, refuse_plugin_copy, resolve_home, utc_now  # noqa: E402
 from setup_survey import token_source  # noqa: E402
 from setup_verify import family_versions, find_env  # noqa: E402
 
@@ -1431,6 +1431,7 @@ def main() -> int:
     args = ap.parse_args()
 
     home = resolve_home()
+    refuse_plugin_copy(home)
     if args.mode == "report":
         ledger = Path(args.ledger) if args.ledger else latest_ledger_path(home)
         if ledger is None or not ledger.exists():

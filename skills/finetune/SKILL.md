@@ -4,6 +4,10 @@ description: Fine-tune an oh-my-mlip model on your own dataset from a foundation
 argument-hint: "<model> --dataset PATH [--out DIR] [--epochs N] [--emit-only] [--slurm]"
 ---
 
+The hub is `$OH_MY_MLIP_HOME` (default `~/.oh-my-mlip`); if neither exists,
+clone it there first (`$OH_MY_MLIP_HOME/AGENTS.md §9.0`). Read the AGENTS.md
+and run the scripts of that clone, never the copy inside the plugin directory.
+
 Defer entirely to `AGENTS.md §3C` (fine-tune a model on your own dataset).
 
 Read `AGENTS.md §3C` now. Do not reproduce its content here; follow it verbatim.

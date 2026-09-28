@@ -13,6 +13,11 @@ if [ -z "${OH_MY_MLIP_HOME:-}" ]; then
   export OH_MY_MLIP_HOME
   unset _OMM_SRC
 fi
+case "$OH_MY_MLIP_HOME/" in
+  */.claude/plugins/*|*/.codex/plugins/*)
+    echo "[oh-my-mlip] warning: $OH_MY_MLIP_HOME is the plugin's own copy, not a hub; export" \
+         "OH_MY_MLIP_HOME=<your clone> (default ~/.oh-my-mlip, AGENTS.md §9.0) and source that clone's env.sh." >&2 ;;
+esac
 
 # ── 1) Weight caches: FRAMEWORK-NATIVE by default; shared root is OPT-IN ──
 # Default: env.sh does NOT redirect any download cache. Every framework uses

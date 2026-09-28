@@ -108,12 +108,11 @@ _REPO_ROOT = _PKG_DIR.parent
 def home() -> str:
     """Return the resolved OH_MY_MLIP_HOME (absolute clone root).
 
-    Order: OH_MY_MLIP_HOME env var -> repo root containing this package.
+    Order: OH_MY_MLIP_HOME env var -> repo root containing this package
+    (the shared resolver in oh_my_mlip/hub.py).
     """
-    env = os.environ.get("OH_MY_MLIP_HOME")
-    if env:
-        return str(Path(env).expanduser())
-    return str(_REPO_ROOT)
+    from oh_my_mlip.hub import resolve_home
+    return str(resolve_home())
 
 
 def _expand(value: Any, home_path: str) -> Any:

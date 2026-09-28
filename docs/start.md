@@ -18,8 +18,10 @@ gets there. Details: [Host requirements](host_requirements.md).
     /plugin install oh-my-mlip@oh-my-mlip
     ```
 
-    The plugin works from any directory and fetches the hub itself on first
-    use. Details: [Use with Claude Code](claude_plugin.md).
+    The plugin works from any directory. On first use Claude clones the hub
+    into `~/.oh-my-mlip` (or uses `$OH_MY_MLIP_HOME` if you set it) and builds
+    envs there, about 5 to 15 GB per model. Details:
+    [Use with Claude Code](claude_plugin.md).
 
 === "Codex or another agent"
 

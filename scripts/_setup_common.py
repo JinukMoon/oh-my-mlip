@@ -8,7 +8,7 @@ points added for testability: `cwd`, `gpu_sample_seconds`, `proc_root`,
 `host_cuda`.
 
 Also the single home of:
-  * ``resolve_home()`` — OH_MY_MLIP_HOME / OMM_HOME / repo-root resolution
+  * ``resolve_home()`` — OH_MY_MLIP_HOME / repo-root resolution (oh_my_mlip/hub.py)
     (moved from setup_survey.py).
   * ``predict_driver_skew()`` — the PREFLIGHT numeric driver-skew predicate.
     It implements the SAME comparison as install.sh's ``warn_driver_skew``
@@ -60,10 +60,20 @@ def load_local_env_map(home: Path) -> dict:
 
 
 def resolve_home() -> Path:
-    home = os.environ.get("OH_MY_MLIP_HOME") or os.environ.get("OMM_HOME")
-    if home and Path(home).is_dir():
-        return Path(home).resolve()
-    return Path(__file__).resolve().parents[1]
+    """The hub root, by the one resolver the package uses (oh_my_mlip/hub.py)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip.hub import resolve_home as _resolve
+    return _resolve()
+
+
+def refuse_plugin_copy(home: Path) -> None:
+    """Exit 2 with the hub message when `home` is a plugin-cache copy."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip.hub import plugin_copy_refusal
+    msg = plugin_copy_refusal(home)
+    if msg:
+        print(f"[stop] {msg}", file=sys.stderr)
+        raise SystemExit(2)
 
 
 # ---------------------------------------------------------------------------

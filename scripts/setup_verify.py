@@ -64,6 +64,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _setup_common import (  # noqa: E402
     predict_driver_skew,
+    refuse_plugin_copy,
     resolve_home,
     stream_process,
 )
@@ -281,6 +282,7 @@ def main() -> int:
     args = ap.parse_args()
 
     home = resolve_home()
+    refuse_plugin_copy(home)
 
     if args.all_variants:
         if args.version:

@@ -4,6 +4,10 @@ description: Install an oh-my-mlip MLIP model environment and verify energy+forc
 argument-hint: "<model … | all | all except <model …>>  e.g. MACE-MPA-0 · MACE SevenNet ORB · all · all except UMA eSEN"
 ---
 
+The hub is `$OH_MY_MLIP_HOME` (default `~/.oh-my-mlip`); if neither exists,
+clone it there first (`$OH_MY_MLIP_HOME/AGENTS.md §9.0`). Read the AGENTS.md
+and run the scripts of that clone, never the copy inside the plugin directory.
+
 Defer entirely to `AGENTS.md §9` (installing model environments — single,
 multiple, or all), plus `AGENTS.md §5` (gated models) and `AGENTS.md §8`
 (error-class recovery policy) that §9 leans on. Read them now and follow
@@ -23,7 +27,7 @@ targets). Use these scripts instead of re-deriving any fact they compute.
 
 Routing notes:
 - Bootstrapping the repo from an arbitrary cwd (locating vs. cloning,
-  `OH_MY_MLIP_HOME`/`OMM_HOME`, conda/mamba check, `env.sh`) —
+  `OH_MY_MLIP_HOME`, conda/mamba check, `env.sh`) —
   `AGENTS.md §9.0`.
 - A pure roster/listing question installs nothing — `AGENTS.md §9.1`.
 - Target resolution for one model, several, `all`, or `all except <...>`,

@@ -21,6 +21,32 @@ the marketplace:
 /plugin marketplace add ~/oh-my-mlip
 ```
 
+## Where it installs
+
+The plugin carries only the instructions. Envs, weights and the machine-local
+records live in a clone of this repository, the hub:
+
+- `$OH_MY_MLIP_HOME` if you set it, otherwise `~/.oh-my-mlip`, which Claude
+  clones on first use;
+- about 5 to 15 GB per installed model.
+
+To use a clone you already have, set `OH_MY_MLIP_HOME` to it before starting
+Claude Code. The copy of the repository inside the plugin directory is never
+used as the hub: it is replaced on every plugin update, so the install scripts
+refuse it.
+
+## Keep it up to date
+
+An installed plugin stays on its version until you update it:
+
+```
+/plugin marketplace update oh-my-mlip
+/plugin update oh-my-mlip@oh-my-mlip
+```
+
+Then restart Claude Code. The hub is a normal git clone: update it with
+`git -C ~/.oh-my-mlip pull` (see [Help](help.md#update)).
+
 ## What it adds
 
 You rarely need to type these; Claude picks the right one from your request.

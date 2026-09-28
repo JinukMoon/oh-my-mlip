@@ -4,6 +4,10 @@ description: Run the full-roster catbench adsorption benchmarking pipeline acros
 argument-hint: "[--dataset PATH] [--models MODEL1,MODEL2,...] [--d3]"
 ---
 
+The hub is `$OH_MY_MLIP_HOME` (default `~/.oh-my-mlip`); if neither exists,
+clone it there first (`$OH_MY_MLIP_HOME/AGENTS.md §9.0`). Read the AGENTS.md
+and run the scripts of that clone, never the copy inside the plugin directory.
+
 Defer entirely to `AGENTS.md §3B` (full-roster catbench pipeline).
 
 Read `AGENTS.md §3B` now. Do not reproduce its content here; follow it verbatim.

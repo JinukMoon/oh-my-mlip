@@ -45,6 +45,16 @@ set -euo pipefail
 # ── Resolve clone root and shared env ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export OH_MY_MLIP_HOME="${OH_MY_MLIP_HOME:-$SCRIPT_DIR}"
+# Same order as oh_my_mlip/hub.py. A copy inside an agent's plugin cache is
+# replaced on every plugin update, so envs are never built there.
+case "$OH_MY_MLIP_HOME/" in
+  */.claude/plugins/*|*/.codex/plugins/*)
+    echo "[stop] $OH_MY_MLIP_HOME is the copy of oh-my-mlip inside the agent's plugin cache, not a hub:" >&2
+    echo "       it is replaced on every plugin update, and envs built there are lost." >&2
+    echo "       Use your own clone: export OH_MY_MLIP_HOME=<clone> (default ~/.oh-my-mlip; clone" >&2
+    echo "       https://github.com/JinukMoon/oh-my-mlip.git there if it does not exist). AGENTS.md §9.0." >&2
+    exit 2 ;;
+esac
 ENVS_DIR="$OH_MY_MLIP_HOME/envs"
 
 # pip gives up on a wheel after 5 resumes of a dropped download; a CUDA wheel

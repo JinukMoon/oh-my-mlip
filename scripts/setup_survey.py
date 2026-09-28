@@ -43,7 +43,7 @@ PER_ENV_GB = 10
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _setup_common import load_local_env_map, resolve_home  # noqa: E402
+from _setup_common import load_local_env_map, refuse_plugin_copy, resolve_home  # noqa: E402
 
 
 def env_state(prefix: Path) -> str:
@@ -176,6 +176,7 @@ def main() -> int:
     parser.add_argument("--table", action="store_true", help="human-readable output")
     args = parser.parse_args()
 
+    refuse_plugin_copy(resolve_home())
     result = survey(resolve_home(), args.targets)
     if args.table:
         print_table(result)

@@ -4,6 +4,10 @@ description: Run a single-point energy/forces calculation or structure relaxatio
 argument-hint: "<model name> [--relax] [--d3] [--structure PATH]"
 ---
 
+The hub is `$OH_MY_MLIP_HOME` (default `~/.oh-my-mlip`); if neither exists,
+clone it there first (`$OH_MY_MLIP_HOME/AGENTS.md §9.0`). Read the AGENTS.md
+and run the scripts of that clone, never the copy inside the plugin directory.
+
 Defer entirely to `AGENTS.md §3A` (run branches — single-point / relax).
 
 Read `AGENTS.md §3A` now. Do not reproduce its content here; follow it verbatim.

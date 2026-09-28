@@ -400,10 +400,15 @@ This is the procedure behind `/oh-my-mlip:setup` and any request to install or
 
 The working directory does not matter:
 
-- use `$OH_MY_MLIP_HOME` if it is set and exists, else `$OMM_HOME`;
+- use `$OH_MY_MLIP_HOME` if it is set and exists;
 - otherwise clone `https://github.com/JinukMoon/oh-my-mlip.git` into
-  `~/.oh-my-mlip`;
-- export `OH_MY_MLIP_HOME` for every child process;
+  `~/.oh-my-mlip` (envs land under it: about 5 to 15 GB per model);
+- export `OH_MY_MLIP_HOME` for every child process, and run scripts and read
+  documents from that clone;
+- never use the copy of this repository inside an agent's plugin cache
+  (`~/.claude/plugins/...`) as the hub: the host replaces it on every plugin
+  update, and `install.sh`, `setup_survey.py`, `setup_verify.py`,
+  `setup_sweep.py` and `adopt_env.py` refuse it;
 - check `which conda || which mamba` before any install (§8 if missing);
 - `source $OH_MY_MLIP_HOME/env.sh` before `install.sh`.
 
