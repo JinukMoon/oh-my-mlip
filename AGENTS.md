@@ -375,7 +375,7 @@ host were blocked.
 |---|---|
 | **`nvcc` missing** | D3 is unavailable; the models still run (§6). Tell the user; installing a CUDA toolkit is their decision. |
 | **Gated weights without token or accepted license** | Give the `license_url` and point to `docs/hf_token.md` (§5). Do not retry the download. |
-| **conda / mamba missing** | Point the user to Miniconda (`https://docs.conda.io/projects/miniconda`). Install it only with the user's explicit consent. |
+| **conda / mamba missing** | An agent's shell often lacks the PATH lines `conda init` writes, so `which conda` failing is not proof. `install.sh` looks in `$CONDA_EXE` and the usual install directories and uses a conda it finds there; only when it reports none, point the user to Miniconda (`https://docs.conda.io/projects/miniconda`). Install it only with the user's explicit consent. |
 | **Install recipe or weight source missing or wrong in `models.json`**, and the official documentation does not resolve it | Make **one bounded attempt** (read the official page, try one or two real fetches or builds). If that fails, stop: ask the user for the model's official install or download instructions, and report what was tried. The guardrail stops below lead here too. |
 
 ### When to stop (enforced by `scripts/setup_guardrail.py`)
@@ -409,7 +409,8 @@ The working directory does not matter:
   (`~/.claude/plugins/...`) as the hub: the host replaces it on every plugin
   update, and `install.sh`, `setup_survey.py`, `setup_verify.py`,
   `setup_sweep.py` and `adopt_env.py` refuse it;
-- check `which conda || which mamba` before any install (§8 if missing);
+- `install.sh` finds conda or mamba itself, also when this shell lacks it on
+  PATH (§8 if it reports none);
 - `source $OH_MY_MLIP_HOME/env.sh` before `install.sh`.
 
 ### 9.1 Listing what can be installed (installs nothing)

@@ -48,3 +48,38 @@ def test_install_sh_and_survey_refuse_a_plugin_cache_home(tmp_path):
     r = subprocess.run([sys.executable, str(REPO / "scripts" / "setup_survey.py"), "--table", "MACE"],
                        env=env, capture_output=True, text=True)
     assert r.returncode == 2 and "~/.oh-my-mlip" in r.stderr
+
+
+def _fake_conda(root: Path) -> Path:
+    bindir = root / "miniconda3" / "bin"
+    bindir.mkdir(parents=True)
+    conda = bindir / "conda"
+    conda.write_text("#!/bin/sh\necho \"fake-conda $*\" >> \"$HOME/conda.calls\"\nexit 1\n")
+    conda.chmod(0o755)
+    return conda
+
+
+def test_status_needs_no_conda(tmp_path):
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(REPO)}
+    r = subprocess.run(["bash", str(REPO / "install.sh"), "--status", "mace"], env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "[--status]" in r.stdout
+
+
+def test_a_conda_off_path_is_found_and_used(tmp_path):
+    conda = _fake_conda(tmp_path)
+    import shutil
+    hub_copy = tmp_path / "hub"          # a hub with no built envs, so install.sh reaches conda
+    shutil.copytree(REPO, hub_copy, ignore=shutil.ignore_patterns(".git", "envs", "models", ".sweep"))
+    (hub_copy / "envs").mkdir()
+    shutil.copy(REPO / "envs" / "mace.yml", hub_copy / "envs" / "mace.yml")
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(hub_copy)}
+    r = subprocess.run(["bash", str(hub_copy / "install.sh"), "mace"], env=env, capture_output=True, text=True)
+    assert f"conda is installed at {conda} but is not on PATH" in r.stderr
+    assert (tmp_path / "conda.calls").read_text().startswith("fake-conda ")   # the found binary did the work
+
+
+def test_no_conda_anywhere_names_where_it_looked(tmp_path):
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(REPO)}
+    r = subprocess.run(["bash", str(REPO / "install.sh"), "mace"], env=env, capture_output=True, text=True)
+    assert r.returncode == 1 and "~/miniconda3" in r.stderr and "Miniforge or Miniconda" in r.stderr

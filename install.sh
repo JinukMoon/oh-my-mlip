@@ -299,16 +299,37 @@ else
   done
 fi
 
-# ── Detect conda / mamba (skipped under --dry-run so the plan always prints) ──
+# ── Detect conda / mamba (skipped under --dry-run and --status, which change nothing) ──
+# An agent's non-interactive shell usually lacks the PATH lines `conda init`
+# writes into ~/.bashrc, so an installed conda is looked for in the usual
+# places before it is declared missing; when found, its bin/ goes first on PATH
+# so the sidecar builds and conda's own pip see it too.
+find_conda_off_path() {
+  local cand
+  for cand in "${MAMBA_EXE:-}" "${CONDA_EXE:-}" \
+              "$HOME"/miniforge3/bin/mamba "$HOME"/mambaforge/bin/mamba \
+              "$HOME"/miniforge3/bin/conda "$HOME"/mambaforge/bin/conda \
+              "$HOME"/miniconda3/bin/conda "$HOME"/anaconda3/bin/conda \
+              /opt/conda/bin/conda /opt/miniconda3/bin/conda /opt/miniforge3/bin/conda; do
+    [ -n "$cand" ] && [ -x "$cand" ] && { echo "$cand"; return 0; }
+  done
+  return 1
+}
 CONDA_BIN=""
-if [ "$DRY_RUN" -eq 0 ]; then
+if [ "$DRY_RUN" -eq 0 ] && [ "$STATUS" -eq 0 ]; then
   if command -v mamba >/dev/null 2>&1; then
     CONDA_BIN="mamba"
   elif command -v conda >/dev/null 2>&1; then
     CONDA_BIN="conda"
+  elif found="$(find_conda_off_path)"; then
+    echo "install.sh: conda is installed at $found but is not on PATH in this shell; using it." >&2
+    echo "  To make it permanent for non-interactive shells: export PATH=\"$(dirname "$found"):\$PATH\"" >&2
+    export PATH="$(dirname "$found"):$PATH"
+    CONDA_BIN="$found"
   else
-    echo "install.sh: neither 'mamba' nor 'conda' found on PATH." >&2
-    echo "  Install Miniconda/Miniforge first, then re-run." >&2
+    echo "install.sh: no conda or mamba found (not on PATH, not in \$CONDA_EXE, not under ~/miniforge3," >&2
+    echo "  ~/mambaforge, ~/miniconda3, ~/anaconda3 or /opt). If you have one elsewhere, put its bin/ on" >&2
+    echo "  PATH and re-run; otherwise install Miniforge or Miniconda first." >&2
     exit 1
   fi
 fi
