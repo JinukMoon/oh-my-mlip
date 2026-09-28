@@ -117,3 +117,57 @@ def test_check_gated_raises_actionable_when_no_token(monkeypatch, capsys):
         msg = str(exc)
         assert "docs/hf_token.md" in msg
         assert "https://huggingface.co/facebook/UMA" in msg
+
+
+def _uma_spec():
+    from oh_my_mlip import registry
+    return registry.resolve("UMA")
+
+
+def test_name_based_gated_loader_stops_with_the_hub_message(monkeypatch, tmp_path):
+    for var in ("HF_TOKEN", "HF_TOKEN_PATH", "OMM_HF_TOKEN_FILE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))                       # no `hf auth login` cache either
+    spec = _uma_spec()
+    assert spec["gated"] and not fetch._inference_weight_targets(spec)   # a name-based loader
+    import pytest
+    with pytest.raises(fetch.GatedError) as info:
+        fetch.ensure_weights(spec["model"], spec["version"], spec=spec)
+    msg = str(info.value)
+    assert spec["license_url"] in msg and "hf auth login" in msg and "docs/hf_token.md" in msg
+
+
+def test_name_based_gated_loader_exports_omm_token_file(monkeypatch, tmp_path):
+    for var in ("HF_TOKEN", "HF_TOKEN_PATH"):
+        monkeypatch.delenv(var, raising=False)
+    token_file = tmp_path / "tok"
+    token_file.write_text("x")
+    monkeypatch.setenv("OMM_HF_TOKEN_FILE", str(token_file))
+    spec = _uma_spec()
+    import os
+    try:
+        assert fetch.ensure_weights(spec["model"], spec["version"], spec=spec) == []
+        assert os.environ["HF_TOKEN_PATH"] == str(token_file)
+    finally:
+        os.environ.pop("HF_TOKEN_PATH", None)       # the export is process-wide; do not leak it
+
+
+def test_worker_start_fails_fast_on_a_gated_model_without_token(monkeypatch, tmp_path):
+    from oh_my_mlip import provider
+    for var in ("HF_TOKEN", "HF_TOKEN_PATH", "OMM_HF_TOKEN_FILE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    w = provider.Worker("UMA")
+    monkeypatch.setattr(w, "_popen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("spawned")))
+    import pytest
+    with pytest.raises(provider.WorkerError, match="no Hugging Face token was found"):
+        w.start()
+
+
+def test_a_401_from_the_worker_names_the_license_page():
+    from oh_my_mlip import provider
+    spec = _uma_spec()
+    hint = provider._gated_access_hint(spec, "HfHubHTTPError: 401 Client Error: Unauthorized for url")
+    assert spec["license_url"] in hint
+    assert provider._gated_access_hint(spec, "CUDA out of memory") == ""
+    assert provider._gated_access_hint({"gated": False}, "401") == ""

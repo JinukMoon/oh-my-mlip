@@ -97,6 +97,18 @@ def get_calculator(
 
 
 # ── Layer 4: persistent Worker (one process per env, id-routed) ──────────────
+def _gated_access_hint(spec: dict, error: str) -> str:
+    """For a gated model refused by Hugging Face: the token was found, so the
+    license is not yet accepted for that account (or the token is another one's)."""
+    if not spec.get("gated"):
+        return ""
+    if not re.search(r"\b(401|403)\b|GatedRepo|gated repo|Unauthorized|Forbidden", error, re.I):
+        return ""
+    return (f"\n[oh-my-mlip] Hugging Face refused access to a gated model. A token was found, so accept the "
+            f"license with the account that token belongs to: {spec.get('license_url') or '(see the model card)'}; "
+            f"access can take a while to be granted. Retrying before that does not help. See docs/hf_token.md.")
+
+
 def _killed_hint(model: str, returncode: int | None) -> str:
     """Name the usual cause when a worker died from SIGKILL before it was ready.
 
@@ -347,6 +359,13 @@ class Worker:
         escape from ``Popen``. This makes the README/AGENTS "actionable message,
         not a traceback" promise true for ``run()`` / ``Worker`` too.
         """
+        # A gated model with no token stops here with the license/login steps;
+        # OMM_HF_TOKEN_FILE is exported as HF_TOKEN_PATH for the child.
+        from oh_my_mlip.fetch import GatedError, gated_precheck
+        try:
+            gated_precheck(self.spec)
+        except GatedError as exc:
+            raise WorkerError(str(exc)) from exc
         # measure the caches before the child exists, so bytes it fetches
         # right away count as download progress instead of the baseline
         caches = _model_cache_dirs()
@@ -388,7 +407,7 @@ class Worker:
             self._terminate_child()
             raise WorkerError(
                 f"worker for {self.model} failed to start: "
-                f"{handshake.get('error')}"
+                f"{handshake.get('error')}" + _gated_access_hint(self.spec, str(handshake.get("error")))
             )
         return self
 
