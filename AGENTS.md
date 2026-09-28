@@ -310,10 +310,16 @@ Check `gated`, `license_url` and `weights` in `models.json` before fetching:
   download fails by design.
 
 **When a gated model is requested:** check only whether a token is available,
-never read or print it. If it is missing, give the user the `license_url` and the
-steps in `docs/hf_token.md`, and ask them to run the login themselves. Never ask
-them to paste a token into the conversation or onto a command line. HTTP 401 or
-403 means access has not been granted yet. Full flow: `docs/gated_models.md`.
+never read or print it:
+`python3 -c "import sys; sys.path.insert(0, 'scripts'); from setup_survey import token_source; print(token_source())"`
+(with `$OH_MY_MLIP_HOME` as the working directory). If it prints `none`, stop
+the gated targets only (install the others meanwhile), give the user each
+`license_url` and the steps in `docs/hf_token.md`, and ask them to log in
+themselves (in Claude Code: `! hf auth login` in the prompt). Never ask them to
+paste a token into the conversation or onto a command line. Resume when the
+check prints a source. HTTP 401 or 403 on the fetch means the license or access
+request is not approved yet for that account: show the `license_url` again and
+do not retry in a loop. Full flow: `docs/gated_models.md`.
 
 ## 6. GPU-specific compilation (D3 kernel, NequIP/Allegro models)
 

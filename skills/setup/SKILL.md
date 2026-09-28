@@ -47,24 +47,9 @@ Routing notes:
   license + token; never ask for, echo, or store the token value —
   `AGENTS.md §5` / `docs/hf_token.md`.
 
-Gated-model token request (before installing any gated target — today every
-UMA variant, `facebook/UMA`, and eSEN-30M-OAM, `facebook/OMAT24`; read the
-current list from `gated` / `license_url` in `models.json`):
-1. Presence-only check, never the value:
-   `python3 -c "import sys; sys.path.insert(0, 'scripts'); from setup_survey import token_source; print(token_source())"`
-   (`$OH_MY_MLIP_HOME` as cwd).
-2. If it prints `none`, STOP the gated targets only (install the non-gated
-   ones meanwhile) and ask the user to:
-   a. open the model's `license_url` while logged in to Hugging Face and accept
-      / request access with that same account;
-   b. make a READ token available themselves — run `! hf auth login` in
-      the prompt, or export `HF_TOKEN_PATH` / `OMM_HF_TOKEN_FILE` pointing at a
-      token file outside the repo (`docs/hf_token.md`).
-   Tell them never to paste the token into the chat or onto a command line.
-3. Resume the gated targets once the check prints a source. A present token
-   does not prove access: an HTTP 401 or 403 response on the fetch means the license/access
-   request is not approved yet — surface the `license_url` again, do not retry
-   in a loop.
+Gated targets (`gated: true` / `license_url` in `models.json`): before
+installing them, follow `AGENTS.md §5` (a presence-only token check; the user
+logs in themselves; never a token in the chat).
 
 Whole-job requests (interview, scoped plan, approval, execution, evidence)
 follow the shared recipe `recipes/setup.md` — read it after the sections

@@ -101,3 +101,33 @@ def test_every_skill_references_an_executable_path():
         text = skill_md.read_text(encoding="utf-8")
         refs = re.findall(r"(?:scripts|run_examples)/[A-Za-z0-9_./-]+", text)
         assert refs, f"{skill_md.relative_to(REPO_ROOT)} references no scripts/ or run_examples/ path"
+
+
+def test_every_agents_section_the_skills_and_recipes_cite_exists():
+    import re
+    from pathlib import Path
+    repo = Path(__file__).resolve().parents[1]
+    headings = [l for l in (repo / "AGENTS.md").read_text(encoding="utf-8").splitlines() if l.startswith("#")]
+
+    def exists(ref: str) -> bool:
+        m = re.fullmatch(r"(\d+)([A-Z])?(?:\.(\d+))?", ref)
+        top, letter, sub = m.groups()
+        if letter:
+            return any(h.startswith(f"### ({letter})") for h in headings) and any(h.startswith(f"## {top}.") for h in headings)
+        if sub:
+            return any(h.startswith(f"### {top}.{sub} ") for h in headings)
+        return any(h.startswith(f"## {top}.") for h in headings)
+
+    files = list((repo / "skills").glob("*/SKILL.md")) + list((repo / "recipes").glob("*.md"))
+    missing = []
+    for f in files:
+        for ref in re.findall(r"AGENTS\.md`? ?§ ?(\d+[A-Z]?(?:\.\d+)?)", f.read_text(encoding="utf-8")):
+            if not exists(ref):
+                missing.append((f.relative_to(repo).as_posix(), ref))
+    assert not missing, missing
+
+
+def test_the_setup_skill_carries_no_hard_coded_gated_list():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / "skills" / "setup" / "SKILL.md").read_text(encoding="utf-8")
+    assert "facebook/UMA" not in text and "eSEN-30M-OAM" not in text
