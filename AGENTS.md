@@ -583,7 +583,11 @@ adapter (see `oh_my_mlip/mcp_server.py`). Launch it from an interpreter with
 `requirements-mcp.txt` installed, with `OH_MY_MLIP_HOME` exported. Every tool
 answers `{"ok": true, ...}` or `{"ok": false, "error": ...}`; `install_model`
 only reports the command (a build is launched and polled per §9.4), and
-`verify_model` is the done-check.
+`verify_model` is the done-check. `run_relax` and `run_catbench` start a job
+and return at once with a `job_id` and a log path (the job runs in its own
+process under `$OH_MY_MLIP_HOME/.mcp_jobs/`, stopped after `timeout_s`); poll
+`job_status(job_id)` with a pause between calls until it reports `done`
+(with `result`), `failed` or `timeout`.
 
 | Section | MCP tool |
 |---|---|
@@ -595,3 +599,4 @@ only reports the command (a build is launched and polled per §9.4), and
 | §3A single point | `run_singlepoint` |
 | §3A relaxation | `run_relax` |
 | §3B CatBench across models | `run_catbench` |
+| a started relaxation or CatBench job | `job_status` |

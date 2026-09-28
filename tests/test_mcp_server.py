@@ -80,12 +80,14 @@ def test_mcp_server_module_constants_present():
         "install_model",
         "verify_model",
         "run_catbench",
+        "job_status",
     )
     assert mcp_server.GPU_FREE_TOOLS == {
         "list_models",
         "describe_model",
         "model_status",
         "install_model",
+        "job_status",
     }
 
 
@@ -319,7 +321,7 @@ def test_run_catbench_runs_emitted_job_files_not_python_c(monkeypatch, tmp_path)
     ran = []
     import subprocess
     monkeypatch.setattr(subprocess, "run", lambda argv, **k: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
-    out = _tool(server, "run_catbench")("demo", str(tmp_path), models=["MACE"])
+    out = mcp_server.catbench_blocking("demo", str(tmp_path), models=["MACE"])   # what the job runs
     assert out["ok"] is True and ran and ran[0][0] == "sh" and ran[0][1].endswith(".sh")
     assert all("-c" not in argv for argv in ran)
     assert (tmp_path / "jobs").is_dir() and "catbench_report.py" in out["aggregate_hint"]
@@ -334,3 +336,40 @@ def test_verify_model_returns_the_setup_verify_verdict(monkeypatch):
         argv, 0, stdout="log line\n" + __import__("json").dumps(verdict) + "\n", stderr=""))
     out = _tool(server, "verify_model")("MACE-MPA-0")
     assert out == {"ok": True, "verdict": verdict}
+
+
+@requires_mcp
+def test_run_relax_is_a_job_that_job_status_polls(monkeypatch, tmp_path):
+    """No GPU: the relaxation fails at once inside the job (env missing there), but the
+    whole start -> detached runner -> job_status path runs for real."""
+    import time
+    from oh_my_mlip import mcp_jobs, registry
+    monkeypatch.setenv("OH_MY_MLIP_HOME", str(tmp_path))
+    (tmp_path / "models.json").write_text((Path(registry._REPO_ROOT) / "models.json").read_text())
+    server = mcp_server.build_server()
+    monkeypatch.setattr(mcp_server, "_env_python_exists", lambda *a, **k: True)   # pass the quick check only
+    out = _tool(server, "run_relax")("MACE", {"symbols": "Cu", "positions": [[0, 0, 0]]}, steps=1)
+    assert out["ok"] is True and out["status"] == "running" and out["job_id"]
+    assert Path(out["log"]).parent.parent == tmp_path / ".mcp_jobs"
+    for _ in range(100):
+        st = _tool(server, "job_status")(out["job_id"])
+        if st["status"] != "running":
+            break
+        time.sleep(0.1)
+    assert st["status"] == "failed" and "not installed" in st["error"]   # the job's own env check
+
+
+@requires_mcp
+def test_job_status_reports_a_dead_runner_and_unknown_ids(monkeypatch, tmp_path):
+    from oh_my_mlip import mcp_jobs
+    monkeypatch.setenv("OH_MY_MLIP_HOME", str(tmp_path))
+    job = tmp_path / ".mcp_jobs" / "j1"
+    job.mkdir(parents=True)
+    mcp_jobs._write(job, {"job_id": "j1", "kind": "relax", "params": {}, "timeout_s": 5, "status": "running",
+                          "created": 0, "log": str(job / "log"), "pid": 999999})
+    st = mcp_jobs.status("j1")
+    assert st["status"] == "failed" and "without recording an outcome" in st["error"]
+    assert mcp_jobs.status("nope")["ok"] is False and mcp_jobs.status("../etc")["ok"] is False
+    mcp_jobs._write(job, {"job_id": "j1", "kind": "relax", "params": {}, "timeout_s": 5, "status": "done",
+                          "created": 0, "log": str(job / "log"), "result": {"ok": True, "energy": -1.0}})
+    assert mcp_jobs.status("j1")["result"]["energy"] == -1.0

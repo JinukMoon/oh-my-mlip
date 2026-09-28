@@ -47,11 +47,12 @@ TOOL_NAMES: tuple[str, ...] = (
     "install_model",
     "verify_model",
     "run_catbench",
+    "job_status",
 )
 
 # Tools that need no GPU / conda env / heavy deps — they answer from the registry.
 GPU_FREE_TOOLS: frozenset[str] = frozenset(
-    {"list_models", "describe_model", "model_status", "install_model"}
+    {"list_models", "describe_model", "model_status", "install_model", "job_status"}
 )
 
 
@@ -215,6 +216,145 @@ def _status_rows() -> list[dict[str, Any]]:
     return rows
 
 
+# ── blocking bodies, run inside a job process (oh_my_mlip/mcp_jobs.py) ─────────
+def relax_blocking(model: str, structure: Any, fmax: float = 0.05, steps: int = 200,
+                   version: str | None = None, apply_d3: bool = False) -> dict:
+    """BFGS against a persistent Worker; run inside an MCP job (oh_my_mlip/mcp_jobs.py)."""
+    try:
+        atoms = structure_to_atoms(structure)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    if not _env_python_exists(model, version):
+        return {"ok": False, "error": _env_hint(model, version)}
+
+    import numpy as np
+    from ase.calculators.calculator import Calculator, all_changes
+    from ase.optimize import BFGS
+
+    from oh_my_mlip import Worker
+
+    class _WorkerCalculator(Calculator):
+        implemented_properties = ["energy", "forces"]
+
+        def __init__(self, worker: "Worker", **kwargs):
+            super().__init__(**kwargs)
+            self._worker = worker
+
+        def calculate(
+            self,
+            atoms=None,
+            properties=("energy", "forces"),
+            system_changes=all_changes,
+        ):
+            super().calculate(atoms, properties, system_changes)
+            resp = self._worker.request(
+                self.atoms, properties=("energy", "forces")
+            )
+            if not resp.get("ok"):
+                raise RuntimeError(
+                    f"worker request failed: {resp.get('error')}"
+                )
+            res = resp["results"]
+            self.results["energy"] = float(res["energy"])
+            self.results["forces"] = np.asarray(res["forces"], dtype=float)
+
+    with Worker(model, version=version, apply_d3=apply_d3) as worker:
+        atoms.calc = _WorkerCalculator(worker)
+        opt = BFGS(atoms, logfile=None)
+        opt.run(fmax=fmax, steps=steps)
+        nsteps = opt.get_number_of_steps()
+
+    forces = atoms.get_forces()
+    fmax_final = float(np.linalg.norm(forces, axis=1).max()) if len(atoms) else 0.0
+    return {
+        "ok": True,
+        "energy": float(atoms.get_potential_energy()),
+        "fmax": fmax_final,
+        "steps": int(nsteps),
+        "converged": fmax_final <= fmax,
+        "atoms": json.loads(json.dumps(atoms.todict(), default=_todict_default)),
+    }
+
+
+def catbench_blocking(tag: str, data_dir: str, models: list[str] | None = None, calc_num: int = 3,
+                      apply_d3: bool = False) -> dict:
+    """Emit and run each model's catbench job files; run inside an MCP job."""
+    import subprocess
+
+    from oh_my_mlip import list_models as _list_models
+    from oh_my_mlip import resolve as _resolve
+
+    work = Path(data_dir).expanduser()
+    data_file = work / "raw_data" / f"{tag}_adsorption.json"
+    if not data_file.exists():
+        return {
+            "ok": False,
+            "error": (
+                f"benchmark data not found: {data_file}. This repo bundles "
+                "no data — provide your own raw_data/<tag>_adsorption.json "
+                "(see run_examples/README.md)."
+            ),
+        }
+
+    roster = _list_models()
+    selected = [m for m in roster if (models is None or m in models)]
+    if not selected:
+        return {"ok": False, "error": "no models selected from the roster."}
+
+    # Every executed action exists first as a file (AGENTS.md): the same
+    # job files catbench_quickstart.py writes, run as their .sh.
+    import sys as _sys
+    _sys.path.insert(0, str(Path(registry.home()) / "scripts"))
+    import catbench_jobgen
+
+    per_model: list[dict[str, Any]] = []
+    for model in selected:
+        try:
+            spec = _resolve(model)
+        except registry.RegistryError as exc:
+            per_model.append(
+                {"model": model, "status": "skipped", "reason": str(exc)}
+            )
+            continue
+        if not Path(spec["python"]).exists():
+            per_model.append(
+                {
+                    "model": model,
+                    "status": "skipped",
+                    "reason": _env_hint(model, None),
+                }
+            )
+            continue
+
+        mlip_name = spec.get("version", model) + ("_D3" if apply_d3 else "")
+        try:
+            artifacts = catbench_jobgen.emit(spec, mlip_name, tag, calc_num, apply_d3, work)
+        except FileExistsError as exc:
+            per_model.append({"model": model, "status": "skipped", "reason": str(exc)})
+            continue
+        proc = subprocess.run(["sh", str(artifacts["sh"])], cwd=str(work))
+        per_model.append(
+            {
+                "model": model,
+                "mlip_name": mlip_name,
+                "status": "ok" if proc.returncode == 0 else "failed",
+                "returncode": proc.returncode,
+                "job": str(artifacts["sh"]),
+            }
+        )
+
+    ran = [m for m in per_model if m["status"] in ("ok", "failed")]
+    return {
+        "ok": bool(ran),
+        "result_dir": str(work / "result"),
+        "models": per_model,
+        "aggregate_hint": (
+            f"python3 {Path(registry.home()) / 'scripts' / 'catbench_report.py'} "
+            f"--result {work / 'result'} --out {work / 'report'}"
+        ),
+    }
+
+
 # ── server construction ───────────────────────────────────────────────────────
 def build_server():
     """Construct and return the ``FastMCP`` server with all tools registered.
@@ -327,70 +467,24 @@ def build_server():
         steps: int = 200,
         version: str | None = None,
         apply_d3: bool = False,
+        timeout_s: int = 7200,
     ) -> dict:
-        """Relax a structure with BFGS against one MLIP. NEEDS A GPU/ENV AT RUNTIME.
+        """Start a BFGS relaxation against one MLIP as a job. NEEDS A GPU/ENV AT RUNTIME.
 
-        Drives an ASE ``BFGS`` optimizer against a persistent ``Worker`` (one
-        long-lived env process for the whole relaxation), mirroring
-        ``run_examples/relax.py``. ``structure`` accepts the same forms as
-        run_singlepoint. Returns the final energy, max force, step count, and the
-        relaxed structure as ``Atoms.todict()``. If the env is not installed,
-        returns an actionable error pointing at install_model / install.sh.
+        Returns at once with ``job_id`` and ``log``; poll ``job_status(job_id)``
+        until it reports ``done`` (then ``result`` holds the final energy, max
+        force, step count, ``converged`` and the relaxed structure as
+        ``Atoms.todict()``), ``failed`` or ``timeout``. The job runs in its own
+        process under ``$OH_MY_MLIP_HOME/.mcp_jobs/`` and is stopped after
+        ``timeout_s`` seconds. ``structure`` accepts the same forms as
+        run_singlepoint. A missing env returns the install command at once.
         """
-        try:
-            atoms = structure_to_atoms(structure)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
+        structure_to_atoms(structure)                     # a bad structure fails now, not in the job
         if not _env_python_exists(model, version):
             return {"ok": False, "error": _env_hint(model, version)}
-
-        import numpy as np
-        from ase.calculators.calculator import Calculator, all_changes
-        from ase.optimize import BFGS
-
-        from oh_my_mlip import Worker
-
-        class _WorkerCalculator(Calculator):
-            implemented_properties = ["energy", "forces"]
-
-            def __init__(self, worker: "Worker", **kwargs):
-                super().__init__(**kwargs)
-                self._worker = worker
-
-            def calculate(
-                self,
-                atoms=None,
-                properties=("energy", "forces"),
-                system_changes=all_changes,
-            ):
-                super().calculate(atoms, properties, system_changes)
-                resp = self._worker.request(
-                    self.atoms, properties=("energy", "forces")
-                )
-                if not resp.get("ok"):
-                    raise RuntimeError(
-                        f"worker request failed: {resp.get('error')}"
-                    )
-                res = resp["results"]
-                self.results["energy"] = float(res["energy"])
-                self.results["forces"] = np.asarray(res["forces"], dtype=float)
-
-        with Worker(model, version=version, apply_d3=apply_d3) as worker:
-            atoms.calc = _WorkerCalculator(worker)
-            opt = BFGS(atoms, logfile=None)
-            opt.run(fmax=fmax, steps=steps)
-            nsteps = opt.get_number_of_steps()
-
-        forces = atoms.get_forces()
-        fmax_final = float(np.linalg.norm(forces, axis=1).max()) if len(atoms) else 0.0
-        return {
-            "ok": True,
-            "energy": float(atoms.get_potential_energy()),
-            "fmax": fmax_final,
-            "steps": int(nsteps),
-            "converged": fmax_final <= fmax,
-            "atoms": json.loads(json.dumps(atoms.todict(), default=_todict_default)),
-        }
+        from oh_my_mlip import mcp_jobs
+        return mcp_jobs.start("relax", {"model": model, "structure": structure, "fmax": fmax, "steps": steps,
+                                        "version": version, "apply_d3": apply_d3}, timeout_s)
 
     @mcp.tool()
     @_envelope
@@ -450,92 +544,38 @@ def build_server():
         models: list[str] | None = None,
         calc_num: int = 3,
         apply_d3: bool = False,
+        timeout_s: int = 86400,
     ) -> dict:
-        """Run a catbench adsorption benchmark across models. NEEDS A GPU/ENV AT RUNTIME.
+        """Start a catbench adsorption benchmark across models as a job. NEEDS A GPU/ENV AT RUNTIME.
 
-        The single-machine catbench roster runner (mirrors
-        ``run_examples/catbench_quickstart.py``). You bring your own data: a file
-        ``<data_dir>/raw_data/<tag>_adsorption.json`` must exist (this repo bundles
-        no benchmark data). Each selected model runs in its OWN env interpreter
-        (one subprocess per model) writing into ``<data_dir>/result/`` for catbench
-        to aggregate. ``models`` filters the roster (default: all). Returns per-model
-        exit codes and the result directory. Models whose env is not installed are
-        skipped with an actionable note rather than crashing the whole run.
+        You bring your own data: ``<data_dir>/raw_data/<tag>_adsorption.json``
+        must exist (this repo bundles no benchmark data). Each selected model's
+        job files are written to ``<data_dir>/jobs/`` (as
+        ``run_examples/catbench_quickstart.py`` does) and run one after the
+        other. Returns at once with ``job_id`` and ``log``; poll
+        ``job_status(job_id)``: ``result`` then lists per-model exit codes, the
+        result directory and the report command. Stopped after ``timeout_s``.
         """
-        import subprocess
-
-        from oh_my_mlip import list_models as _list_models
-        from oh_my_mlip import resolve as _resolve
-
-        work = Path(data_dir).expanduser()
-        data_file = work / "raw_data" / f"{tag}_adsorption.json"
+        data_file = Path(data_dir).expanduser() / "raw_data" / f"{tag}_adsorption.json"
         if not data_file.exists():
-            return {
-                "ok": False,
-                "error": (
-                    f"benchmark data not found: {data_file}. This repo bundles "
-                    "no data — provide your own raw_data/<tag>_adsorption.json "
-                    "(see run_examples/README.md)."
-                ),
-            }
+            return {"ok": False, "error": (f"benchmark data not found: {data_file}. This repo bundles no data — "
+                                           "provide your own raw_data/<tag>_adsorption.json.")}
+        from oh_my_mlip import mcp_jobs
+        return mcp_jobs.start("catbench", {"tag": tag, "data_dir": data_dir, "models": models,
+                                           "calc_num": calc_num, "apply_d3": apply_d3}, timeout_s)
 
-        roster = _list_models()
-        selected = [m for m in roster if (models is None or m in models)]
-        if not selected:
-            return {"ok": False, "error": "no models selected from the roster."}
+    @mcp.tool()
+    @_envelope
+    def job_status(job_id: str) -> dict:
+        """State of a job started by run_relax or run_catbench. GPU-FREE.
 
-        # Every executed action exists first as a file (AGENTS.md): the same
-        # job files catbench_quickstart.py writes, run as their .sh.
-        import sys as _sys
-        _sys.path.insert(0, str(Path(registry.home()) / "scripts"))
-        import catbench_jobgen
-
-        per_model: list[dict[str, Any]] = []
-        for model in selected:
-            try:
-                spec = _resolve(model)
-            except registry.RegistryError as exc:
-                per_model.append(
-                    {"model": model, "status": "skipped", "reason": str(exc)}
-                )
-                continue
-            if not Path(spec["python"]).exists():
-                per_model.append(
-                    {
-                        "model": model,
-                        "status": "skipped",
-                        "reason": _env_hint(model, None),
-                    }
-                )
-                continue
-
-            mlip_name = spec.get("version", model) + ("_D3" if apply_d3 else "")
-            try:
-                artifacts = catbench_jobgen.emit(spec, mlip_name, tag, calc_num, apply_d3, work)
-            except FileExistsError as exc:
-                per_model.append({"model": model, "status": "skipped", "reason": str(exc)})
-                continue
-            proc = subprocess.run(["sh", str(artifacts["sh"])], cwd=str(work))
-            per_model.append(
-                {
-                    "model": model,
-                    "mlip_name": mlip_name,
-                    "status": "ok" if proc.returncode == 0 else "failed",
-                    "returncode": proc.returncode,
-                    "job": str(artifacts["sh"]),
-                }
-            )
-
-        ran = [m for m in per_model if m["status"] in ("ok", "failed")]
-        return {
-            "ok": bool(ran),
-            "result_dir": str(work / "result"),
-            "models": per_model,
-            "aggregate_hint": (
-                f"python3 {Path(registry.home()) / 'scripts' / 'catbench_report.py'} "
-                f"--result {work / 'result'} --out {work / 'report'}"
-            ),
-        }
+        ``status`` is ``running``, ``done``, ``failed`` or ``timeout``; ``log_tail``
+        is the end of its log; ``result`` is present once ``done``. Poll with a
+        pause between calls; a finished job's record stays until you delete
+        ``$OH_MY_MLIP_HOME/.mcp_jobs/<job_id>``.
+        """
+        from oh_my_mlip import mcp_jobs
+        return mcp_jobs.status(job_id)
 
     return mcp
 

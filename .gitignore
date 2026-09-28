@@ -78,3 +78,4 @@ distill_demo*/
 # --- run_examples outputs (written to the current directory) ---
 relaxed.extxyz
 ft_demo.traj
+.mcp_jobs/
