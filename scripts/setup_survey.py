@@ -60,19 +60,19 @@ def env_state(prefix: Path) -> str:
 def token_source() -> str:
     """Name the first available token source; never touch the value.
 
-    Order mirrors oh_my_mlip.fetch resolution: HF_TOKEN env, then the
-    standard huggingface_hub file paths, then the OMM convenience variable.
+    Order mirrors oh_my_mlip.fetch._resolve_token: HF_TOKEN, HF_TOKEN_PATH,
+    OMM_HF_TOKEN_FILE, then the `hf auth login` cache.
     """
     if os.environ.get("HF_TOKEN"):
         return "HF_TOKEN"
     path = os.environ.get("HF_TOKEN_PATH")
     if path and Path(path).is_file():
         return "HF_TOKEN_PATH"
-    if (Path.home() / ".cache" / "huggingface" / "token").is_file():
-        return "hf_cache"
     omm = os.environ.get("OMM_HF_TOKEN_FILE")
     if omm and Path(omm).is_file():
         return "OMM_HF_TOKEN_FILE"
+    if (Path.home() / ".cache" / "huggingface" / "token").is_file():
+        return "hf_cache"
     return "none"
 
 
@@ -81,13 +81,16 @@ def survey(home: Path, targets: list[str]) -> dict:
     families = {k: v for k, v in registry.items() if not k.startswith("_")}
 
     wanted = {t.lower() for t in targets}
+    matched: set[str] = set()
     adopted_map = load_local_env_map(home)
     rows: list[dict] = []
     seen_envs: set[str] = set()
     for family, spec in families.items():
         env = spec["env"]
-        if wanted and family.lower() not in wanted and env.lower() not in wanted:
+        names = {family.lower(), env.lower()} | {v.lower() for v in (spec.get("versions") or {})}
+        if wanted and not (names & wanted):
             continue
+        matched |= names & wanted
         gated = any(
             bool(v.get("gated")) for v in (spec.get("versions") or {}).values()
         )
@@ -139,6 +142,7 @@ def survey(home: Path, targets: list[str]) -> dict:
         },
         "token": {"available": source != "none", "source": source},
         "gated_envs": [r["env"] for r in rows if r["gated"]],
+        "unknown_targets": sorted(t for t in targets if t.lower() not in matched),
     }
 
 
@@ -178,6 +182,13 @@ def main() -> int:
 
     refuse_plugin_copy(resolve_home())
     result = survey(resolve_home(), args.targets)
+    if result["unknown_targets"]:
+        registry = json.loads((resolve_home() / "models.json").read_text())
+        fams = sorted(k for k in registry if not k.startswith("_"))
+        print(f"[stop] not a family, env or variant in models.json: {', '.join(result['unknown_targets'])}. "
+              f"Families: {', '.join(fams)} (variant names: python3 -c \"import oh_my_mlip; "
+              f"print(oh_my_mlip.list_versions('<Family>'))\").", file=sys.stderr)
+        return 2
     if args.table:
         print_table(result)
     else:

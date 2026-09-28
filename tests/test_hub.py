@@ -83,3 +83,15 @@ def test_no_conda_anywhere_names_where_it_looked(tmp_path):
     env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "OH_MY_MLIP_HOME": str(REPO)}
     r = subprocess.run(["bash", str(REPO / "install.sh"), "mace"], env=env, capture_output=True, text=True)
     assert r.returncode == 1 and "~/miniconda3" in r.stderr and "Miniforge or Miniconda" in r.stderr
+
+
+def test_survey_accepts_a_variant_and_refuses_an_unknown_name():
+    env = dict(os.environ, OH_MY_MLIP_HOME=str(REPO))
+    r = subprocess.run([sys.executable, str(REPO / "scripts" / "setup_survey.py"), "MACE-MPA-0"],
+                       env=env, capture_output=True, text=True)
+    import json
+    out = json.loads(r.stdout)
+    assert r.returncode == 0 and [row["env"] for row in out["envs"]] == ["mace"] and out["unknown_targets"] == []
+    r = subprocess.run([sys.executable, str(REPO / "scripts" / "setup_survey.py"), "--table", "NotAModel"],
+                       env=env, capture_output=True, text=True)
+    assert r.returncode == 2 and "NotAModel" in r.stderr and "MACE" in r.stderr and "fits" not in r.stdout
