@@ -28,6 +28,11 @@ Input selection:
 The identity of what was relaxed (path, sha256, atom count, formula) is printed
 before the optimizer starts. For gated models export HF_TOKEN first
 (docs/gated_models.md).
+
+Convergence: the output reports `converged`, the final `fmax` (largest force
+on a free atom), the steps taken and why it stopped. relaxed.extxyz is written
+either way; exit 0 means converged, exit 3 means the step cap came first and
+the structure is not a converged minimum.
 """
 import argparse
 import hashlib
@@ -156,7 +161,9 @@ def main() -> int:
         with Worker(args.model, version=args.version, apply_d3=args.d3, arch=args.arch) as worker:
             atoms.calc = _WorkerCalculator(worker)
             opt = BFGS(atoms)
-            opt.run(fmax=args.fmax, steps=args.steps)
+            converged = bool(opt.run(fmax=args.fmax, steps=args.steps))
+            # get_forces() applies the constraints, so fixed atoms count as zero
+            final_fmax = float((atoms.get_forces() ** 2).sum(axis=1).max() ** 0.5) if len(atoms) else 0.0
     except WorkerError as exc:
         # Env not materialized (or worker failed to start): print the actionable
         # message, not a raw traceback.
@@ -165,9 +172,17 @@ def main() -> int:
 
     print(f"model       : {args.model}{' +D3' if args.d3 else ''}")
     print(f"final energy: {atoms.get_potential_energy():.6f} eV")
+    print(f"converged   : {'yes' if converged else 'no'}")
+    print(f"final fmax  : {final_fmax:.4f} eV/A (target {args.fmax})")
+    print(f"steps       : {opt.nsteps} of {args.steps}")
+    print(f"stopped     : {'fmax reached the target' if converged else 'the step cap was reached first'}")
     out = Path("relaxed.extxyz")
     atoms.write(str(out))
-    print(f"wrote       : {out}")
+    print(f"wrote       : {out}" + ("" if converged else " (NOT converged: raise --steps or check the structure)"))
+    if not converged:
+        print(f"[oh-my-mlip] relaxation did not converge in {args.steps} steps (final fmax {final_fmax:.4f} "
+              f"> {args.fmax} eV/A); {out} is the last step, not a minimum.", file=sys.stderr)
+        return 3
     return 0
 
 

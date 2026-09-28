@@ -12,6 +12,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import ase.build
+import ase.io
 import numpy as np
 import pytest
 
@@ -145,3 +147,35 @@ def test_structure_flag_is_in_the_parser():
              and getattr(n.func, "attr", None) == "add_argument"
              for a in n.args if isinstance(a, ast.Constant) and isinstance(a.value, str)}
     assert "--structure" in flags
+
+
+class _PushingWorker(_FakeWorker):
+    """A harmonic pull toward points 1 A away along x: one BFGS step cannot reach fmax."""
+
+    def request(self, atoms, properties=("energy", "forces")):
+        if not hasattr(self, "_x0"):
+            self._x0 = atoms.get_positions() + np.array([1.0, 0.0, 0.0])
+        d = atoms.get_positions() - self._x0
+        return {"ok": True, "results": {"energy": float(0.5 * (d ** 2).sum()), "forces": (-d).tolist()}}
+
+
+def test_a_converged_relaxation_says_so(relax, monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    src = tmp_path / "in.xyz"
+    ase.io.write(str(src), ase.build.bulk("Cu", "fcc", a=3.6, cubic=True))
+    rc = _run(relax, monkeypatch, ["MACE", "--structure", str(src), "--steps", "5"])
+    out = capsys.readouterr().out
+    assert rc == 0 and "converged   : yes" in out and "final fmax  : 0.0000" in out
+
+
+def test_hitting_the_step_cap_is_reported_and_exits_3(relax, monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(relax, "Worker", _PushingWorker)
+    src = tmp_path / "in.xyz"
+    ase.io.write(str(src), ase.build.bulk("Cu", "fcc", a=3.6, cubic=True))
+    rc = _run(relax, monkeypatch, ["MACE", "--structure", str(src), "--steps", "1", "--fmax", "0.05"])
+    cap = capsys.readouterr()
+    assert rc == 3
+    assert "converged   : no" in cap.out and "steps       : 1 of 1" in cap.out
+    assert "the step cap was reached first" in cap.out and "NOT converged" in cap.out
+    assert "did not converge in 1 steps" in cap.err and (tmp_path / "relaxed.extxyz").is_file()
