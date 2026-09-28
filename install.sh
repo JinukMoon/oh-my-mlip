@@ -50,7 +50,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export OH_MY_MLIP_HOME="${OH_MY_MLIP_HOME:-$SCRIPT_DIR}"
 # Same order as oh_my_mlip/hub.py. A copy inside an agent's plugin cache is
 # replaced on every plugin update, so envs are never built there.
-case "$OH_MY_MLIP_HOME/" in
+# the real path, as oh_my_mlip/hub.py resolves it: a symlink into the cache is refused too
+OMM_REAL_HOME="$(cd "$OH_MY_MLIP_HOME" 2>/dev/null && pwd -P || echo "$OH_MY_MLIP_HOME")"
+case "$OMM_REAL_HOME/" in
   */.claude/plugins/*|*/.codex/plugins/*)
     echo "[stop] $OH_MY_MLIP_HOME is the copy of oh-my-mlip inside the agent's plugin cache, not a hub:" >&2
     echo "       it is replaced on every plugin update, and envs built there are lost." >&2
@@ -69,7 +71,8 @@ export PIP_RETRIES="${PIP_RETRIES:-10}"
 export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
 
 OMM_LOCKS=()
-trap 'rm -f ${OMM_LOCKS[@]+"${OMM_LOCKS[@]}"} 2>/dev/null' EXIT
+# only the locks this process took (each holds our pid) are removed on exit
+trap 'rm -rf ${OMM_LOCKS[@]+"${OMM_LOCKS[@]}"} 2>/dev/null' EXIT
 DRY_RUN=0
 STATUS=0
 WITH_ACCEL=0
@@ -469,14 +472,28 @@ install_one() {
   # One build per env at a time: a second install.sh (an agent re-running the
   # command while the first still builds in the background) would otherwise
   # judge the half-built env and act on it.
-  local lock="$ENVS_DIR/.$env_name.install.pid" holder
-  if [ -f "$lock" ] && holder="$(cat "$lock" 2>/dev/null)" && [ -n "$holder" ] \
-     && [ "$holder" != "$$" ] && kill -0 "$holder" 2>/dev/null; then
-    echo "install.sh: '$env_name' is already being built by install.sh (pid $holder). Wait for it:" >&2
-    echo "  it is done when $prefix/.omm_ready exists or that pid has exited." >&2
+  # mkdir is atomic: exactly one process creates the lock directory. A lock
+  # left by a dead holder is removed once and taken again; any other failure
+  # stops this env (fail closed) instead of building without the lock.
+  local lock="$ENVS_DIR/.$env_name.install.lock" holder
+  if ! mkdir "$lock" 2>/dev/null; then
+    holder="$(cat "$lock/pid" 2>/dev/null || true)"
+    if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+      echo "install.sh: '$env_name' is already being built by install.sh (pid $holder). Wait for it:" >&2
+      echo "  it is done when $prefix/.omm_ready exists or that pid has exited." >&2
+      return 3
+    fi
+    rm -rf "$lock"
+    if ! mkdir "$lock" 2>/dev/null; then
+      echo "install.sh: could not take the build lock $lock for '$env_name'; not building it." >&2
+      return 3
+    fi
+  fi
+  if ! echo "$$" > "$lock/pid"; then
+    rm -rf "$lock"
+    echo "install.sh: could not write $lock/pid; not building '$env_name'." >&2
     return 3
   fi
-  echo "$$" > "$lock"
   OMM_LOCKS+=("$lock")
 
   if [ -e "$sentinel" ]; then

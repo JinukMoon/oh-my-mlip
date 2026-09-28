@@ -259,12 +259,37 @@ def _is_partial(path: Path) -> bool:
     return path.name.endswith(_PARTIAL_SUFFIXES) or path.name.startswith("tmp.")
 
 
+def _open_files(proc_root: Path = Path("/proc")) -> set | None:
+    """Real paths of every file some process has open, or None when /proc
+    cannot be read (then nothing is deleted: age alone cannot prove a stalled
+    download is abandoned)."""
+    if not proc_root.is_dir():
+        return None
+    opened: set = set()
+    for pid_dir in proc_root.iterdir():
+        if not pid_dir.name.isdigit():
+            continue
+        try:
+            fds = list((pid_dir / "fd").iterdir())
+        except (PermissionError, FileNotFoundError, NotADirectoryError):
+            continue          # another user's process, or gone: it cannot hold our hub files open
+        for fd in fds:
+            try:
+                opened.add(os.path.realpath(os.readlink(fd)))
+            except OSError:
+                continue
+    return opened
+
+
 def _collect_hub_partials(home: Path, delete: bool, min_age_s: float) -> tuple:
     """Leftovers of interrupted downloads under the hub only. Symlinks are never
-    followed or removed, and a file changed in the last `min_age_s` seconds is
-    left alone (another download may still be writing it)."""
+    followed or removed; a file changed in the last `min_age_s` seconds, or held
+    open by any process (a stalled download), is left alone."""
     import time as _time
     removed, freed, now = [], 0, _time.time()
+    opened = _open_files() if delete else set()
+    if opened is None:
+        delete = False
     for root in _hub_partial_roots(home):
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
             for name in filenames:
@@ -275,7 +300,7 @@ def _collect_hub_partials(home: Path, delete: bool, min_age_s: float) -> tuple:
                     st = path.stat()
                 except OSError:
                     continue
-                if now - st.st_mtime < min_age_s:
+                if now - st.st_mtime < min_age_s or os.path.realpath(path) in (opened or set()):
                     continue
                 removed.append({"path": str(path), "bytes": st.st_size})
                 freed += st.st_size

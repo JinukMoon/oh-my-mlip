@@ -78,13 +78,17 @@ def test_a_symlinked_env_is_never_touched(hub, tmp_path):
 
 def test_a_second_install_of_the_same_env_waits_for_the_first(hub):
     home, env = hub
+    lock = home / "envs" / ".mace.install.lock"
     holder = subprocess.Popen(["sleep", "30"])
     try:
-        (home / "envs" / ".mace.install.pid").write_text(str(holder.pid))
+        lock.mkdir()
+        (lock / "pid").write_text(str(holder.pid))
         r = _install(env, "mace")
         assert r.returncode == 1 and f"already being built by install.sh (pid {holder.pid})" in r.stderr
+        assert lock.is_dir()                                      # the live holder's lock is left alone
     finally:
         holder.kill()
-    (home / "envs" / ".mace.install.pid").write_text("999999")   # a dead holder does not block
+        holder.wait()
+    (lock / "pid").write_text(str(holder.pid))                    # now a dead holder: taken over, then released
     r = _install(env, "mace")
-    assert "already being built" not in r.stderr and not (home / "envs" / ".mace.install.pid").exists()
+    assert "already being built" not in r.stderr and not lock.exists()

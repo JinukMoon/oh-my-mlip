@@ -338,49 +338,47 @@ def builder_reads(version: str) -> tuple[list, list] | None:
     """Which of a family's settings this hub's builder passes to the trainer.
 
     The builder runs once in a scratch directory with every setting marked as
-    user-set, and TrackedSettings records what it read: the same test the run
-    applies before refusing a setting the builder never reads. Returns
-    (passed, not_passed) native names, or None when the family has no builder
-    or the probe cannot run it (a required value missing, say)."""
+    user-set, and TrackedSettings records every name it looks up, present or
+    not: the same test the run applies before refusing a setting the builder
+    never reads. The whole catalog is classified, including settings without a
+    default. Returns (passed, not_passed), or None when the family has no
+    builder or the probe cannot run (a required value missing, no writable
+    temporary directory, ...)."""
     try:
         family, version, finetune, resolved = load_finetune(version, None)
+        catalog = [e["name"] for e in ft_settings.load_settings_file(family).get("settings", [])]
     except (SystemExit, Exception):  # noqa: BLE001 - a probe never fails --show-settings
         return None
     builder = BUILDERS.get(family)
     if builder is None:
         return None
-    try:
-        settings, _origins = ft_settings.resolve_settings(family, user_knobs={})
-    except Exception:  # noqa: BLE001
-        return None
-    passed = _probe_once(builder, family, version, finetune, resolved, settings)
-    if passed is None:
-        # deepmd-kit has no default training length or learning rate; give it some
+    # deepmd-kit has no default training length or learning rate; give it some
+    for knobs in ({}, {"max_steps": 100, "lr": 0.001}):
         try:
-            settings, _origins = ft_settings.resolve_settings(family, user_knobs={"max_steps": 100, "lr": 0.001})
+            settings, _origins = ft_settings.resolve_settings(family, user_knobs=knobs)
         except Exception:  # noqa: BLE001
-            return None
-        passed = _probe_once(builder, family, version, finetune, resolved, settings)
-    if passed is None:
-        return None
-    return sorted(passed), sorted(n for n in settings if n not in passed)
+            continue
+        reads = _probe_once(builder, family, version, finetune, resolved, settings, catalog)
+        if reads is not None:
+            return sorted(n for n in catalog if n in reads), sorted(n for n in catalog if n not in reads)
+    return None
 
 
-def _probe_once(builder, family, version, finetune, resolved, settings) -> set | None:
+def _probe_once(builder, family, version, finetune, resolved, settings, catalog) -> set | None:
     import tempfile
     tracked = TrackedSettings(settings)
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp)
-        ctx = Context(family=family, version=version, finetune=finetune, resolved=resolved, out=out,
-                      epochs=2, batch_size=2, device="cuda",
-                      dataset_paths={"train": str(out / "train.xyz"), "valid": str(out / "valid.xyz")},
-                      elements=["Cu"], seed=0, settings=tracked,
-                      settings_origins={name: "user" for name in settings})
-        try:
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            ctx = Context(family=family, version=version, finetune=finetune, resolved=resolved, out=out,
+                          epochs=2, batch_size=2, device="cuda",
+                          dataset_paths={"train": str(out / "train.xyz"), "valid": str(out / "valid.xyz")},
+                          elements=["Cu"], seed=0, settings=tracked,
+                          settings_origins={name: "user" for name in catalog})
             builder(ctx)
-        except Exception:  # noqa: BLE001 - the table stays usable without the probe
-            return None
-    return {n for n in settings if n in tracked.reads}
+    except Exception:  # noqa: BLE001 - the table stays usable without the probe
+        return None
+    return set(tracked.reads)
 
 
 # ── model/version/finetune resolution ────────────────────────────────────────

@@ -1138,6 +1138,14 @@ def test_builder_reads_says_which_settings_reach_the_trainer():
     assert "--lr" in passed and "--multiheads_finetuning" in passed
     assert "--scheduler" in not_passed                   # listed by --show-settings, refused if set
     assert ft_run.builder_reads("DPA-3.1-3M-FT") is not None   # needs max_steps/lr to run at all
+    tace_passed, _ = ft_run.builder_reads("TACE-OAM-L")         # settings with no default count too
+    assert "optimizer.lr" in tace_passed and "trainer.max_epochs" in tace_passed
+
+
+def test_the_probe_survives_an_unwritable_temp_dir(monkeypatch):
+    import tempfile
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", lambda *a, **k: (_ for _ in ()).throw(OSError("read-only")))
+    assert ft_run.builder_reads("MACE-MPA-0") is None
 
 
 def test_energy_and_force_keys_reach_the_converter(tmp_path, monkeypatch):

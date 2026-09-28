@@ -108,11 +108,12 @@ def ensure_weights(
     targets = _inference_weight_targets(resolved)
     if not targets:
         # A name-based loader (UMA: get_predict_unit('uma-s-1p2')) downloads
-        # through the framework itself; a gated one still gets the hub's
-        # license/login message and the OMM_HF_TOKEN_FILE export here, instead
-        # of the framework's bare 401 later.
+        # through the framework itself; a gated one still gets the
+        # OMM_HF_TOKEN_FILE export here. A missing token is not refused: the
+        # weights may already be cached, and a real 401/403 is explained where
+        # it happens.
         if resolved.get("gated"):
-            gated_precheck(resolved)
+            _export_token_env(resolved)
         return []
     # size/sha in the registry describe the DOWNLOADED artifact. They apply only
     # when the inference target IS that artifact: with several targets there is
@@ -645,23 +646,33 @@ def cache_root() -> Path:
 
 
 # ── gated gate ───────────────────────────────────────────────────────────────
-def gated_precheck(spec: dict) -> None:
-    """For a gated spec: stop with the license/login message when no token source
-    exists, and export OMM_HF_TOKEN_FILE as HF_TOKEN_PATH so the framework's own
-    loader (and a worker process) finds the token. Quiet when a token is present;
-    a present token does not prove the license was accepted (HTTP 401/403 then)."""
+def gated_token_env(spec: dict, env: dict) -> dict:
+    """For a gated spec, the variables to add to `env` so the framework's own
+    loader finds the user's token: OMM_HF_TOKEN_FILE becomes HF_TOKEN_PATH
+    unless `env` already names a token. Never reads the token, never raises:
+    weights already in a cache need no token, and a real refusal (HTTP 401/403)
+    is explained where it happens (provider._gated_access_hint)."""
+    if not spec.get("gated"):
+        return {}
+    return {k: v for k, v in _resolve_token(env)["env"].items() if not env.get(k)}
+
+
+_EXPORTED_TOKEN_PATH: str | None = None   # what this process exported, so a later change replaces it
+
+
+def _export_token_env(spec: dict) -> None:
+    """In-process twin of gated_token_env: apply it to os.environ, replacing a
+    value this process exported earlier (the caller may point
+    OMM_HF_TOKEN_FILE elsewhere) but never one the user set."""
+    global _EXPORTED_TOKEN_PATH
     if not spec.get("gated"):
         return
-    resolved = _resolve_token()
-    if resolved["source"] == "none":
-        license_url = spec.get("license_url") or "(see the model card)"
-        raise GatedError(
-            f"{spec.get('model')}/{spec.get('version')} is gated and no Hugging Face token was found. "
-            f"Accept the license while logged in to Hugging Face: {license_url}, then run "
-            f"`hf auth login` in your own terminal (or set HF_TOKEN_PATH / OMM_HF_TOKEN_FILE to a token "
-            f"file outside the repo) and retry. Never paste the token into a chat. See docs/hf_token.md.")
-    for key, val in resolved["env"].items():
-        os.environ.setdefault(key, val)
+    env = dict(os.environ)
+    if _EXPORTED_TOKEN_PATH is not None and env.get("HF_TOKEN_PATH") == _EXPORTED_TOKEN_PATH:
+        env.pop("HF_TOKEN_PATH")
+    add = gated_token_env(spec, env)
+    if "HF_TOKEN_PATH" in add:
+        os.environ["HF_TOKEN_PATH"] = _EXPORTED_TOKEN_PATH = add["HF_TOKEN_PATH"]
 
 
 def _check_gated(model: str, version: str | None) -> dict:

@@ -97,16 +97,23 @@ def get_calculator(
 
 
 # ── Layer 4: persistent Worker (one process per env, id-routed) ──────────────
-def _gated_access_hint(spec: dict, error: str) -> str:
-    """For a gated model refused by Hugging Face: the token was found, so the
-    license is not yet accepted for that account (or the token is another one's)."""
+def _gated_access_hint(spec: dict, error: str, env: dict | None = None) -> str:
+    """For a gated model refused by Hugging Face: say whether a token was found
+    and what the user does next (log in, or accept the license)."""
     if not spec.get("gated"):
         return ""
     if not re.search(r"\b(401|403)\b|GatedRepo|gated repo|Unauthorized|Forbidden", error, re.I):
         return ""
+    from oh_my_mlip.fetch import _resolve_token
+    url = spec.get("license_url") or "(see the model card)"
+    if _resolve_token(os.environ if env is None else env)["source"] == "none":
+        return (f"\n[oh-my-mlip] {spec.get('version')} is gated and no Hugging Face token was found. Accept the "
+                f"license while logged in to Hugging Face: {url}, then run `hf auth login` in your own terminal "
+                f"(or set HF_TOKEN_PATH / OMM_HF_TOKEN_FILE to a token file outside the repo) and retry. Never "
+                f"paste the token into a chat. See docs/hf_token.md.")
     return (f"\n[oh-my-mlip] Hugging Face refused access to a gated model. A token was found, so accept the "
-            f"license with the account that token belongs to: {spec.get('license_url') or '(see the model card)'}; "
-            f"access can take a while to be granted. Retrying before that does not help. See docs/hf_token.md.")
+            f"license with the account that token belongs to: {url}; access can take a while to be granted. "
+            f"Retrying before that does not help. See docs/hf_token.md.")
 
 
 def _killed_hint(model: str, returncode: int | None) -> str:
@@ -333,6 +340,10 @@ class Worker:
         child_env.setdefault("OH_MY_MLIP_HOME", registry.home())
         if self._env_override:
             child_env.update(self._env_override)
+        # a gated model's token file, resolved against the CHILD's environment
+        # (override included); the parent's os.environ is never changed
+        from oh_my_mlip.fetch import gated_token_env
+        child_env.update(gated_token_env(self.spec, child_env))
         return child_env
 
     def _build_cmd(self) -> list[str]:
@@ -359,13 +370,6 @@ class Worker:
         escape from ``Popen``. This makes the README/AGENTS "actionable message,
         not a traceback" promise true for ``run()`` / ``Worker`` too.
         """
-        # A gated model with no token stops here with the license/login steps;
-        # OMM_HF_TOKEN_FILE is exported as HF_TOKEN_PATH for the child.
-        from oh_my_mlip.fetch import GatedError, gated_precheck
-        try:
-            gated_precheck(self.spec)
-        except GatedError as exc:
-            raise WorkerError(str(exc)) from exc
         # measure the caches before the child exists, so bytes it fetches
         # right away count as download progress instead of the baseline
         caches = _model_cache_dirs()
@@ -407,7 +411,8 @@ class Worker:
             self._terminate_child()
             raise WorkerError(
                 f"worker for {self.model} failed to start: "
-                f"{handshake.get('error')}" + _gated_access_hint(self.spec, str(handshake.get("error")))
+                f"{handshake.get('error')}"
+                + _gated_access_hint(self.spec, str(handshake.get("error")), self._build_env())
             )
         return self
 

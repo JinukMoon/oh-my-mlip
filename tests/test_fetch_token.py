@@ -124,50 +124,59 @@ def _uma_spec():
     return registry.resolve("UMA")
 
 
-def test_name_based_gated_loader_stops_with_the_hub_message(monkeypatch, tmp_path):
-    for var in ("HF_TOKEN", "HF_TOKEN_PATH", "OMM_HF_TOKEN_FILE"):
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))                       # no `hf auth login` cache either
-    spec = _uma_spec()
-    assert spec["gated"] and not fetch._inference_weight_targets(spec)   # a name-based loader
-    import pytest
-    with pytest.raises(fetch.GatedError) as info:
-        fetch.ensure_weights(spec["model"], spec["version"], spec=spec)
-    msg = str(info.value)
-    assert spec["license_url"] in msg and "hf auth login" in msg and "docs/hf_token.md" in msg
-
-
-def test_name_based_gated_loader_exports_omm_token_file(monkeypatch, tmp_path):
-    for var in ("HF_TOKEN", "HF_TOKEN_PATH"):
-        monkeypatch.delenv(var, raising=False)
-    token_file = tmp_path / "tok"
-    token_file.write_text("x")
-    monkeypatch.setenv("OMM_HF_TOKEN_FILE", str(token_file))
-    spec = _uma_spec()
-    import os
-    try:
-        assert fetch.ensure_weights(spec["model"], spec["version"], spec=spec) == []
-        assert os.environ["HF_TOKEN_PATH"] == str(token_file)
-    finally:
-        os.environ.pop("HF_TOKEN_PATH", None)       # the export is process-wide; do not leak it
-
-
-def test_worker_start_fails_fast_on_a_gated_model_without_token(monkeypatch, tmp_path):
-    from oh_my_mlip import provider
+def test_a_cached_gated_model_needs_no_token_here(monkeypatch, tmp_path):
+    """Weights may already be in the framework's cache: nothing refuses up front."""
     for var in ("HF_TOKEN", "HF_TOKEN_PATH", "OMM_HF_TOKEN_FILE"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
-    w = provider.Worker("UMA")
-    monkeypatch.setattr(w, "_popen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("spawned")))
-    import pytest
-    with pytest.raises(provider.WorkerError, match="no Hugging Face token was found"):
-        w.start()
+    spec = _uma_spec()
+    assert spec["gated"] and not fetch._inference_weight_targets(spec)   # a name-based loader
+    assert fetch.ensure_weights(spec["model"], spec["version"], spec=spec) == []
 
 
-def test_a_401_from_the_worker_names_the_license_page():
+def test_name_based_gated_loader_exports_and_replaces_its_own_token_path(monkeypatch, tmp_path):
+    import os
+    for var in ("HF_TOKEN", "HF_TOKEN_PATH"):
+        monkeypatch.delenv(var, raising=False)
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.write_text("x"); b.write_text("y")
+    spec = _uma_spec()
+    monkeypatch.setattr(fetch, "_EXPORTED_TOKEN_PATH", None)
+    try:
+        monkeypatch.setenv("OMM_HF_TOKEN_FILE", str(a))
+        fetch.ensure_weights(spec["model"], spec["version"], spec=spec)
+        assert os.environ["HF_TOKEN_PATH"] == str(a)
+        monkeypatch.setenv("OMM_HF_TOKEN_FILE", str(b))          # the caller points elsewhere
+        fetch.ensure_weights(spec["model"], spec["version"], spec=spec)
+        assert os.environ["HF_TOKEN_PATH"] == str(b)
+        os.environ["HF_TOKEN_PATH"] = "user-set"                   # a value the user set is kept
+        fetch.ensure_weights(spec["model"], spec["version"], spec=spec)
+        assert os.environ["HF_TOKEN_PATH"] == "user-set"
+    finally:
+        os.environ.pop("HF_TOKEN_PATH", None)
+
+
+def test_worker_resolves_the_token_in_its_own_env_and_leaves_the_parent_alone(monkeypatch, tmp_path):
+    import os
+    from oh_my_mlip import provider
+    for var in ("HF_TOKEN", "HF_TOKEN_PATH", "OMM_HF_TOKEN_FILE"):
+        monkeypatch.delenv(var, raising=False)
+    tok = tmp_path / "t"
+    tok.write_text("x")
+    w = provider.Worker("UMA", env={"OMM_HF_TOKEN_FILE": str(tok)})
+    child = w._build_env()
+    assert child["HF_TOKEN_PATH"] == str(tok) and "HF_TOKEN_PATH" not in os.environ
+    w2 = provider.Worker("UMA", env={"HF_TOKEN": "secret-not-read"})
+    assert "HF_TOKEN_PATH" not in w2._build_env()               # an explicit token wins, nothing added
+
+
+def test_a_401_from_the_worker_says_whether_a_token_was_found(tmp_path):
     from oh_my_mlip import provider
     spec = _uma_spec()
-    hint = provider._gated_access_hint(spec, "HfHubHTTPError: 401 Client Error: Unauthorized for url")
-    assert spec["license_url"] in hint
-    assert provider._gated_access_hint(spec, "CUDA out of memory") == ""
-    assert provider._gated_access_hint({"gated": False}, "401") == ""
+    none_env = {"HOME": str(tmp_path)}
+    hint = provider._gated_access_hint(spec, "HfHubHTTPError: 401 Client Error: Unauthorized", none_env)
+    assert "no Hugging Face token was found" in hint and "hf auth login" in hint and spec["license_url"] in hint
+    hint = provider._gated_access_hint(spec, "403 Forbidden", {"HF_TOKEN": "x"})
+    assert "A token was found" in hint and spec["license_url"] in hint
+    assert provider._gated_access_hint(spec, "CUDA out of memory", none_env) == ""
+    assert provider._gated_access_hint({"gated": False}, "401", none_env) == ""

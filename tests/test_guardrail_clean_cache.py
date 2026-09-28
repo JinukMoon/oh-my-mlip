@@ -68,3 +68,19 @@ def test_symlinks_are_never_followed(tmp_path):
     (Path(env["OH_MY_MLIP_HOME"]) / "models" / "linked.part").symlink_to(victim)
     _clean(env, "--yes")
     assert victim.exists()
+
+
+def test_a_partial_file_another_process_holds_open_is_kept(tmp_path):
+    files, env = _setup(tmp_path)
+    held = open(files["hub_part"], "ab")          # a stalled download still writing
+    try:
+        _clean(env, "--yes")
+        assert files["hub_part"].exists() and not files["hub_tmp"].exists()
+    finally:
+        held.close()
+
+
+def test_no_proc_means_nothing_is_deleted(tmp_path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import setup_guardrail as g
+    assert g._open_files(tmp_path / "no-proc") is None
