@@ -204,3 +204,19 @@ def test_a_result_folder_never_mixes_two_datasets(monkeypatch, tmp_path, capsys)
 def test_max_reactions_below_one_is_refused(monkeypatch, tmp_path, capsys):
     qs, work = _prepared(monkeypatch, tmp_path)
     assert qs.main(["demo", "--only", "MACE", "--emit-only", "--max-reactions", "0"]) == 2
+
+
+def test_a_half_built_hub_env_is_not_ready_but_an_adopted_one_is(monkeypatch, tmp_path):
+    qs = _load_quickstart()
+    monkeypatch.setenv("OH_MY_MLIP_HOME", str(tmp_path))
+    prefix = tmp_path / "envs" / "mace"
+    (prefix / "bin").mkdir(parents=True)
+    (prefix / "bin" / "python").write_text("")
+    spec = {"python": str(prefix / "bin" / "python")}
+    assert qs._env_ready(spec) is False            # interrupted build: interpreter, no sentinel
+    (prefix / ".omm_ready").write_text("")
+    assert qs._env_ready(spec) is True
+    adopted = tmp_path / "elsewhere" / "MACE"
+    (adopted / "bin").mkdir(parents=True)
+    (adopted / "bin" / "python").write_text("")
+    assert qs._env_ready({"python": str(adopted / "bin" / "python")}) is True

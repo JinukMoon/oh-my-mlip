@@ -44,6 +44,8 @@ Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu,
     python <repo>/scripts/catbench_report.py --result ./result --out ./report
     ```
 
+    An agent following the recipe also pins the catbench version
+    (`--catbench-version`) and passes `--expect-models` to the report.
     The full benchmark drops `--max-reactions`; pick the dataset and models
     with `python3 scripts/catbench_datasets.py --list`. A dataset's download
     size says little about its run time: a small file of large molecules can

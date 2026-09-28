@@ -236,14 +236,21 @@ def _env_ready(spec: dict) -> bool:
     """True if the model's env interpreter is materialized.
 
     Build-from-recipe writes ``$OH_MY_MLIP_HOME/envs/<env>/bin/python`` plus a
-    ``.omm_ready`` sentinel (see install.sh). We accept either the sentinel or
-    the interpreter itself so a fresh clone (no envs built) is detected BEFORE we
+    ``.omm_ready`` sentinel (see install.sh); such an env needs the sentinel, an
+    adopted env (outside envs/) its interpreter. A fresh clone is detected BEFORE we
     dispatch a subprocess — otherwise launching a non-existent interpreter raises
     a raw FileNotFoundError that kills the whole roster on the first unbuilt env.
     """
     python = Path(spec["python"])
-    sentinel = python.parent.parent / ".omm_ready"
-    return sentinel.exists() or python.exists()
+    prefix = python.parent.parent
+    if (prefix / ".omm_ready").exists():
+        return True
+    home = Path(os.environ.get("OH_MY_MLIP_HOME") or _HOME).resolve()
+    if prefix.resolve().parent == (home / "envs").resolve():
+        # an env install.sh builds is ready only with its sentinel: an
+        # interpreter alone is also what an interrupted build leaves
+        return (prefix / ".omm_ready").exists()
+    return python.exists()           # an adopted env (env_map.local.json) has no sentinel
 
 
 def _run_one_model(

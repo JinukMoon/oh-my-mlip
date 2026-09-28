@@ -25,7 +25,7 @@ files:
 | execution | `bash <out>/<variant>/finetune_<Variant>.sh` — `set -eu`, `cd` to `<out>`, one `export` per `env_run` key, `exec` of the variant's env interpreter | the run the user can repeat |
 | dependencies | the variant's env, built from `envs/<env>.yml` (plus `CATBENCH_PIN`) by `install.sh`; nothing else is available to a fine-tune | the package set |
 | verification | `scripts/ft_verify.py <ckpt> --model <Variant> [--version <V>] --device cuda --json` — reload the checkpoint with the framework's own loader; the verdict is pass iff `reason` is empty, checked in order: finite energy (`non_finite_energy`), the probe's `[4,3]` forces shape (`bad_forces_shape`), `forces_finite` (`non_finite_forces`), a backend execution record with a non-negative compute-op count (`witness_record_missing`), `gpu_used` agreeing with that count (`witness_inconsistent`), and on `--device cuda` at least one GPU compute op (`gpu_not_used`). An unknown family or version is rc 2 (`RegistryError`). A bare family name in `--model` resolves the family default; the sweep passes the variant name | pass / fail per checkpoint |
-| native builders | the `BUILDERS` table of `scripts/ft_run.py`, alphabetically Allegro · CHGNet · DeePMD · DPA4 · GRACE · MACE · MatterSim · NequIP · PET · SevenNet · TACE · UMA — one command per family taken from that package's installed sources, each cited in `scripts/upstream_finetune.py` (`note`) and shown in `docs/finetune.md`; nothing renders a command for a family absent from the table. Such a family, if it passes the registry gate, is refused with exit 4 before any dataset conversion or file write (`EXIT_NO_BUILDER`, "no real command builder … implementation gap, not an upstream limitation"); nothing is emitted, `--emit-only` included. Today the registry status already stops each absent family earlier (exit 2 or exit 3), which makes exit 4 a guard, not an expected path | which families have a runnable command at all |
+| native builders | the `BUILDERS` table of `scripts/ft_run.py` (every registry family except AlphaNet, Eqnorm and MatRIS; `tests/test_recipe_contract.py` keeps this list equal to the code) — one command per family taken from that package's installed sources, each cited in `scripts/upstream_finetune.py` (`note`) and shown in `docs/finetune.md`; nothing renders a command for a family absent from the table. Such a family, if it passes the registry gate, is refused with exit 4 before any dataset conversion or file write (`EXIT_NO_BUILDER`, "no real command builder … implementation gap, not an upstream limitation"); nothing is emitted, `--emit-only` included. Today the registry status already stops each absent family earlier (exit 2 or exit 3), which makes exit 4 a guard, not an expected path | which families have a runnable command at all |
 | dataset formats | `scripts/ft_dataset.py --to <format>`: `chgnet` is an alias of extxyz (the CHGNet driver converts to pymatgen Structures in memory); `orb`, `aselmdb`/`nequix` and `alphanet` are documented but not implemented and exit 2 from `ft_dataset.py` | which training-file formats can be produced at all |
 | prestage line | some emitted `finetune_<Variant>.sh` (SevenNet, NequIP/Allegro, TACE) run one prestage command before `exec`, under the same `set -eu`; still one rerunnable file, and a failing prestage aborts the run | what runs before the training process starts |
 | exit codes of `ft_run.py` | 1 usage or unknown model; 2 refused by registry status; 3 not runnable as installed (remaining blockers named); 4 no real builder in this hub; 5 explicit `--seed` the family cannot honour in full (`EXIT_SEED_UNHONOURED`, before any write; see the seed-control row); 6 `--dataset` missing or the model env not installed (`EXIT_MISSING_INPUT`, before any write; the message names the path, or the `install.sh` and `setup_verify.py` commands with the hub's absolute path); any other value is the training process's own return code. `ft_sweep.py` has no exit-5 class because it passes no `--seed` | how a refusal is told apart from a training failure |
@@ -78,7 +78,7 @@ has since been found is re-audited by updating
 `scripts/upstream_finetune.py` with the new source cited — a separate
 reviewed change, not a run-time decision.
 
-Builder honesty: only the eleven `BUILDERS` families have a command built
+Builder honesty: only the `BUILDERS` families have a command built
 from the installed package's sources. A variant whose registry status
 says "go" but whose family has no builder is refused by `ft_run.py` with
 exit 4 before any file is written — there is no generic rendering, no
@@ -97,7 +97,7 @@ other stop is a blocker of this hub's installation — including
 `fairchem-core` 2.19.1 `UMATask` enum is a version-compatibility blocker
 (exit 3 like the rest of UMA), not an upstream exclusion.
 
-Eleven builders is the implementation coverage of this hub today, not
+The `BUILDERS` table is the implementation coverage of this hub today, not
 the fulfilment of the fine-tuning requirement. The exit-3 families are
 ones upstream documents as fine-tunable (repo-only configs, gated
 checkpoints, an unshipped `finetune.py`, a missing dataset writer) — they
@@ -202,8 +202,9 @@ research table; `tests/test_gen_finetune.py` checks the rendering from
 
 Missing executable parts (described by function; no owner file yet):
 
-- builders for the families outside `BUILDERS` (UMA, ORB, Nequix,
-  EquFlash, fairchemv1, AlphaNet, EqV3, Eqnorm, MatRIS); until one lands
+- builders for the families outside `BUILDERS` (AlphaNet, Eqnorm,
+  MatRIS), and runnable installs for the families whose builder is
+  stopped by an exit-3 blocker; until one lands
   (a reviewed change to `scripts/ft_run.py`, plus the env or registry
   change that lifts the earlier exit 2 or exit 3 stop), that family is refused before any
   file is written and recorded with the refusing exit code, never

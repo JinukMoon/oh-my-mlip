@@ -486,3 +486,16 @@ def test_recipes_carry_no_ad_hoc_clone_or_copy_commands():
                 if needle in line:
                     bad.append(f"{path.name}:{i}: {needle!r}")
     assert not bad, "\n".join(bad)
+
+
+def test_finetune_recipe_names_exactly_the_families_without_a_builder():
+    import json
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import ft_run
+    registry = json.loads((REPO_ROOT / "models.json").read_text(encoding="utf-8"))
+    without = sorted(k for k in registry if not k.startswith("_") and k not in ft_run.BUILDERS)
+    text = (REPO_ROOT / "recipes" / "finetune.md").read_text(encoding="utf-8")
+    listed = "(every registry family except " + ", ".join(without[:-1]) + " and " + without[-1] + ";"
+    assert listed in text, (without, "update the BUILDERS row of recipes/finetune.md")
+    assert not re.search(r"\b(eleven|twelve|\d+) builders\b", text, re.I)

@@ -42,7 +42,11 @@ Required inputs (skip any the user already gave):
 3. **Models** — registry names or versions, or a non-registry calculator
    (the user's ASE calculator file plus the interpreter that runs it).
 4. **D3** on or off; `calc_num` if not the default.
-5. **New job or rerun** of an approved job — this decides the version rule.
+5. **Full dataset or a quick check** — a request for a quick or first look
+   is a subset: `--max-reactions N` (the report labels it "Subset: N of M");
+   a dataset's file size says little about its run time, so a subset is the
+   default proposal when the user has not asked for the full set.
+6. **New job or rerun** of an approved job — this decides the version rule.
 
 Dataset recommendation, only when the target had to be asked:
 `python3 scripts/catbench_datasets.py --target "<the user's words>" --confirm --json`.
@@ -181,7 +185,8 @@ boundary, in this order:
 
 ### Jobs
 
-`python3 run_examples/catbench_quickstart.py <tag> --only M1,M2 --catbench-version <ver> [--version FAM=VER] [--d3] [--calc-num N] --emit-only`
+`python3 run_examples/catbench_quickstart.py <tag> --only M1,M2 --catbench-version <ver> [--version FAM=VER] [--d3] [--calc-num N] [--max-reactions N] --emit-only`
+(`--max-reactions N` whenever the plan is a quick check, item 5 above)
 writes `jobs/catbench_<MLIP>.py`, `jobs/run_catbench_<MLIP>.sh` and
 `jobs/catbench_<MLIP>.meta.json`; the plan lists those files.
 `--catbench-version` is passed into each job's guard and its meta file —
@@ -217,9 +222,10 @@ approval.
 - Materialize, then run the files: `bash jobs/run_catbench_<MLIP>.sh > jobs/<MLIP>.log 2>&1`
   per model, in the approved order, one at a time. This is also the rerun
   command: the `.sh` on disk (edited by the user or not) is what runs.
-  `catbench_quickstart.py` without `--emit-only` is a shortcut for a
-  first run into an empty `jobs/` only — it re-emits every file before
-  executing and would overwrite an edited one; `--submit` dispatches
+  `catbench_quickstart.py` without `--emit-only` emits and then executes;
+  on a rerun it keeps unchanged files and refuses (exit 3) to replace one
+  whose rendering changed, as the rerun rule above says, unless
+  `--regenerate` is passed, which overwrites it, edits included; `--submit` dispatches
   through the injectable hook instead of running locally, and with
   `--calc-file` it refuses (exit 3) unless `jobs/witness_<name>.json`
   exists with `ok: true` and a `calc_file_sha256` equal to the current
