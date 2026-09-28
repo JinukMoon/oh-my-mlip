@@ -44,9 +44,13 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
 
 ??? note "Run it yourself"
 
+    Run the scripts with the teacher env's interpreter (they import numpy,
+    ase and yaml):
+
     ```bash
+    PY=$(python3 -c "import oh_my_mlip; print(oh_my_mlip.resolve('MACE-MPA-0')['python'])")
     scripts/build_lammps_nnmtp.sh --repo <onthefly-distill>  # once
-    python scripts/distill_bootstrap.py --teacher MACE-MPA-0 --structure slab.vasp \
+    "$PY" scripts/distill_bootstrap.py --teacher MACE-MPA-0 --structure slab.vasp \
         --work ./distill --repo <onthefly-distill> --lmp-bin <lmp>
     cd distill && sh run_distill.sh > distill.log 2>&1
     ```
@@ -57,7 +61,7 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
     explicitly (values in `< >` are yours to choose):
 
     ```bash
-    python scripts/distill_bootstrap.py --teacher MACE-MPA-0 --structure slab.vasp \
+    "$PY" scripts/distill_bootstrap.py --teacher MACE-MPA-0 --structure slab.vasp \
         --work ./distill --repo <onthefly-distill> --lmp-bin <lmp> \
         --acceptance --mode production \
         --energy-mae-max <meV/atom> --force-mae-max <meV/A> \
@@ -67,7 +71,7 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
     and afterwards:
 
     ```bash
-    python scripts/distill_verify.py --work ./distill --json
+    "$PY" scripts/distill_verify.py --work ./distill --json
     ```
 
     `--mode fixture` (at most 3 rounds) only exercises the loop: even a passing
