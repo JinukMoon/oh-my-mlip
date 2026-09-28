@@ -428,7 +428,10 @@ own Hugging Face login (§5).
   `install.sh` accepts several targets.
 - `all`: every framework in `models.json`, one env each.
 - `all except <names>`: `all` minus those; list the exclusions in the plan.
-- Naming the models is the approval; only `all` needs the gate in §9.3.
+- Naming the models, one or several, is the approval; `all` and
+  `all except <names>` go through the gate in §9.3. Either way, a survey
+  showing the disk will not fit, or a gated model without a token, is put to
+  the user before anything is built.
 
 ### 9.3 Installing everything: survey, plan, approve
 
@@ -496,7 +499,10 @@ For each target:
    0): `guardrail_halt` / `wallclock_halt` stop; `stalled` /
    `stalled_cumulative` stop and ask for documentation (§8); `ok` continues.
 3. **On failure:** classify with §8, apply that strategy, back to step 1.
-4. **Verify:** `scripts/setup_verify.py <model> --json`. It picks CPU when the
+4. **Verify:** `scripts/setup_verify.py <model> --json` for each variant the
+   user named (a family name verifies its default variant; `--all-variants`
+   verifies every variant of the family and downloads each one's weights, so
+   do that only when asked). It picks CPU when the
    driver is too old (ground rule 6), computes energy and forces, confirms GPU use,
    and prints one verdict (`pass`, `device`, `degraded`, `reason`, `energy_ev`,
    `fmax_ev_a`, `forces_shape`, `gpu_pid_confirmed`, `gpu_mem_bytes`,

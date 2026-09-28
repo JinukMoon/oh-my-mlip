@@ -32,7 +32,9 @@ runs those files unchanged:
 
 Host and arch branches already inside those files — the agent names the
 branch, never adds one: a host driver below the recipe's CUDA runtime →
-`install.sh` prints a driver-skew warning and the env runs CPU-only;
+`install.sh` prints a driver-skew warning and the env installs, but runs
+on CPU only for variants whose inference line takes a device; the rest
+are refused (`AGENTS.md` ground rule 6) and the fix is a newer driver;
 `nvcc` absent → D3 is left off and the MLIP still runs; an arch-pinned
 model → `--arch` on `run_examples/single_point.py`; a gated checkpoint →
 the token rules of `AGENTS.md §5`.
@@ -74,8 +76,9 @@ Do not open with a disk question; the survey answers it.
    failure here stops the plan before any solve.
 4. Write `PLAN.md`: targets in order; for each, the survey state and the
    resulting action (verify only / install / adopt-or-heal); the variants
-   that will be witnessed (every version of the env in `models.json`, named
-   individually); expected outputs (`envs/<env>/bin/python`, `.omm_ready`,
+   that will be witnessed (the ones the user named, or the family default;
+   every version of the env only when the user asks, since each downloads
+   its own weights), named individually; expected outputs (`envs/<env>/bin/python`, `.omm_ready`,
    verdict JSON per variant, a `models.local.json` row per PASS, the sweep
    ledger path); the disk floor; exclusions; the hub commit
    (`git rev-parse HEAD`) and, when the tree is dirty, `git status
@@ -121,27 +124,31 @@ Do not open with a disk question; the survey answers it.
 
 ## 3. Approve
 
-- A single or explicitly listed target is approved by being named
-  (`AGENTS.md §9.2`).
-- `all` or a multi-target batch goes through the `§9.3` gate with the
+- Named targets, one or several, are approved by being named
+  (`AGENTS.md §9.2`), unless the survey shows the disk will not fit or a
+  gated target has no token; then the user is asked first.
+- `all` and `all except <names>` go through the `§9.3` gate with the
   survey table rendered first.
 - A fresh-install root always needs an explicit yes, whatever the target
   count, and so does every `seed-cache` item.
 
 ## 4. Execute
 
-- Single target: `bash install.sh <model>` with stdout and stderr captured
-  to `<work>/install_<env>.log` → on failure
+- Single target: `bash install.sh <model>` launched detached with stdout and
+  stderr captured to `<work>/install_<env>.log` and polled
+  (`AGENTS.md §9.4` step 1) → on failure
   `python3 scripts/setup_guardrail.py gate --state <state.json> --ceiling-gb 30 --stderr-file <stderr.txt>`
   → the `§8` recovery for the class it names (free disk, supply a token,
   rerun) → `bash install.sh <model>` again, which adopts what was built
-  and resumes the post-steps.
+  when its imports work and resumes the post-steps, and otherwise stops
+  without deleting anything until it is re-run with `--rebuild <env>`.
 - Batch: `python3 scripts/setup_sweep.py --targets M1,M2,...` then
   `python3 scripts/setup_sweep.py report`.
-- Verdicts, every variant and not only the family default:
+- Verdicts for the planned variants:
+  `python3 scripts/setup_verify.py <Version> --json` per version, or, when
+  the plan covers every variant,
   `python3 scripts/setup_verify.py <Family> --all-variants --json` (one
-  verdict per version plus a summary object), or
-  `python3 scripts/setup_verify.py <Version> --json` per version. Add
+  verdict per version plus a summary object). Add
   `--no-local-record` when the job is a read-only witness that must leave
   `models.local.json` untouched. Keep each JSON verdict as a file under
   the work dir.
@@ -240,8 +247,9 @@ Missing executable parts (described by function; no owner file yet):
   writes the resolved closure for its own owned env, but a single
   `install.sh` target or a plain sweep still records only the recipe
   file's sha256 and the pins;
-- a lock of that closure per env, so a rebuild resolves the same set
-  rather than the same pins;
+- recording in the job record whether a build replayed the lock
+  (`OMM_USE_LOCK=1`, `envs/locks/<env>.{conda,pip}.txt`) or resolved the
+  recipe;
 - changing the catbench version an existing env holds — today only a
   rebuild with `OMM_CATBENCH_VERSION` set changes it (the mismatch itself
   is reported by `scripts/catbench_version.py`, see `recipes/catbench.md`).

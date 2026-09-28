@@ -39,13 +39,13 @@ names) and runs exactly as written:
   exactly: python, torch with its CUDA-runtime tag, the framework release
   or git SHA, and the packages each recipe names are fixed; transitive
   dependencies the recipe does not name resolve at build time (several
-  recipes say so in their own comments), and no lock file of the solved
-  closure exists yet. That is an open gap against the requirement of
-  persisted, tested dependencies — not the accepted end state: until a
-  lock or an installed-inventory capture exists, the evidence records the
-  recipe file's sha256 and the pin values, and every report names the
-  floating remainder as a gap rather than presenting the pins as the
-  whole dependency set.
+  recipes say so in their own comments). Every env also has a lock of a
+  solved closure, `envs/locks/<env>.{conda,pip}.txt`
+  (`scripts/gen_env_lock.py`); `OMM_USE_LOCK=1 ./install.sh <env>` replays
+  it exactly instead of resolving the recipe. A default build resolves
+  the recipe, so its evidence records the recipe file's sha256 and the pin
+  values, and a report names the floating remainder rather than
+  presenting the pins as the whole dependency set.
 - **Execution** is an emitted file — a `.sh` runner, a `.py` job, a config —
   produced by a repo script from the approved inputs, kept on disk, and
   rerunnable without the agent.
@@ -63,7 +63,10 @@ Consequences the recipes enforce:
    `failed(<class>)` with its log. The fix — a new pin, another pass, a
    different flag — is a reviewed change to the owner file, followed by a
    rebuild through the same chain. Nothing is installed, upgraded or edited
-   inside an env by hand to make a verdict pass.
+   inside an env by hand to make a verdict pass. The one listed exception is
+   the `pypi.nvidia.com` recovery in `AGENTS.md §8`: it installs the exact
+   `nvidia-*` pins torch declares, from pypi.org instead of an unreachable
+   host, and then `install.sh` finishes the build as usual.
 2. **Host and architecture conditions are branches inside the owner
    files** (driver below the recipe's CUDA runtime, `nvcc` absent, an
    arch-pinned compiled artifact, a gated download). The recipe names the
@@ -95,7 +98,8 @@ it never substitutes.
    hidden alternative path.
 3. **Approve** — present the plan and wait for an explicit approval; use the
    host's interactive question UI when it has one. Approval covers the
-   disclosed scope only.
+   disclosed scope only. One exception, stated in `AGENTS.md §9.2`:
+   installing models the user named is approved by the naming.
 4. **Execute** — run the approved commands. Every executed action exists
    first as a file the user can rerun without the agent (`.sh`, `.py`,
    config), never as an inline `python -c`.
