@@ -461,13 +461,34 @@ For each target:
 
 0. **State first:** `scripts/setup_survey.py --table <model>` (read-only). If
    `ready`, go to step 4 and stop when verification passes; otherwise continue
-   (`install.sh` repairs a partial env instead of duplicating it).
-1. **Install:** `install.sh <model>` with `OH_MY_MLIP_HOME` exported; keep stdout
-   and stderr. A first build takes 30 to 120 minutes. Wait for it to exit
-   before ending your turn: in a one-shot session (`claude -p`, `codex exec`)
-   ending the turn ends the session, which kills an install left running in
-   the background and leaves a half-built env.
-2. **Guardrail:** save the attempt's stderr to a file as-is, then run
+   (`install.sh` finishes a partial env whose imports work, and asks for
+   `--rebuild` when they do not; it never builds a duplicate).
+1. **Install: launch detached, then poll.** A first build takes 30 to 120
+   minutes, longer than one agent tool call may run (Claude Code's Bash tool
+   stops a call after 2 minutes by default, 10 at most). With
+   `OH_MY_MLIP_HOME` exported and `L=$OH_MY_MLIP_HOME/.sweep; mkdir -p $L`:
+
+   ```bash
+   nohup bash "$OH_MY_MLIP_HOME/install.sh" <model> > "$L/install_<env>.log" 2>&1 &
+   echo $! > "$L/install_<env>.pid"
+   ```
+
+   Then poll with short calls (a `sleep` of a minute or so each, or the host's
+   own background-task facility): the install succeeded when
+   `envs/<env>/.omm_ready` exists and the pid has exited; it failed when the
+   pid has exited without it (read the log). Keep the session open until
+   then: in a one-shot session (`claude -p`, `codex exec`) ending the turn
+   ends the session and kills the build.
+   - A tool call that times out or is killed while you wait is not an install
+     error. Do not re-run `install.sh` and do not give that output to
+     `setup_guardrail.py`; keep polling. `install.sh` refuses a second build
+     of an env that is still being built.
+   - `install.sh` stops without deleting anything when an existing env's
+     imports fail, which is what an interrupted build leaves. Re-run it with
+     `--rebuild <env>` to delete that env and build it again; it never
+     deletes a symlinked env, or one whose import check timed out.
+2. **Guardrail** (after an install that exited on its own): save the
+   attempt's stderr to a file as-is, then run
    `scripts/setup_guardrail.py gate --state <state-file> --ceiling-gb 30
    --stderr-file <stderr-file>`. Read its JSON verdict (the exit code is always
    0): `guardrail_halt` / `wallclock_halt` stop; `stalled` /

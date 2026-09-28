@@ -17,6 +17,9 @@ Success oracle (zero human prompts, clone to verified compute):
 `run_examples/single_point.py <model>` prints energy and forces with the GPU
 confirmed in use. `install.sh` exit-0 alone is never sufficient.
 
+A first build outlasts one tool call: start `install.sh` detached and poll
+it as `AGENTS.md §9.4` step 1 describes; never wait on it inside a single call.
+
 Deterministic entry scripts, called in the order `AGENTS.md §9` drives them:
 `scripts/setup_survey.py` (state + disk-budget read; `--table <model>` for a
 single target), `install.sh` (build / adopt-or-heal),
