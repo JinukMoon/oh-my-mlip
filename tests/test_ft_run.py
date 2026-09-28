@@ -786,6 +786,7 @@ def _run_main(monkeypatch, argv: list[str], fake_conversion: bool = True) -> tup
 
     if fake_conversion:
         monkeypatch.setattr(ft_run, "run_ft_dataset", fake_run_ft_dataset)
+        monkeypatch.setattr(ft_run, "_missing_input", lambda *a: None)   # no real dataset or env here
     monkeypatch.setattr(ft_run.subprocess, "run", lambda *a, **k: pytest.fail("nothing may execute here"))
     # Prevent detect_host_arch from calling nvidia-smi
     monkeypatch.setattr(reg, "detect_host_arch", lambda: "sm89")
@@ -1110,3 +1111,23 @@ def test_rematerialize_keeps_every_option_the_user_passed():
         i = argv.index(pair[0])
         assert argv[i:i + 2] == pair
     assert argv.count("--emit-only") == 1 and "--slurm" not in argv and "--partition" not in argv
+
+
+def test_missing_dataset_and_missing_env_exit_6_without_writing(tmp_path, monkeypatch, capsys):
+    import ft_run
+    out = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", ["ft_run.py", "MACE", "--dataset", str(tmp_path / "absent.extxyz"),
+                                      "--out", str(out), "--emit-only"])
+    rc = ft_run.main()
+    assert rc == ft_run.EXIT_MISSING_INPUT == 6
+    assert "dataset not found" in capsys.readouterr().err and not out.exists()
+    data = tmp_path / "t.extxyz"
+    data.write_text("x")
+    real_resolve = ft_run.reg.resolve
+    monkeypatch.setattr(ft_run.reg, "resolve",
+                        lambda *a, **k: dict(real_resolve(*a, **k), python=str(tmp_path / "envs" / "mace" / "bin" / "python")))
+    monkeypatch.setattr(sys, "argv", ["ft_run.py", "MACE", "--dataset", str(data), "--out", str(out), "--emit-only"])
+    rc = ft_run.main()
+    err = capsys.readouterr().err
+    assert rc == 6 and "is not installed" in err and "install.sh mace" in err and "setup_verify.py" in err
+    assert "$OH_MY_MLIP_HOME" not in err and not out.exists()

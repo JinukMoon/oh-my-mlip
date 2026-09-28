@@ -46,6 +46,9 @@ Refusal gate, checked BEFORE any file is written:
   family has no real builder in `BUILDERS`           -> exit 4 (implementation
                                                           gap in THIS hub, not
                                                           an upstream fact)
+  --dataset missing, or the model env not installed  -> exit 6 (the path, or
+                                                          the install and
+                                                          verify commands)
   explicit --seed for a family whose trainer only    -> exit 5 (unless
     seeds the data split (NequIP/Allegro, see           --allow-partial-seed;
     SEED_CONTROL)                                        the scope is then
@@ -133,6 +136,7 @@ EXIT_NO_BUILDER = 4
 # is refused (never silently narrowed) unless --allow-partial-seed says the
 # caller accepts the narrower scope recorded in SEED_CONTROL / ft_run.json.
 EXIT_SEED_UNHONOURED = 5
+EXIT_MISSING_INPUT = 6   # --dataset missing, or the model env not installed; nothing written
 
 # How far `--seed` reaches in each family's OWN trainer -- "native" means the
 # value is handed to the upstream seed knob that seeds the training run;
@@ -419,6 +423,21 @@ def set_dotted(d: dict, dotted: str, value) -> None:
 
 
 # ── dataset conversion ────────────────────────────────────────────────────────
+def _missing_input(dataset: Path, resolved: dict, version: str) -> str | None:
+    """Why ft_run cannot start (exit 6), or None: the dataset must exist, and so
+    must the model env whose interpreter converts it (a fresh clone has none)."""
+    if not dataset.exists():
+        return (f"[ft_run] dataset not found: {dataset}. Pass --dataset <path to an ASE-readable file of "
+                f"labelled frames>; nothing was written.")
+    if not Path(resolved["python"]).exists():
+        return (f"[ft_run] {version}: the env {resolved.get('env')!r} is not installed (no interpreter at "
+                f"{resolved['python']}). Install and verify it first:\n"
+                f"    bash {reg.home()}/install.sh {resolved.get('env')}\n"
+                f"    python3 {reg.home()}/scripts/setup_verify.py {version} --json\n"
+                f"  Nothing was written.")
+    return None
+
+
 def run_ft_dataset(dataset: Path, target: str, out: Path, split: float, seed: int,
                    python_bin: str | None = None) -> dict:
     # The model env is the one interpreter guaranteed to carry ase/numpy; the
@@ -2712,11 +2731,18 @@ def main() -> int:
         print(note + " -- oh-my-mlip does not redistribute this checkpoint; "
               "a fine-tuned derivative inherits this licence's terms.", file=sys.stderr)
 
+    # Inputs that must exist before anything is written: the dataset, and the
+    # model env whose interpreter converts it (a fresh clone has no envs yet).
+    dataset = args.dataset.resolve()
+    missing = _missing_input(dataset, resolved, version)
+    if missing:
+        print(missing, file=sys.stderr)
+        return EXIT_MISSING_INPUT
+
     # per-VERSION default so two variants of one family never share a dir
     out = Path(args.out).resolve() if args.out else (Path.cwd() / f"ft_{version}").resolve()
     out.mkdir(parents=True, exist_ok=True)
 
-    dataset = args.dataset.resolve()
     target = dataset_target(family)
     conv = run_ft_dataset(dataset, target, out / "data", args.split, seed,
                           python_bin=resolved["python"])
