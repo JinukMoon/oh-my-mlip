@@ -256,7 +256,7 @@ def disk_check(ceiling_gb: float, env: dict[str, str]) -> dict:
 
 def clean_cache(env: dict[str, str]) -> dict:
     log("Running scoped cache cleanup via setup_guardrail.py clean-cache")
-    data = run_json([sys.executable, str(GUARDRAIL), "clean-cache"], env=env)
+    data = run_json([sys.executable, str(GUARDRAIL), "clean-cache", "--yes"], env=env)
     freed = data.get("total_bytes_freed")
     if isinstance(freed, int):
         log(f"Scoped cache cleanup freed {freed} bytes")

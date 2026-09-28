@@ -16,7 +16,7 @@ BOUNDARY (B-prime contract):
 Usage:
   python3 scripts/setup_guardrail.py disk-check --ceiling-gb 30 [--path PATH]
   python3 scripts/setup_guardrail.py record-attempt --state FILE --stderr-file FILE
-  python3 scripts/setup_guardrail.py clean-cache [--dry-run]
+  python3 scripts/setup_guardrail.py clean-cache [--yes] [--min-age-min N]
   python3 scripts/setup_guardrail.py gate --state FILE --ceiling-gb 30 --stderr-file FILE
 
 All subcommands print a single JSON object to stdout and exit 0 (even on stall/halt so
@@ -244,69 +244,71 @@ def cmd_record_attempt(args: argparse.Namespace) -> None:
 # Subcommand: clean-cache
 # ---------------------------------------------------------------------------
 
-def _hf_cache_roots() -> list:
-    """Return candidate HuggingFace cache directories."""
-    roots = []
-    hf_home = os.environ.get("HF_HOME", "")
-    if hf_home:
-        roots.append(Path(hf_home))
-    roots.append(Path.home() / ".cache" / "huggingface")
-    return roots
+# Names an interrupted download leaves behind (oh_my_mlip/fetch.py
+# _PARTIAL_NAMES, plus huggingface_hub's .incomplete and fetch's tmp.* archives).
+_PARTIAL_SUFFIXES = (".download", ".part", ".tmp", ".crdownload", ".incomplete")
 
 
-def _collect_torch_extensions(dry_run: bool) -> tuple:
-    """Collect (and optionally delete) ~/.cache/torch_extensions contents."""
-    removed = []
-    freed = 0
-    te_dir = Path.home() / ".cache" / "torch_extensions"
-    if te_dir.exists():
-        for child in list(te_dir.iterdir()):
-            try:
-                size = sum(f.stat().st_size for f in child.rglob("*") if f.is_file()) if child.is_dir() else child.stat().st_size
-                removed.append({"path": str(child), "bytes": size})
-                freed += size
-                if not dry_run:
-                    if child.is_dir():
-                        shutil.rmtree(child)
-                    else:
-                        child.unlink()
-            except OSError:
-                pass
-    return removed, freed
+def _hub_partial_roots(home: Path) -> list:
+    """Where clean-cache may delete: the hub's own weights and download cache."""
+    roots = [home / "models", home / "cache"]
+    return [r for r in roots if r.is_dir() and not r.is_symlink()]
 
 
-def _collect_hf_partials(dry_run: bool) -> tuple:
-    """Collect (and optionally delete) HF partial/incomplete/lock files."""
-    import glob as _glob
-    removed = []
-    freed = 0
-    for root in _hf_cache_roots():
-        if not root.exists():
-            continue
-        for pattern in ("**/*.incomplete", "**/*.lock"):
-            for hit in root.glob(pattern):
+def _is_partial(path: Path) -> bool:
+    return path.name.endswith(_PARTIAL_SUFFIXES) or path.name.startswith("tmp.")
+
+
+def _collect_hub_partials(home: Path, delete: bool, min_age_s: float) -> tuple:
+    """Leftovers of interrupted downloads under the hub only. Symlinks are never
+    followed or removed, and a file changed in the last `min_age_s` seconds is
+    left alone (another download may still be writing it)."""
+    import time as _time
+    removed, freed, now = [], 0, _time.time()
+    for root in _hub_partial_roots(home):
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            for name in filenames:
+                path = Path(dirpath) / name
+                if path.is_symlink() or not _is_partial(path):
+                    continue
                 try:
-                    size = hit.stat().st_size
-                    removed.append({"path": str(hit), "bytes": size})
-                    freed += size
-                    if not dry_run:
-                        hit.unlink(missing_ok=True)
+                    st = path.stat()
                 except OSError:
-                    pass
+                    continue
+                if now - st.st_mtime < min_age_s:
+                    continue
+                removed.append({"path": str(path), "bytes": st.st_size})
+                freed += st.st_size
+                if delete:
+                    path.unlink(missing_ok=True)
     return removed, freed
+
+
+def _outside_hub_report() -> dict:
+    """Shared caches clean-cache never touches; reported so the user can decide."""
+    te = Path.home() / ".cache" / "torch_extensions"
+    te_bytes = sum(f.stat().st_size for f in te.rglob("*") if f.is_file()) if te.is_dir() else 0
+    hf_roots = [Path(os.environ["HF_HOME"])] if os.environ.get("HF_HOME") else []
+    hf_roots.append(Path.home() / ".cache" / "huggingface")
+    incomplete = [str(p) for r in hf_roots if r.is_dir() for p in r.rglob("*.incomplete")]
+    return {"note": "shared with other programs; never deleted here. Remove these yourself only when no "
+                    "other download or build is running.",
+            "torch_extensions": {"path": str(te), "bytes": te_bytes},
+            "hf_incomplete_files": incomplete}
 
 
 def cmd_clean_cache(args: argparse.Namespace) -> None:
-    dry_run = args.dry_run
-    te_removed, te_freed = _collect_torch_extensions(dry_run)
-    hf_removed, hf_freed = _collect_hf_partials(dry_run)
-    total_freed = te_freed + hf_freed
+    from _setup_common import resolve_home
+    home = resolve_home()
+    delete = bool(args.yes) and not args.dry_run
+    items, freed = _collect_hub_partials(home, delete, args.min_age_min * 60)
     _print_json({
-        "dry_run": dry_run,
-        "action": "would_remove" if dry_run else "removed",
-        "torch_extensions": {"items": te_removed, "bytes_freed": te_freed},
-        "hf_partials": {"items": hf_removed, "bytes_freed": hf_freed},
-        "total_bytes_freed": total_freed,
+        "dry_run": not delete,
+        "action": "removed" if delete else "would_remove (pass --yes to delete)",
+        "hub": str(home),
+        "hub_partials": {"items": items, "bytes_freed": freed if delete else 0},
+        "outside_hub_not_touched": _outside_hub_report(),
+        "total_bytes_freed": freed if delete else 0,
     })
 
 
@@ -421,9 +423,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     # clean-cache
     p_clean = sub.add_parser("clean-cache",
-                              help="Remove torch_extensions and HF partial/lock files only.")
+                              help="Remove leftovers of interrupted downloads under the hub "
+                                   "($OH_MY_MLIP_HOME/models, /cache) only; lists, never deletes, shared caches.")
+    p_clean.add_argument("--yes", action="store_true",
+                         help="Actually delete; without it the command only lists what it would remove.")
     p_clean.add_argument("--dry-run", action="store_true",
-                         help="List what would be removed without deleting anything.")
+                         help="List only (the default without --yes).")
+    p_clean.add_argument("--min-age-min", type=float, default=10.0,
+                         help="Skip files changed in the last N minutes (default 10): a download may still be writing.")
 
     # gate
     p_gate = sub.add_parser("gate", help="Combined disk-check + record-attempt verdict.")

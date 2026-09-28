@@ -387,7 +387,9 @@ Whatever the error, the first of these ends the loop:
 3. **5** attempts in total, even with different errors → `stalled_cumulative`;
 4. a wall-clock limit, when one is set → `wallclock_halt`.
 
-Partial downloads are cleaned between attempts (`clean-cache`). On any of these
+Partial downloads under the hub are cleaned between attempts
+(`setup_guardrail.py clean-cache --yes`; it never deletes from shared caches
+such as `~/.cache/huggingface` or `~/.cache/torch_extensions`). On any of these
 verdicts, stop and report the verdict.
 
 ## 9. Installing model envs — one, several or all
