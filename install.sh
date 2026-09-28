@@ -344,7 +344,8 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$STATUS" -eq 0 ]; then
   elif found="$(find_conda_off_path)"; then
     echo "install.sh: conda is installed at $found but is not on PATH in this shell; using it." >&2
     echo "  To make it permanent for non-interactive shells: export PATH=\"$(dirname "$found"):\$PATH\"" >&2
-    export PATH="$(dirname "$found"):$PATH"
+    conda_dir="$(dirname "$found")"
+    export PATH="$conda_dir:$PATH"
     CONDA_BIN="$found"
   else
     echo "install.sh: no conda or mamba found (not on PATH, not in \$CONDA_EXE, not under ~/miniforge3," >&2
