@@ -289,6 +289,28 @@ def _resolve_family_and_version_name(
             matches.append(family)
 
     if not matches:
+        # The names people type: a family or variant in another case ("mace",
+        # "mace-mpa-0"), or the env name install.sh prints ("mace"). Each must
+        # point at exactly one family; anything else stays an error.
+        want = model.lower()
+        families = [f for f, i in data.items() if not f.startswith("_") and isinstance(i, dict)]
+        by_family = [f for f in families if f.lower() == want]
+        if len(by_family) == 1:
+            return by_family[0], version
+        by_version = [(f, v) for f in families for v in (data[f].get("versions") or {}) if v.lower() == want]
+        if len(by_version) == 1:
+            model = by_version[0][1]
+            matches = [by_version[0][0]]
+        else:
+            by_env = [f for f in families if str(data[f].get("env", "")).lower() == want]
+            if len(by_env) == 1:
+                return by_env[0], version
+            if len(by_env) > 1:
+                raise RegistryError(
+                    f"{model!r} is the env of several families {by_env}; name the family or a variant"
+                )
+
+    if not matches:
         raise RegistryError(
             f"unknown model: {model!r} (known: {list_models(data)})"
         )

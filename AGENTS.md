@@ -503,8 +503,9 @@ For each target:
      imports fail, which is what an interrupted build leaves. Re-run it with
      `--rebuild <env>` to delete that env and build it again; it never
      deletes a symlinked env, or one whose import check timed out.
-2. **Guardrail** (after an install that exited on its own): save the
-   attempt's stderr to a file as-is, then run
+2. **Guardrail** (only after an install that failed; after a successful one
+   go straight to step 4, since the finished build itself may have taken the
+   disk below the floor): save the attempt's stderr to a file as-is, then run
    `scripts/setup_guardrail.py gate --state <state-file>
    --stderr-file <stderr-file>`. Read its JSON verdict (the exit code is always
    0): `guardrail_halt` / `wallclock_halt` stop; `stalled` /

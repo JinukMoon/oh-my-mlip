@@ -561,3 +561,22 @@ def test_package_imports_without_torch_ase():
     for name in ("list_models", "resolve", "get_calculator", "run",
                  "parse_env_run", "Worker", "WorkerPool"):
         assert hasattr(oh_my_mlip, name)
+
+
+def test_names_people_type_resolve_to_one_family():
+    from oh_my_mlip import registry as reg
+    for name in ("mace", "MACE", "Mace", "mace-mpa-0"):
+        spec = reg.resolve(name)
+        assert (spec["model"], spec["version"]) == ("MACE", "MACE-MPA-0"), name
+    assert reg.resolve("sevennet")["model"] == "SevenNet"                  # env name
+    import pytest
+    with pytest.raises(reg.RegistryError, match="unknown model"):
+        reg.resolve("notamodel")
+
+
+def test_an_env_shared_by_several_families_is_ambiguous():
+    from oh_my_mlip import registry as reg
+    data = {"A": {"env": "shared", "versions": {"A-1": {}}}, "B": {"env": "shared", "versions": {"B-1": {}}}}
+    import pytest
+    with pytest.raises(reg.RegistryError, match="env of several families"):
+        reg._resolve_family_and_version_name("shared", None, data)
