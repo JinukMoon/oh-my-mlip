@@ -26,7 +26,7 @@ python3 scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on the GPU
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| An install was interrupted, or an env is `partial` | the build stopped midway | run `./install.sh <env>` again; it repairs or rebuilds the env instead of duplicating it |
+| An install was interrupted, or an env is `partial` | the build stopped midway | run `./install.sh <env>` again: it keeps an env whose imports work and finishes it; if they fail it stops without deleting anything, and `./install.sh --rebuild <env>` deletes that env and builds it again |
 | `setup_verify` passes with `degraded: true`, `device: cpu` | the NVIDIA driver is older than the env's CUDA build (common for the CUDA 13.0 envs dpa4, matris, tace) | upgrade the driver, or run on CPU; see [Host requirements](host_requirements.md) |
 | Loading `UMA-m-1p1-*` ends with no error message (exit code 137) | the 11.2 GB checkpoint does not fit in host RAM | use a machine with 32 GB or more, or a `UMA-s-*` model |
 | HTTP 401 or 403 when downloading UMA or eSEN | license not accepted, or the token belongs to another account | accept the license and run `hf auth login`; see [Gated models](gated_models.md) |

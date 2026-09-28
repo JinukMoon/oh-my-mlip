@@ -22,7 +22,10 @@
 #                partial / broken / not installed); changes nothing. An env
 #                without the .omm_ready sentinel is NEVER duplicate-built: the
 #                real install verifies its imports and adopts it (resuming the
-#                post-install steps) or removes and rebuilds it if broken.
+#                post-install steps); if they fail it stops and deletes nothing.
+#     --rebuild  allow deleting an env whose imports fail (an interrupted build)
+#                and building it again from the recipe. Never applies to a
+#                symlinked env, or when the import check timed out.
 #     --with-accel  opt-in (default OFF): also PRINT the curated GPU compile/accel
 #                commands (NequIP/Allegro/SevenNet) for each targeted env, as in
 #                docs/compile.md; this flag only prints them (the NequIP/Allegro
@@ -65,9 +68,12 @@ export PIP_RESUME_RETRIES="${PIP_RESUME_RETRIES:-50}"
 export PIP_RETRIES="${PIP_RETRIES:-10}"
 export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
 
+OMM_LOCKS=()
+trap 'rm -f ${OMM_LOCKS[@]+"${OMM_LOCKS[@]}"} 2>/dev/null' EXIT
 DRY_RUN=0
 STATUS=0
 WITH_ACCEL=0
+REBUILD=0
 REQUESTED=()
 
 # catbench ships in EVERY env (D3 dispersion + adsorption benchmarking are
@@ -83,6 +89,7 @@ for arg in "$@"; do
     --all) BUILD_ALL=1 ;;
     --status) STATUS=1 ;;
     --with-accel) WITH_ACCEL=1 ;;
+    --rebuild) REBUILD=1 ;;
     -h|--help)
       sed -n '2,33p' "${BASH_SOURCE[0]:-$0}"
       exit 0
@@ -257,8 +264,12 @@ warn_driver_skew() {
 # sentinel (interrupted install): a passing import means the env is real and
 # must be ADOPTED, not duplicate-built; a failure means broken -> rebuild.
 verify_env_imports() {
+  # 0 = imports OK; 124 = timed out; 10 = the check itself could not run
+  # (no interpreter / unreadable models.json); anything else = an import failed.
+  # The env's own interpreter reads models.json, so no host python3 is needed.
   local env_name="$1" prefix="$2" imports tmpf rc
-  imports="$(python3 - "$env_name" "$OH_MY_MLIP_HOME/models.json" <<'PY'
+  [ -x "$prefix/bin/python" ] || return 10
+  imports="$("$prefix/bin/python" - "$env_name" "$OH_MY_MLIP_HOME/models.json" <<'PY'
 import json
 import sys
 
@@ -270,14 +281,23 @@ for info in data.values():
         print("\n".join(info.get("import", [])))
         break
 PY
-)" || return 1
+)" || return 10
   [ -n "$imports" ] || return 0   # no registered imports -> interpreter presence is enough
   tmpf="$(mktemp)"
   printf '%s\n' "$imports" > "$tmpf"
   rc=0
-  timeout 180 "$prefix/bin/python" "$tmpf" >/dev/null 2>&1 || rc=$?
+  timeout "${OMM_IMPORT_CHECK_TIMEOUT:-600}" "$prefix/bin/python" "$tmpf" >/dev/null 2>&1 || rc=$?
   rm -f "$tmpf"
   return "$rc"
+}
+
+# Why an import check did not pass, for the halt messages below.
+import_check_reason() {
+  case "$1" in
+    124) echo "the import check timed out after ${OMM_IMPORT_CHECK_TIMEOUT:-600} s (a slow disk or a cold network home can do this)" ;;
+    10)  echo "the import check could not run (no interpreter in the env, or models.json unreadable)" ;;
+    *)   echo "a registered import failed (exit $1)" ;;
+  esac
 }
 
 # No env names: building all 20 frameworks is hundreds of GB and hours of work,
@@ -409,7 +429,7 @@ if [ "$STATUS" -eq 1 ]; then
     if [ -e "$prefix/.omm_ready" ]; then
       state="ready       (built + post-steps done; install.sh will skip)"
     elif [ -x "$prefix/bin/python" ]; then
-      state="partial     (env exists, no sentinel; install.sh will verify imports and ADOPT or rebuild — never duplicate)"
+      state="partial     (env exists, no sentinel; install.sh will verify imports and ADOPT it, or stop and ask for --rebuild)"
     elif [ -e "$prefix" ]; then
       state="broken      (prefix without interpreter; install.sh will remove + rebuild)"
     else
@@ -445,15 +465,35 @@ install_one() {
     return 1
   fi
 
+  # One build per env at a time: a second install.sh (an agent re-running the
+  # command while the first still builds in the background) would otherwise
+  # judge the half-built env and act on it.
+  local lock="$ENVS_DIR/.$env_name.install.pid" holder
+  if [ -f "$lock" ] && holder="$(cat "$lock" 2>/dev/null)" && [ -n "$holder" ] \
+     && [ "$holder" != "$$" ] && kill -0 "$holder" 2>/dev/null; then
+    echo "install.sh: '$env_name' is already being built by install.sh (pid $holder). Wait for it:" >&2
+    echo "  it is done when $prefix/.omm_ready exists or that pid has exited." >&2
+    return 3
+  fi
+  echo "$$" > "$lock"
+  OMM_LOCKS+=("$lock")
+
   if [ -e "$sentinel" ]; then
     # Trust but verify: a sentinel can LIE — observed on this host when an old
     # install.sh (pre fail-safe guards) wrote it after a killed build (the env
     # had no torch/fairchem yet was marked ready). Re-verify the registered
     # imports; a stale sentinel is removed and the env falls through to
     # adopt-or-heal below instead of being trusted blindly.
-    if verify_env_imports "$env_name" "$prefix"; then
+    local vrc=0
+    verify_env_imports "$env_name" "$prefix" || vrc=$?
+    if [ "$vrc" -eq 0 ]; then
       echo "  '$env_name' already installed (sentinel present + imports verified) — skipping."
       return 0
+    fi
+    if [ "$vrc" -eq 124 ] || [ "$vrc" -eq 10 ]; then
+      echo "  '$env_name' is marked ready but $(import_check_reason "$vrc"). Nothing was changed;" >&2
+      echo "  run install.sh again, or pass --rebuild to delete $prefix and build it from the recipe." >&2
+      return 1
     fi
     echo "  '$env_name' sentinel present but imports FAIL — stale sentinel; removing it and re-entering adopt-or-heal." >&2
     rm -f "$sentinel"
@@ -470,18 +510,31 @@ install_one() {
   # (skip the build, resume the post-install steps below); on failure remove it
   # and rebuild from the recipe.
   local skip_build=0
+  if [ -L "$prefix" ]; then
+    # A symlink points at an env this script did not build; it is never removed.
+    echo "  '$env_name': $prefix is a symlink to $(readlink "$prefix"); install.sh never modifies or" >&2
+    echo "  removes a linked env. Remove the link yourself to build here, or use adopt_env.py." >&2
+    return 1
+  fi
   if [ -x "$prefix/bin/python" ]; then
     echo "  '$env_name' env exists without sentinel — verifying imports (adopt-or-heal) ..."
-    if verify_env_imports "$env_name" "$prefix"; then
+    local vrc=0
+    verify_env_imports "$env_name" "$prefix" || vrc=$?
+    if [ "$vrc" -eq 0 ]; then
       echo "  imports OK — adopting the existing env; resuming post-install steps (no rebuild)."
       skip_build=1
-    else
-      echo "  imports FAILED — removing the broken env and rebuilding from the recipe."
+    elif [ "$REBUILD" -eq 1 ] && [ "$vrc" -ne 124 ] && [ "$vrc" -ne 10 ]; then
+      echo "  $(import_check_reason "$vrc"); --rebuild given: deleting $prefix and rebuilding from the recipe."
       "$CONDA_BIN" env remove -p "$prefix" -y >/dev/null 2>&1 || true
       rm -rf "$prefix"
+    else
+      echo "  '$env_name': $prefix has an interpreter but $(import_check_reason "$vrc")." >&2
+      echo "  Nothing was deleted. An interrupted build usually looks like this. To delete this env and" >&2
+      echo "  build it again from the recipe, re-run with --rebuild:  ./install.sh --rebuild $env_name" >&2
+      return 1
     fi
   elif [ -e "$prefix" ]; then
-    echo "  '$env_name' prefix exists but has no interpreter (partial build) — removing and rebuilding."
+    echo "  '$env_name' prefix exists but has no interpreter (partial build) — removing $prefix and rebuilding."
     rm -rf "$prefix"
   fi
 
