@@ -91,7 +91,8 @@ def test_a_conda_off_path_is_found_and_used(tmp_path):
     shutil.copytree(REPO, hub_copy, ignore=shutil.ignore_patterns(".git", "envs", "models", ".sweep"))
     (hub_copy / "envs").mkdir()
     shutil.copy(REPO / "envs" / "mace.yml", hub_copy / "envs" / "mace.yml")
-    env = {"HOME": str(tmp_path), "PATH": _path_without_conda(tmp_path), "OH_MY_MLIP_HOME": str(hub_copy)}
+    env = {"HOME": str(tmp_path), "PATH": _path_without_conda(tmp_path), "OH_MY_MLIP_HOME": str(hub_copy),
+           "OMM_DISK_FLOOR_GB": "0"}
     r = subprocess.run(["bash", str(hub_copy / "install.sh"), "mace"], env=env, capture_output=True, text=True)
     assert f"conda is installed at {conda} but is not on PATH" in r.stderr
     assert (tmp_path / "conda.calls").read_text().startswith("fake-conda ")   # the found binary did the work

@@ -55,6 +55,20 @@ _HOST_ARCH_UNSET = object()
 _host_arch_cache: Any = _HOST_ARCH_UNSET
 
 
+# WSL ships the driver's nvidia-smi here, and a non-interactive shell (an
+# agent's) often lacks this directory on PATH.
+_WSL_NVIDIA_SMI = "/usr/lib/wsl/lib/nvidia-smi"
+
+
+def nvidia_smi() -> str | None:
+    """Path of nvidia-smi: on PATH, else WSL's driver directory, else None."""
+    import shutil
+    found = shutil.which("nvidia-smi")
+    if found:
+        return found
+    return _WSL_NVIDIA_SMI if os.access(_WSL_NVIDIA_SMI, os.X_OK) else None
+
+
 def detect_host_arch() -> str | None:
     """Return the arch of the GPU this process will use as ``"sm<major><minor>"``
     (e.g. ``sm86``, ``sm89``) via ``nvidia-smi``, or ``None`` when no GPU / no
@@ -71,8 +85,11 @@ def detect_host_arch() -> str | None:
         return _host_arch_cache
     arch: str | None = None
     try:
+        smi = nvidia_smi()
+        if smi is None:
+            raise FileNotFoundError("nvidia-smi")
         rows = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index,uuid,compute_cap", "--format=csv,noheader"],
+            [smi, "--query-gpu=index,uuid,compute_cap", "--format=csv,noheader"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -446,8 +463,13 @@ def resolve(
     # arch actually used is returned as spec["arch"] so callers (Worker) can
     # propagate it explicitly to the in-env worker process.
     use_arch: str | None = None
+    arch_source: str | None = None
     if arch_pinned:
-        use_arch = arch or detect_host_arch() or "sm89"
+        detected = None if arch else detect_host_arch()
+        use_arch = arch or detected or "sm89"
+        # "default" means no GPU was seen: fine for writing a job for another
+        # host, never a claim about this one (fetch.py names the missing driver)
+        arch_source = "explicit" if arch else ("detected" if detected else "default")
         inference = vinfo.get(f"inference_{use_arch}") or vinfo.get("inference")
         if not inference:
             raise RegistryError(
@@ -504,6 +526,7 @@ def resolve(
         "env_run_raw": env_run_raw,
         "arch_pinned": arch_pinned,
         "arch": use_arch,
+        "arch_source": arch_source,
         "gated": bool(vinfo.get("gated", False)),
         "license_url": vinfo.get("license_url"),
         "weights": vinfo.get("weights", "bundled"),

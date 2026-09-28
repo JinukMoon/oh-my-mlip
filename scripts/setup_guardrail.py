@@ -23,6 +23,11 @@ All subcommands print a single JSON object to stdout and exit 0 (even on stall/h
 the caller can parse the verdict rather than relying on exit codes).
 """
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+from oh_my_mlip.hub import DISK_FLOOR_GB as _DISK_FLOOR_GB  # noqa: E402
+
 import argparse
 import hashlib
 import json
@@ -428,8 +433,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # disk-check
     p_disk = sub.add_parser("disk-check", help="Check free disk headroom at PATH.")
-    p_disk.add_argument("--ceiling-gb", type=float, default=30.0,
-                        help="Minimum required free space in GB (default: 30).")
+    p_disk.add_argument("--ceiling-gb", type=float, default=_DISK_FLOOR_GB,
+                        help="Minimum required free space in GB (default: DISK_FLOOR_GB in oh_my_mlip/hub.py).")
     p_disk.add_argument("--path", default=None,
                         help="Filesystem path to check (default: cwd).")
 
@@ -461,8 +466,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_gate = sub.add_parser("gate", help="Combined disk-check + record-attempt verdict.")
     p_gate.add_argument("--state", required=True,
                         help="Path to JSON state file.")
-    p_gate.add_argument("--ceiling-gb", type=float, default=30.0,
-                        help="Minimum required free space in GB (default: 30).")
+    p_gate.add_argument("--ceiling-gb", type=float, default=_DISK_FLOOR_GB,
+                        help="Minimum required free space in GB (default: DISK_FLOOR_GB in oh_my_mlip/hub.py).")
     p_gate.add_argument("--stderr-file", required=True,
                         help="Path to stderr text file, or '-' to read from stdin.")
     p_gate.add_argument("--path", default=None,

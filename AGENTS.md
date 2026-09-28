@@ -20,7 +20,8 @@ to submit themselves.
    `install.sh` and `scripts/setup_sweep.py` are serial by design; do not work
    around that with `&`, `xargs -P` or several shells. Before retrying a failed
    build, make sure no process from the earlier attempt is still running, and
-   check free disk space first (30 GB is the default floor).
+   check free disk space first (`DISK_FLOOR_GB` in `oh_my_mlip/hub.py`, 30 GB;
+   `install.sh` refuses to start a build below it).
 2. **Done means energy and forces on the GPU.** A model is installed only when
    `scripts/setup_verify.py <model> --json` passes: it computes energy and forces
    and confirms the GPU was used. A zero exit code from `install.sh` is not
@@ -61,8 +62,10 @@ to submit themselves.
 2. **`envs/<env>.yml`** — each env's recipe (conda + PyPI), which `install.sh`
    builds; this is the only way an env is installed.
 
-Run `source env.sh` once per shell before anything else: it sets up the model
-caches and the CUDA environment that the D3 correction needs.
+Source `$OH_MY_MLIP_HOME/env.sh` in every shell that runs a model or a build: it
+sets up the model caches and the CUDA environment that the D3 correction needs.
+An agent's tool calls usually each start a fresh shell, so put it in the same
+command: `source "$OH_MY_MLIP_HOME/env.sh" && <command>`.
 
 ## 1. Layout
 
@@ -349,7 +352,7 @@ built on the user's machine:
 - [ ] For NequIP/Allegro, the compiled model exists for the GPU the job runs on.
 - [ ] For gated models, token presence checked and `license_url` given; no token
       or gated weight written into any file.
-- [ ] `source env.sh` before running.
+- [ ] `source "$OH_MY_MLIP_HOME/env.sh" &&` in the same command that runs the model.
 
 ## 8. Recovering from install errors
 
@@ -388,7 +391,7 @@ host were blocked.
 
 Whatever the error, the first of these ends the loop:
 
-1. free disk below the floor (default **30 GB**) → `guardrail_halt`;
+1. free disk below the floor (`DISK_FLOOR_GB`, **30 GB**) → `guardrail_halt`;
 2. the same normalized error **twice** → `stalled`;
 3. **5** attempts in total, even with different errors → `stalled_cumulative`;
 4. a wall-clock limit, when one is set → `wallclock_halt`.
@@ -419,7 +422,7 @@ The working directory does not matter:
   `setup_sweep.py` and `adopt_env.py` refuse it;
 - `install.sh` finds conda or mamba itself, also when this shell lacks it on
   PATH (§8 if it reports none);
-- `source $OH_MY_MLIP_HOME/env.sh` before `install.sh`.
+- `source "$OH_MY_MLIP_HOME/env.sh" &&` in the same command as `install.sh`.
 
 ### 9.1 Listing what can be installed (installs nothing)
 
@@ -464,7 +467,7 @@ Installing everything takes 100+ GB and hours, so ask once, clearly:
 
 `scripts/setup_sweep.py --targets <M1,M2,...>` runs a batch: one env at a time,
 gated models without a token recorded as `skipped_gated`, a failure never stops
-the rest, a 10 GB free-disk check before each target (below it, the remaining
+the rest, a `DISK_FLOOR_GB` (30 GB) free-disk check before each target (below it, the remaining
 targets are recorded as `skipped_disk`), and one JSONL line per step under
 `.sweep/`. Do not loop over `install.sh` by hand.
 
@@ -500,7 +503,7 @@ For each target:
      deletes a symlinked env, or one whose import check timed out.
 2. **Guardrail** (after an install that exited on its own): save the
    attempt's stderr to a file as-is, then run
-   `scripts/setup_guardrail.py gate --state <state-file> --ceiling-gb 30
+   `scripts/setup_guardrail.py gate --state <state-file>
    --stderr-file <stderr-file>`. Read its JSON verdict (the exit code is always
    0): `guardrail_halt` / `wallclock_halt` stop; `stalled` /
    `stalled_cumulative` stop and ask for documentation (§8); `ok` continues.

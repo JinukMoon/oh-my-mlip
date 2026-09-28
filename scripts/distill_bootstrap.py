@@ -153,11 +153,19 @@ try:
     from ase.data import atomic_masses
     from ase.io import read as ase_read, write as ase_write
 except ImportError as exc:  # pragma: no cover - environment hint
-    raise ImportError(
-        "distill_bootstrap.py needs ase + pyyaml on the interpreter that runs "
-        "it -- use any conda env carrying both (e.g. a model env or your "
-        "analysis env), not the bare system python."
-    ) from exc
+    # --help must work anywhere; the real run stops after argument parsing.
+    _MISSING_DEPS = exc
+else:
+    _MISSING_DEPS = None
+
+
+def _require_deps() -> None:
+    if _MISSING_DEPS is not None:
+        print(f"[stop] distill_bootstrap.py needs numpy, ase and pyyaml ({_MISSING_DEPS}). Run it with the teacher env's "
+              "interpreter: \"$(python3 -c \"import sys; sys.path.insert(0, '$OH_MY_MLIP_HOME'); "
+              "import oh_my_mlip; print(oh_my_mlip.resolve('<Variant>')['python'])\")\" "
+              f"$OH_MY_MLIP_HOME/scripts/distill_bootstrap.py ...", file=sys.stderr)
+        raise SystemExit(2)
 
 MAX_SPECIES = 4  # pair_nnmtp v1: `int species_Z[4]` (F18) -- v2 is unbounded
                  # but is documented as "not used by the loop"; bound to v1.
@@ -1272,6 +1280,7 @@ def render_plan_md(acc: dict, *, work: Path) -> str:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    _require_deps()
     work = args.work.resolve()
     structure_abs = args.structure.resolve()
 

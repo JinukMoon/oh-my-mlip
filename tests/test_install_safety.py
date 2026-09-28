@@ -23,7 +23,7 @@ def hub(tmp_path):
     (fakebin / "conda").write_text('#!/bin/sh\necho "conda $*" >> "$CALLS"\nexit 1\n')
     (fakebin / "conda").chmod(0o755)
     env = {"HOME": str(tmp_path), "PATH": f"{fakebin}:/usr/bin:/bin", "OH_MY_MLIP_HOME": str(home),
-           "CALLS": str(tmp_path / "calls")}
+           "CALLS": str(tmp_path / "calls"), "OMM_DISK_FLOOR_GB": "0"}   # the runner's disk is not under test
     return home, env
 
 
@@ -92,3 +92,26 @@ def test_a_second_install_of_the_same_env_waits_for_the_first(hub):
     (lock / "pid").write_text(str(holder.pid))                    # now a dead holder: taken over, then released
     r = _install(env, "mace")
     assert "already being built" not in r.stderr and not lock.exists()
+
+
+def test_a_build_does_not_start_below_the_disk_floor(hub):
+    home, env = hub
+    r = _install(dict(env, OMM_DISK_FLOOR_GB="999999"), "mace")
+    assert r.returncode == 1 and "needs at least 999999 GB" in r.stderr and "nothing was built" in r.stderr
+    assert not Path(env["CALLS"]).exists()                       # conda never ran
+
+
+def test_the_floor_is_one_constant():
+    import re
+    import sys
+    sys.path.insert(0, str(REPO))
+    from oh_my_mlip.hub import DISK_FLOOR_GB
+    sys.path.insert(0, str(REPO / "scripts"))
+    import setup_guardrail
+    import setup_sweep
+    import inspect
+    assert f"DISK_FLOOR_GB = {DISK_FLOOR_GB}" in (REPO / "oh_my_mlip" / "hub.py").read_text()
+    assert setup_guardrail._DISK_FLOOR_GB == DISK_FLOOR_GB
+    assert inspect.signature(setup_sweep.sweep).parameters["min_free_gb"].default is None
+    agents = (REPO / "AGENTS.md").read_text()
+    assert "--ceiling-gb 30" not in agents and not re.search(r"\b10 GB free-disk", agents)

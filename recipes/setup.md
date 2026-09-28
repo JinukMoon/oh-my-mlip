@@ -137,7 +137,7 @@ Do not open with a disk question; the survey answers it.
 - Single target: `bash install.sh <model>` launched detached with stdout and
   stderr captured to `<work>/install_<env>.log` and polled
   (`AGENTS.md §9.4` step 1) → on failure
-  `python3 scripts/setup_guardrail.py gate --state <state.json> --ceiling-gb 30 --stderr-file <stderr.txt>`
+  `python3 scripts/setup_guardrail.py gate --state <state.json> --stderr-file <stderr.txt>` (its disk floor defaults to `DISK_FLOOR_GB`)
   → the `§8` recovery for the class it names (free disk, supply a token,
   rerun) → `bash install.sh <model>` again, which adopts what was built
   when its imports work and resumes the post-steps, and otherwise stops

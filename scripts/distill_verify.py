@@ -131,10 +131,19 @@ try:
     import yaml
     from ase.io import read as ase_read
 except ImportError as exc:  # pragma: no cover - environment hint
-    raise ImportError(
-        "distill_verify.py needs ase + numpy + pyyaml on the interpreter that "
-        "runs it -- the same requirement as distill_bootstrap.py."
-    ) from exc
+    # --help must work anywhere; the real run stops after argument parsing.
+    _MISSING_DEPS = exc
+else:
+    _MISSING_DEPS = None
+
+
+def _require_deps() -> None:
+    if _MISSING_DEPS is not None:
+        print(f"[stop] distill_verify.py needs numpy, ase and pyyaml ({_MISSING_DEPS}). Run it with the teacher env's "
+              "interpreter: \"$(python3 -c \"import sys; sys.path.insert(0, '$OH_MY_MLIP_HOME'); "
+              "import oh_my_mlip; print(oh_my_mlip.resolve('<Variant>')['python'])\")\" "
+              f"$OH_MY_MLIP_HOME/scripts/distill_verify.py ...", file=sys.stderr)
+        raise SystemExit(2)
 
 ACCEPTANCE_SCHEMA = "oh-my-mlip.distill.acceptance/1"
 WALLCLOCK_SCHEMA = "oh-my-mlip.distill.wallclock/3"  # /3: carries `attribution`
@@ -1003,6 +1012,7 @@ def append_ledger(path: Path, row: dict) -> None:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    _require_deps()
     work = args.work.resolve()
     log = Log(work / "verify" / "verify.log")
     log(f"verify {work} at {utc_now()}")

@@ -89,6 +89,13 @@ def ensure_weights(
     # architecture (common on mixed clusters) with no compile for it yet.
     if resolved.get("arch_pinned"):
         missing = [p for p in _inference_weight_targets(resolved) if not p.is_file()]
+        if missing and resolved.get("arch_source") == "default":
+            raise FetchError(
+                f"{resolved.get('model', model)}/{resolved.get('version') or version}: no NVIDIA GPU was found "
+                f"on this host (nvidia-smi is missing or lists no GPU), so there is no GPU architecture to "
+                f"compile for, and NequIP / Allegro run on a GPU only. Install the NVIDIA driver, or run on a "
+                f"GPU host; to write a job for another host, pass its architecture (--arch sm86, ...)."
+            )
         if missing:
             env = resolved.get("env", "")
             home = registry.home()

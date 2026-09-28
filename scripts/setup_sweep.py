@@ -177,7 +177,11 @@ def last_json_line(stdout: str) -> dict | None:
 
 def sweep(targets: list[str], home: Path, ledger: Path,
           install_cmd: list[str] | None, verify_cmd: list[str] | None,
-          min_free_gb: float = 10.0) -> None:
+          min_free_gb: float | None = None) -> None:
+    if min_free_gb is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from oh_my_mlip.hub import DISK_FLOOR_GB
+        min_free_gb = DISK_FLOOR_GB
     append(ledger, {"seq": 0, "phase": "plan", "targets": targets, "at": utc_now()})
     token_missing = token_source() == "none"
     seq = 0

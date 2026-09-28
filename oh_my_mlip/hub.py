@@ -22,6 +22,11 @@ from pathlib import Path
 
 DEFAULT_HUB = "~/.oh-my-mlip"
 
+# Disk, one source for every script and AGENTS.md. An env takes 5 to 15 GB,
+# and a build also fills pip/conda download caches while it runs.
+DISK_FLOOR_GB = 30.0   # free space install.sh, the sweep and the guardrail require to start one build
+ENV_BUDGET_GB = 15.0   # setup_survey's planning estimate per env to build
+
 # Path segment pairs that mark an agent host's plugin cache.
 _PLUGIN_CACHE_MARKERS = ((".claude", "plugins"), (".codex", "plugins"))
 

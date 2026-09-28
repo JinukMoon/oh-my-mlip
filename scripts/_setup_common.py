@@ -59,6 +59,13 @@ def load_local_env_map(home: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def nvidia_smi() -> str | None:
+    """nvidia-smi on PATH or in WSL's driver directory (oh_my_mlip.registry.nvidia_smi)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from oh_my_mlip.registry import nvidia_smi as _find
+    return _find()
+
+
 def resolve_home() -> Path:
     """The hub root, by the one resolver the package uses (oh_my_mlip/hub.py)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -143,12 +150,13 @@ def sample_gpu(
     cwd: Path | None = None,
     proc_root: Path = Path("/proc"),
 ) -> None:
-    if shutil.which("nvidia-smi") is None:
+    smi = nvidia_smi()
+    if smi is None:
         return
     try:
         proc = subprocess.run(
             [
-                "nvidia-smi",
+                smi,
                 "--query-compute-apps=pid,used_memory",
                 "--format=csv,noheader",
             ],
@@ -322,11 +330,12 @@ def parse_host_cuda(nvidia_smi_text: str) -> int | None:
 
 
 def _probe_host_cuda() -> int | None:
-    if shutil.which("nvidia-smi") is None:
+    smi = nvidia_smi()
+    if smi is None:
         return None
     try:
         proc = subprocess.run(
-            ["nvidia-smi"],
+            [smi],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,

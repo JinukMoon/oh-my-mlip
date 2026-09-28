@@ -247,8 +247,10 @@ warn_driver_skew() {
   cu="$(grep -oE 'torch==[0-9.]+\+cu[0-9]+' "$recipe" 2>/dev/null | grep -oE 'cu[0-9]+' | head -1 || true)"
   [ -n "$cu" ] || return 0                       # CPU-only recipe / no pinned torch wheel
   env_cu="${cu#cu}"
-  command -v nvidia-smi >/dev/null 2>&1 || return 0
-  host_mm="$(nvidia-smi 2>/dev/null | grep -oE 'CUDA Version: [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)"
+  local smi
+  smi="$(command -v nvidia-smi || { [ -x /usr/lib/wsl/lib/nvidia-smi ] && echo /usr/lib/wsl/lib/nvidia-smi; } || true)"
+  [ -n "$smi" ] || return 0
+  host_mm="$("$smi" 2>/dev/null | grep -oE 'CUDA Version: [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)"
   [ -n "$host_mm" ] || return 0
   host_cu="$(( ${host_mm%.*} * 10 + ${host_mm#*.} ))"
   if [ "$env_cu" -gt "$host_cu" ]; then
@@ -320,6 +322,24 @@ else
   for arg in "${REQUESTED[@]}"; do
     TARGETS+=("$(resolve_to_env "$arg")")
   done
+fi
+
+# A name that is neither an env nor a registered family or variant stops here,
+# before --status or any build, with the valid names (as registry.py lists them).
+UNKNOWN=()
+for t in "${TARGETS[@]}"; do
+  [ -e "$ENVS_DIR/$t.yml" ] || UNKNOWN+=("$t")
+done
+if [ "${#UNKNOWN[@]}" -gt 0 ]; then
+  families=""
+  py_bin="$(command -v python3 || command -v python || true)"
+  if [ -n "$py_bin" ] && [ -e "$MODELS_JSON" ]; then
+    families="$("$py_bin" -c 'import json,sys; print(", ".join(k for k in json.load(open(sys.argv[1])) if not k.startswith("_")))' "$MODELS_JSON" 2>/dev/null || true)"
+  fi
+  echo "install.sh: not an env, model family or variant: ${UNKNOWN[*]}" >&2
+  echo "  envs: ${ALL_ENVS[*]}" >&2
+  [ -n "$families" ] && echo "  families: $families (any of their variant names works too)" >&2
+  exit 2
 fi
 
 # ── Detect conda / mamba (skipped under --dry-run and --status, which change nothing) ──
@@ -515,6 +535,20 @@ install_one() {
     fi
     echo "  '$env_name' sentinel present but imports FAIL — stale sentinel; removing it and re-entering adopt-or-heal." >&2
     rm -f "$sentinel"
+  fi
+
+  # Disk preflight before the solve: a build needs DISK_FLOOR_GB free
+  # (oh_my_mlip/hub.py, the value the survey, sweep and guardrail use); a
+  # full disk otherwise fails 20 minutes in with "No space left on device".
+  if [ ! -x "$prefix/bin/python" ]; then
+    local floor free_gb
+    floor="${OMM_DISK_FLOOR_GB:-$(grep -oE '^DISK_FLOOR_GB = [0-9.]+' "$OH_MY_MLIP_HOME/oh_my_mlip/hub.py" 2>/dev/null | grep -oE '[0-9.]+$' || echo 30)}"
+    free_gb="$(df -Pk "$ENVS_DIR" 2>/dev/null | awk 'NR==2 {printf "%d", $4/1048576}')"
+    if [ -n "$free_gb" ] && [ "$free_gb" -lt "${floor%.*}" ]; then
+      echo "install.sh: only $free_gb GB free under $ENVS_DIR; building '$env_name' needs at least ${floor%.*} GB" >&2
+      echo "  (an env is 5-15 GB plus download caches). Free space and re-run; nothing was built." >&2
+      return 1
+    fi
   fi
 
   # Preflight: warn now (before the long build) if this recipe's CUDA runtime is

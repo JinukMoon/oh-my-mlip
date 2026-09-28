@@ -39,7 +39,10 @@ from pathlib import Path
 # Conservative per-env build budget (GB). Matches the skill contract's
 # "~10 GB x missing/broken" plan math; partial envs count full because
 # adopt-or-heal may fall back to a rebuild.
-PER_ENV_GB = 10
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from oh_my_mlip.hub import DISK_FLOOR_GB, ENV_BUDGET_GB  # noqa: E402
+
+PER_ENV_GB = ENV_BUDGET_GB
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -129,7 +132,11 @@ def survey(home: Path, targets: list[str]) -> dict:
     budget_gb = PER_ENV_GB * len(to_build)
 
     source = token_source()
+    sys.path.insert(0, str(home))
+    from oh_my_mlip.registry import detect_host_arch
+    arch = detect_host_arch()
     return {
+        "gpu": {"arch": arch, "found": arch is not None},
         "home": str(home),
         "envs": rows,
         "counts": counts,
@@ -138,7 +145,9 @@ def survey(home: Path, targets: list[str]) -> dict:
             "free_gb": round(free_gb, 1),
             "budget_gb": budget_gb,
             "per_env_gb": PER_ENV_GB,
-            "fits": free_gb >= budget_gb,
+            # the last build must still start above the floor install.sh enforces
+            "floor_gb": DISK_FLOOR_GB,
+            "fits": not to_build or free_gb >= budget_gb - PER_ENV_GB + DISK_FLOOR_GB,
         },
         "token": {"available": source != "none", "source": source},
         "gated_envs": [r["env"] for r in rows if r["gated"]],
@@ -164,10 +173,14 @@ def print_table(result: dict) -> None:
     )
     print(
         f"disk: {d['budget_gb']} GB needed for {len(result['to_build'])} builds"
-        f" ({d['per_env_gb']} GB each; ready envs cost zero)"
+        f" ({d['per_env_gb']:g} GB each, and {d['floor_gb']:g} GB free to start each build; ready envs cost zero)"
         f" vs {d['free_gb']} GB free -> "
         + ("fits" if d["fits"] else "DOES NOT FIT")
     )
+    g = result["gpu"]
+    print("gpu: " + (f"found ({g['arch']})" if g["found"] else
+                     "NO NVIDIA GPU found (nvidia-smi missing or lists none): the models run on a GPU; "
+                     "installing works, running needs the NVIDIA driver or a GPU host"))
     print(
         "hf token: "
         + (f"available (source: {t['source']})" if t["available"] else "none found")

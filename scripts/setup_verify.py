@@ -129,7 +129,13 @@ def decide_verdict(
         "gpu_mem_bytes": gpu_mem,
     }
     if returncode != 0:
-        verdict["reason"] = normalized_tail(stderr) or f"exit {returncode}"
+        # The not-installed message carries the exact install command; the
+        # normalization used for error signatures would mangle it into text
+        # that cannot be run, and the agent is told to report it as printed.
+        if "is not materialized yet" in stderr:
+            verdict["reason"] = "\n".join(ln for ln in stderr.splitlines() if ln.strip())[-2000:]
+        else:
+            verdict["reason"] = normalized_tail(stderr) or f"exit {returncode}"
         return verdict
     if witness is None:
         verdict["reason"] = "witness_json_missing"

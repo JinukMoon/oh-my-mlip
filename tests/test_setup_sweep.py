@@ -48,7 +48,7 @@ def _run_sweep(tmp_path, targets, install_body, verify_body):
     ledger = tmp_path / "ledger.jsonl"
     install = _script(tmp_path / "fake_install.sh", install_body)
     verify = _script(tmp_path / "fake_verify.sh", verify_body)
-    driver.sweep(targets, home, ledger, [install], [verify])
+    driver.sweep(targets, home, ledger, [install], [verify], min_free_gb=0)   # the host disk is not under test
     lines = [json.loads(ln) for ln in ledger.read_text().splitlines()]
     return home, ledger, lines
 

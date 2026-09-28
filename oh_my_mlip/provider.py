@@ -41,7 +41,7 @@ def _env_not_installed_msg(model: str, env: str, python_exe: str) -> str:
     return (
         f"the conda env {env!r} for {model} is not materialized yet "
         f"(interpreter not found: {python_exe}). Install it first:\n"
-        f'    bash "$OH_MY_MLIP_HOME/install.sh" {model}\n'
+        f'    bash "{registry.home()}/install.sh" {model}\n'
         f"  (or by env name: install.sh {env})."
     )
 

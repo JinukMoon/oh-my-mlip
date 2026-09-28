@@ -10,7 +10,8 @@ LAUNCHER NEEDS ase: unlike single_point.py, the ASE optimizer (BFGS) runs in the
 LAUNCHING interpreter (it drives the worker step by step), so this example must
 be run with a python that can import ase. Use the model's own registry-resolved
 interpreter — every model env ships ase — rather than a hand-picked one:
-  python3 -c 'import oh_my_mlip; print(oh_my_mlip.resolve("<MODEL>")["python"])'
+  python3 -c 'import sys; sys.path.insert(0, "<hub root>"); import oh_my_mlip; print(oh_my_mlip.resolve("<MODEL>")["python"])'
+(when ase is missing, relax.py prints the exact command itself)
 Only the heavy MLIP framework stays in the worker; ase here is just the optimizer
 + structure I/O. (single_point.py is fully ase-free in the launcher.)
 
@@ -49,12 +50,19 @@ try:
     from ase.io import read  # noqa: E402
     from ase.optimize import BFGS  # noqa: E402
 except ImportError as _exc:  # the optimizer runs HERE, so this interpreter needs ase
+    # The registry is stdlib-only, so name the exact interpreter and command here
+    # (the hint works from any directory; nothing depends on the cwd).
+    _model = next((a for a in sys.argv[1:] if not a.startswith("-")), "MACE")
+    try:
+        from oh_my_mlip import resolve as _resolve
+        _py = _resolve(_model)["python"]
+    except Exception:  # noqa: BLE001 - fall back to the generic instruction
+        _py = f"<the interpreter oh_my_mlip.resolve({_model!r})['python'] names>"
     print(
         f"relax.py needs ase in the interpreter that runs it ({sys.executable}): {_exc}.\n"
         "  The ASE optimizer drives the worker step by step, so it lives in the launcher.\n"
-        "  Use the model's own interpreter, which ships ase:\n"
-        "    python3 -c 'import oh_my_mlip; print(oh_my_mlip.resolve(\"<MODEL>\")[\"python\"])'\n"
-        "  then rerun this file with that interpreter.",
+        f"  Rerun it with the model's own interpreter, which ships ase:\n"
+        f"    OH_MY_MLIP_HOME={_HOME} {_py} {Path(__file__).resolve()} {' '.join(sys.argv[1:])}",
         file=sys.stderr,
     )
     raise SystemExit(2)

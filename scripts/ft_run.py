@@ -2929,7 +2929,8 @@ def run_training(sh_path: Path, *, batch_size: int | None, family: str | None = 
 
 def _gpu_total() -> str:
     try:
-        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+        out = subprocess.run([reg.nvidia_smi() or "nvidia-smi", "--query-gpu=memory.total",
+                              "--format=csv,noheader,nounits"],
                              capture_output=True, text=True, timeout=10).stdout.split()
         return f" on a {int(out[0]) / 1024:.0f} GB GPU" if out else ""
     except (OSError, ValueError, subprocess.SubprocessError):

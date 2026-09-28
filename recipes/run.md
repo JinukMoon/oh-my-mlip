@@ -35,14 +35,15 @@ State whether the env is materialized (`python3 scripts/setup_survey.py
 file that will run:
 
 - single point:
-  `cd <work> && OH_MY_MLIP_HOME=<hub root> <python3> <hub root>/run_examples/single_point.py <Model> --structure <file> [--version V] [--d3] [--device cuda|cpu] [--arch <tag>] [--json]`
-  — any `ase.io.read` format, an absolute path named on the command line
+  `cd <work> && export OH_MY_MLIP_HOME=<hub root> && source <hub root>/env.sh && <python3> <hub root>/run_examples/single_point.py <Model> --structure <file> [--version V] [--d3] [--device cuda|cpu] [--arch <tag>] [--json]`
+  — `env.sh` is sourced in the same command because each agent tool call
+  may start a fresh shell; any `ase.io.read` format, an absolute path named on the command line
   and read inside the model's worker; `<python3>` is any interpreter
   that can import `oh_my_mlip` (the launcher is ase-free and starts the
   model's own env through `run()`), and the script is named by its
   absolute hub path for the same reason as the relaxation below;
 - relaxation:
-  `cd <work> && OH_MY_MLIP_HOME=<hub root> <interpreter> <hub root>/run_examples/relax.py <Model> --structure <file> --fmax <F> --steps <N> [--version V] [--d3] [--arch <tag>]`,
+  `cd <work> && export OH_MY_MLIP_HOME=<hub root> && source <hub root>/env.sh && <interpreter> <hub root>/run_examples/relax.py <Model> --structure <file> --fmax <F> --steps <N> [--version V] [--d3] [--arch <tag>]`,
   where `<file>` is the user's structure in any `ase.io.read` format (an
   absolute path; the script resolves and hashes it), `<interpreter>` is
   the path `resolve(<Model>)` printed, and `<hub root>` is the absolute
