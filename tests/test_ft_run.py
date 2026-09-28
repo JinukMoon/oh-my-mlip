@@ -777,7 +777,7 @@ def test_seed_is_never_silently_dropped(tmp_path):
 def _run_main(monkeypatch, argv: list[str], fake_conversion: bool = True) -> tuple[int, list]:
     calls: list = []
 
-    def fake_run_ft_dataset(dataset, target, out, split, seed, python_bin=None):
+    def fake_run_ft_dataset(dataset, target, out, split, seed, python_bin=None, energy_key=None, force_key=None):
         calls.append(("convert", str(dataset), target, str(out), split, seed))
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / "conversion.json").write_text("{}")
@@ -1131,3 +1131,25 @@ def test_missing_dataset_and_missing_env_exit_6_without_writing(tmp_path, monkey
     err = capsys.readouterr().err
     assert rc == 6 and "is not installed" in err and "install.sh mace" in err and "setup_verify.py" in err
     assert "$OH_MY_MLIP_HOME" not in err and not out.exists()
+
+
+def test_builder_reads_says_which_settings_reach_the_trainer():
+    passed, not_passed = ft_run.builder_reads("MACE-MPA-0")
+    assert "--lr" in passed and "--multiheads_finetuning" in passed
+    assert "--scheduler" in not_passed                   # listed by --show-settings, refused if set
+    assert ft_run.builder_reads("DPA-3.1-3M-FT") is not None   # needs max_steps/lr to run at all
+
+
+def test_energy_and_force_keys_reach_the_converter(tmp_path, monkeypatch):
+    seen = {}
+
+    class _Proc:
+        returncode = 0
+        stdout = '{"outputs": {}}\n'
+        stderr = ""
+
+    monkeypatch.setattr(ft_run.subprocess, "run", lambda cmd, **k: seen.setdefault("cmd", cmd) and _Proc())
+    ft_run.run_ft_dataset(tmp_path / "d.xyz", "extxyz", tmp_path / "o", 0.9, 0,
+                          python_bin="/x/python", energy_key="dft_E", force_key="dft_F")
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--energy-key") + 1] == "dft_E" and cmd[cmd.index("--force-key") + 1] == "dft_F"

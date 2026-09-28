@@ -334,6 +334,55 @@ class CommandSpec:
     extra_env: dict = field(default_factory=dict)
 
 
+def builder_reads(version: str) -> tuple[list, list] | None:
+    """Which of a family's settings this hub's builder passes to the trainer.
+
+    The builder runs once in a scratch directory with every setting marked as
+    user-set, and TrackedSettings records what it read: the same test the run
+    applies before refusing a setting the builder never reads. Returns
+    (passed, not_passed) native names, or None when the family has no builder
+    or the probe cannot run it (a required value missing, say)."""
+    try:
+        family, version, finetune, resolved = load_finetune(version, None)
+    except (SystemExit, Exception):  # noqa: BLE001 - a probe never fails --show-settings
+        return None
+    builder = BUILDERS.get(family)
+    if builder is None:
+        return None
+    try:
+        settings, _origins = ft_settings.resolve_settings(family, user_knobs={})
+    except Exception:  # noqa: BLE001
+        return None
+    passed = _probe_once(builder, family, version, finetune, resolved, settings)
+    if passed is None:
+        # deepmd-kit has no default training length or learning rate; give it some
+        try:
+            settings, _origins = ft_settings.resolve_settings(family, user_knobs={"max_steps": 100, "lr": 0.001})
+        except Exception:  # noqa: BLE001
+            return None
+        passed = _probe_once(builder, family, version, finetune, resolved, settings)
+    if passed is None:
+        return None
+    return sorted(passed), sorted(n for n in settings if n not in passed)
+
+
+def _probe_once(builder, family, version, finetune, resolved, settings) -> set | None:
+    import tempfile
+    tracked = TrackedSettings(settings)
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        ctx = Context(family=family, version=version, finetune=finetune, resolved=resolved, out=out,
+                      epochs=2, batch_size=2, device="cuda",
+                      dataset_paths={"train": str(out / "train.xyz"), "valid": str(out / "valid.xyz")},
+                      elements=["Cu"], seed=0, settings=tracked,
+                      settings_origins={name: "user" for name in settings})
+        try:
+            builder(ctx)
+        except Exception:  # noqa: BLE001 - the table stays usable without the probe
+            return None
+    return {n for n in settings if n in tracked.reads}
+
+
 # ── model/version/finetune resolution ────────────────────────────────────────
 def load_finetune(model: str, version: str | None) -> tuple[str, str, dict, dict]:
     """Resolve `model` (family or version name) via the SAME name resolution
@@ -439,7 +488,8 @@ def _missing_input(dataset: Path, resolved: dict, version: str) -> str | None:
 
 
 def run_ft_dataset(dataset: Path, target: str, out: Path, split: float, seed: int,
-                   python_bin: str | None = None) -> dict:
+                   python_bin: str | None = None, energy_key: str | None = None,
+                   force_key: str | None = None) -> dict:
     # The model env is the one interpreter guaranteed to carry ase/numpy; the
     # ambient interpreter that launched ft_run.py carries no such guarantee.
     cmd = [
@@ -448,6 +498,11 @@ def run_ft_dataset(dataset: Path, target: str, out: Path, split: float, seed: in
         "--split", str(split), "--seed", str(seed),
         "--to", target, "--out", str(out),
     ]
+    # labels stored under info/arrays keys instead of on a calculator
+    if energy_key:
+        cmd += ["--energy-key", energy_key]
+    if force_key:
+        cmd += ["--force-key", force_key]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)
@@ -2541,6 +2596,12 @@ def main() -> int:
     ap.add_argument("--version", default=None, help="specific version (default: family default_version)")
     ap.add_argument("--dataset", type=Path, help="anything ase.io.read handles")
     ap.add_argument("--out", default=None, help="output directory (default: ./ft_<version>)")
+    ap.add_argument("--energy-key", default=None,
+                    help="dataset energies under atoms.info[KEY] rather than on a calculator "
+                         "(passed to ft_dataset.py)")
+    ap.add_argument("--force-key", default=None,
+                    help="dataset forces under atoms.arrays[KEY] rather than on a calculator "
+                         "(passed to ft_dataset.py)")
     ap.add_argument("--show-settings", action="store_true",
                     help="print the model's available settings and exit")
     # Common knob flags
@@ -2584,6 +2645,15 @@ def main() -> int:
             resolved = reg.resolve(args.model)
             framework = resolved["model"]
             print(ft_settings.show_settings(framework))
+            probe = builder_reads(resolved["version"])
+            if probe is None:
+                print(f"\nNo builder in this hub runs {resolved['version']}; see docs/finetune.md for its status.")
+            else:
+                passed, not_passed = probe
+                print(f"\nThis hub's {framework} builder passes to the trainer: {', '.join(passed) or 'none'}")
+                if not_passed:
+                    print(f"Not passed by this builder (setting one is refused before anything runs): "
+                          f"{', '.join(not_passed)}")
             return 0
         except (ft_settings.SettingsError, reg.RegistryError) as e:
             print(f"[ft_run] {e}", file=sys.stderr)
@@ -2745,7 +2815,8 @@ def main() -> int:
 
     target = dataset_target(family)
     conv = run_ft_dataset(dataset, target, out / "data", args.split, seed,
-                          python_bin=resolved["python"])
+                          python_bin=resolved["python"], energy_key=args.energy_key,
+                          force_key=args.force_key)
 
     # Epochs and batch size as the user's knob values, when the framework exposes those
     # knobs. Builders read every emitted value from `resolved_settings` by native name and

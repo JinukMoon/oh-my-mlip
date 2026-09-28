@@ -19,7 +19,7 @@ files:
 | Step | Owner file | What it fixes |
 |---|---|---|
 | upstream knowledge | `scripts/upstream_finetune.py` — per family: entrypoint, selector kind and path, dataset format, variant args, status, doc URL — ingested into the `finetune` block of `models.json`; `docs/finetune.md` rendered by `scripts/gen_finetune.py` (`--check` in CI) | what upstream's own training path is, with its source |
-| dataset conversion | `scripts/ft_dataset.py --input <files> --to <format> --out <out>/data --split <f> --seed <n> [--energy-key K] [--force-key K]`, invoked by `ft_run.py`; an empty validation split with `--split` below 1.0 is refused (`--split 1.0` opts out explicitly) | the framework-native training files and the train/valid split |
+| dataset conversion | `scripts/ft_dataset.py --input <files> --to <format> --out <out>/data --split <f> --seed <n> [--energy-key K] [--force-key K]`, invoked by `ft_run.py` (its `--energy-key` / `--force-key` pass through); an empty validation split with `--split` below 1.0 is refused (`--split 1.0` opts out explicitly) | the framework-native training files and the train/valid split |
 | materialization | `scripts/ft_run.py <Variant> --dataset <data> --out <out>/<variant> --epochs <N> --batch-size <B> --device cuda --emit-only` (default `--out` is `./ft_<version>`) → `<out>/data/`, the patched `input.yaml`/`input.json` for config-key families, `finetune_<Variant>.sh` (`--slurm` adds `slurm_finetune_<Variant>.sh`, identical body, emission only — it says so on stderr and never submits), and `<out>/ft_run.json` (schema `ft_run.json/1`: family, version, env, python, absolute dataset, out, epochs, batch_size, device, split, seed, `seed_requested`, `seed_control {scope, basis}`, `designated_checkpoint` (one glob, `{version}` substituted), `artifacts {sh, slurm|null, config, extra_files[], conversion}`, n_train, n_valid, elements, `command` (the exec'd argv), `pre_steps` (in-env prestage argvs), `rematerialize` (the exact `ft_run.py` argv plus `--emit-only` that re-creates the run after a cache cleanup; hub-owned absolute inputs come back from `install.sh`/prestage, not from the `.sh`)). SevenNet emit writes `sevennet_patch.json` + `sevennet_prestage.py` and materializes `input.yaml` only inside the env, so `--emit-only` no longer needs the SevenNet env | the exact command, written before anything runs |
 | seed control | `--seed <n>` on `ft_run.py`; `SEED_CONTROL` in `scripts/ft_run.py` records per family how far the seed reaches in that family's own trainer (`scope`, with the installed-source `basis` — source inspection, not a runtime determinism proof). Native: MACE (`mace_run_train --seed`), SevenNet (`train.random_seed` patched over the installed preset, which ships 1 or 777), DeePMD and DPA4 (`training.seed`, data sampling; model-init seeds come from the checkpoint's own model section), GRACE (top-level `seed`, also names the `seed/<seed>/` output dir), PET (top-level `seed`), MatterSim (`--seed`), TACE (`misc.global_seed` + `dataset.split_seed`), CHGNet (the generated driver seeds random/numpy/torch and passes `Trainer(torch_seed=, data_seed=)`). Data-split-only: NequIP and Allegro (`data.seed` only; the training seed is hard-coded `seed_everything(123)` in `nequip/utils/global_state.py:79` of the pinned nequip 0.15.0). Scope `none`: Nequix (the JAX trainer seeds nothing from the config; its model-init key is fixed and its loaders are unseeded). Without `--seed` seed 0 is used and recorded as `seed_requested: false`; an explicit `--seed` on a data-split-only or `none` family is refused with exit 5 before any file is written, stderr naming the scope, `global_state.py:79` and `--allow-partial-seed`, which lets the run proceed with the note still printed and `scope: "data-split-only"` in `ft_run.json`. Native families never refuse. The sweep passes no `--seed`, so it never reaches exit 5 | what a seed does and does not fix per family |
 | execution | `bash <out>/<variant>/finetune_<Variant>.sh` — `set -eu`, `cd` to `<out>`, one `export` per `env_run` key, `exec` of the variant's env interpreter | the run the user can repeat |
@@ -40,7 +40,7 @@ files:
   named variants, never as a count.
 - **Dataset** — a path `ase.io.read` handles, and whether energies/forces
   sit on a calculator or under `info`/`arrays` keys (`--energy-key` /
-  `--force-key` of `scripts/ft_dataset.py`).
+  `--force-key` on `ft_run.py`, passed to `scripts/ft_dataset.py`).
 - **Purpose** — (a) a real fine-tune; (b) a pipeline proof on small data
   with a short run — the default when the question is "does fine-tuning
   work for X".
@@ -49,7 +49,15 @@ files:
   stress weights and stress on or off. Present these defaults with their origin
   (official fine-tuning value or upstream default), let the user keep or replace
   them, and run with what the user chose. A setting with neither value must be
-  asked.
+  asked. Offer only settings the table's closing lines say this hub's builder
+  passes to the trainer; setting any other one is refused before anything
+  runs.
+- **Training mode** — what the variant's `finetune.semantics` in
+  `models.json` says a bare run does. For MACE that is a multihead run that
+  replays the foundation data (`--multiheads_finetuning` defaults to True),
+  not training on the user's frames alone; say so and ask which the user
+  wants (`--set=--multiheads_finetuning=False` for their frames only; a
+  native name that starts with dashes needs the `--set=` form).
 - **Output directory.**
 
 ## 2. Plan
