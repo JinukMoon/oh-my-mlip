@@ -45,6 +45,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "run_singlepoint",
     "run_relax",
     "install_model",
+    "verify_model",
     "run_catbench",
 )
 
@@ -132,9 +133,33 @@ def structure_to_atoms(structure: Any):
     return Atoms(**kwargs)
 
 
+# ── one response shape for every tool ────────────────────────────────────────
+def _envelope(fn):
+    """Every tool answers {"ok": true, ...} or {"ok": false, "error": "..."}:
+    a registry, worker or fetch error becomes the error string, never an
+    exception the client has to parse differently per tool."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            out = fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - the client gets the message either way
+            return {"ok": False, "error": f"{exc.__class__.__name__}: {exc}"}
+        if isinstance(out, dict) and "ok" not in out:
+            out = {"ok": True, **out}
+        return out
+
+    return wrapper
+
+
+def _install_command(env: str) -> str:
+    return f'bash "{Path(registry.home()) / "install.sh"}" {env}'
+
+
 # ── graceful "env not installed" guard for compute tools ─────────────────────
 def _env_hint(model: str, version: str | None) -> str:
-    """Return an actionable hint pointing at install.sh."""
+    """Return an actionable hint pointing at install.sh (absolute path)."""
     try:
         spec = registry.resolve(model, version=version)
         env = spec["env"]
@@ -142,7 +167,7 @@ def _env_hint(model: str, version: str | None) -> str:
         env = "<env>"
     return (
         f"the conda env {env!r} for {model} is not installed yet. Build it from "
-        f'its recipe with:  bash "$OH_MY_MLIP_HOME/install.sh" {env}'
+        f"its recipe with:  {_install_command(env)}  (then verify_model)"
     )
 
 
@@ -203,6 +228,7 @@ def build_server():
 
     # ── GPU-free registry tools ──────────────────────────────────────────────
     @mcp.tool()
+    @_envelope
     def list_models() -> dict:
         """List every registered MLIP framework and its versions. GPU-FREE.
 
@@ -224,6 +250,7 @@ def build_server():
         return out
 
     @mcp.tool()
+    @_envelope
     def describe_model(model: str, version: str | None = None) -> dict:
         """Resolve a model into its codegen dict. GPU-FREE.
 
@@ -238,6 +265,7 @@ def build_server():
         return dict(spec)
 
     @mcp.tool()
+    @_envelope
     def model_status() -> dict:
         """Per-model status: validation / gated / weights. GPU-FREE.
 
@@ -249,11 +277,13 @@ def build_server():
 
     # ── compute-dependent tools (need a materialized env + GPU at runtime) ────
     @mcp.tool()
+    @_envelope
     def run_singlepoint(
         model: str,
         structure: Any,
         version: str | None = None,
         apply_d3: bool = False,
+        device: str = "cuda",
     ) -> dict:
         """Single-point energy + forces for one structure. NEEDS A GPU/ENV AT RUNTIME.
 
@@ -263,7 +293,9 @@ def build_server():
           * a path to a structure file (POSCAR / .cif / .xyz / ...);
           * a full ``Atoms.todict()`` dict;
           * a simple dict ``{"symbols", "positions", "cell"?, "pbc"?}``.
-        Set ``apply_d3=True`` for the D3 dispersion correction. Returns
+        Set ``apply_d3=True`` for the D3 dispersion correction; ``device="cpu"``
+        works only for models whose load line takes a device (the rest are
+        refused, AGENTS.md ground rule 6). Returns
         ``{"energy", "forces"}``. If the model's env is not installed yet, returns
         an actionable error pointing at install_model / install.sh instead of a
         traceback.
@@ -280,12 +312,14 @@ def build_server():
             model,
             atoms,
             properties=("energy", "forces"),
+            device=device,
             version=version,
             apply_d3=apply_d3,
         )
         return {"ok": True, "results": results}
 
     @mcp.tool()
+    @_envelope
     def run_relax(
         model: str,
         structure: Any,
@@ -359,6 +393,7 @@ def build_server():
         }
 
     @mcp.tool()
+    @_envelope
     def install_model(model: str, version: str | None = None) -> dict:
         """Report whether a model's conda env is installed, and how to install it.
 
@@ -373,9 +408,11 @@ def build_server():
             spec = registry.resolve(model, version=version)
         except registry.RegistryError as exc:
             return {"ok": False, "error": str(exc)}
-        command = f'bash "$OH_MY_MLIP_HOME/install.sh" {spec["env"]}'
+        command = _install_command(spec["env"])
         result: dict[str, Any] = {"env": spec["env"], "command": command,
-                                  "gated": bool(spec.get("gated"))}
+                                  "gated": bool(spec.get("gated")),
+                                  "note": "a first build takes 30-120 min: run the command detached and poll "
+                                          "(AGENTS.md §9.4), then call verify_model"}
         if spec.get("gated"):
             result["license_url"] = spec.get("license_url")
         if Path(spec["python"]).exists():
@@ -384,6 +421,29 @@ def build_server():
                 **result}
 
     @mcp.tool()
+    @_envelope
+    def verify_model(version: str) -> dict:
+        """The done-check for an install: energy and forces on the GPU. NEEDS A GPU/ENV.
+
+        Runs ``scripts/setup_verify.py <version> --json`` (the only oracle
+        AGENTS.md accepts for "installed and working") and returns its verdict:
+        ``pass``, ``device``, ``degraded``, ``reason``, ``energy_ev`` ... A first
+        call may download the model's weights, which can take many minutes.
+        """
+        import subprocess
+        import sys
+
+        script = Path(registry.home()) / "scripts" / "setup_verify.py"
+        proc = subprocess.run([sys.executable, str(script), version, "--json"],
+                              capture_output=True, text=True)
+        lines = [ln for ln in proc.stdout.splitlines() if ln.strip().startswith("{")]
+        if not lines:
+            return {"ok": False, "error": (proc.stderr.strip().splitlines() or ["no verdict printed"])[-1]}
+        verdict = json.loads(lines[-1])
+        return {"ok": bool(verdict.get("pass")), "verdict": verdict}
+
+    @mcp.tool()
+    @_envelope
     def run_catbench(
         tag: str,
         data_dir: str,
@@ -402,7 +462,6 @@ def build_server():
         exit codes and the result directory. Models whose env is not installed are
         skipped with an actionable note rather than crashing the whole run.
         """
-        import os
         import subprocess
 
         from oh_my_mlip import list_models as _list_models
@@ -425,19 +484,11 @@ def build_server():
         if not selected:
             return {"ok": False, "error": "no models selected from the roster."}
 
-        template = (
-            'import warnings\n'
-            'warnings.filterwarnings("ignore")\n'
-            "from catbench.adsorption import AdsorptionCalculation\n"
-            "{d3_import}{import_lines}\n\n"
-            "calc_num = {calc_num}\n"
-            "calculators = []\n"
-            "for i in range(calc_num):\n"
-            "{inference_lines}\n"
-            "{d3_apply}    calculators.append(calc)\n\n"
-            'config = {{"mlip_name": {mlip_name!r}, "benchmark": {benchmark!r}}}\n'
-            "AdsorptionCalculation(calculators, **config).run()\n"
-        )
+        # Every executed action exists first as a file (AGENTS.md): the same
+        # job files catbench_quickstart.py writes, run as their .sh.
+        import sys as _sys
+        _sys.path.insert(0, str(Path(registry.home()) / "scripts"))
+        import catbench_jobgen
 
         per_model: list[dict[str, Any]] = []
         for model in selected:
@@ -459,40 +510,19 @@ def build_server():
                 continue
 
             mlip_name = spec.get("version", model) + ("_D3" if apply_d3 else "")
-            indent = "    "
-            script = template.format(
-                d3_import=(
-                    "from catbench.dispersion import DispersionCorrection\n"
-                    if apply_d3
-                    else ""
-                ),
-                import_lines="\n".join(spec["imports"]),
-                calc_num=calc_num,
-                inference_lines="\n".join(
-                    indent + ln for ln in spec["inference"]
-                ),
-                d3_apply=(
-                    f"{indent}calc = DispersionCorrection().apply(calc)\n"
-                    if apply_d3
-                    else ""
-                ),
-                mlip_name=mlip_name,
-                benchmark=tag,
-            )
-            child_env = dict(os.environ)
-            child_env.update(spec.get("env_run", {}))
-            child_env.setdefault("OH_MY_MLIP_HOME", registry.home())
-            proc = subprocess.run(
-                [spec["python"], "-c", script],
-                env=child_env,
-                cwd=str(work),
-            )
+            try:
+                artifacts = catbench_jobgen.emit(spec, mlip_name, tag, calc_num, apply_d3, work)
+            except FileExistsError as exc:
+                per_model.append({"model": model, "status": "skipped", "reason": str(exc)})
+                continue
+            proc = subprocess.run(["sh", str(artifacts["sh"])], cwd=str(work))
             per_model.append(
                 {
                     "model": model,
                     "mlip_name": mlip_name,
                     "status": "ok" if proc.returncode == 0 else "failed",
                     "returncode": proc.returncode,
+                    "job": str(artifacts["sh"]),
                 }
             )
 
@@ -502,9 +532,8 @@ def build_server():
             "result_dir": str(work / "result"),
             "models": per_model,
             "aggregate_hint": (
-                "from catbench.adsorption import AdsorptionAnalysis; "
-                "a = AdsorptionAnalysis(); a.analysis(); "
-                "a.threshold_sensitivity_analysis()"
+                f"python3 {Path(registry.home()) / 'scripts' / 'catbench_report.py'} "
+                f"--result {work / 'result'} --out {work / 'report'}"
             ),
         }
 

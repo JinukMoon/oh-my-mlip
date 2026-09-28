@@ -6,6 +6,10 @@
 # needs it. The mcp import in mcp_server.py is lazily guarded, so importing
 # oh_my_mlip works fine without this installed.
 #
-# Launch the server:  python -m oh_my_mlip.mcp_server
+# Launch the server:  OH_MY_MLIP_HOME=<hub> python -m oh_my_mlip.mcp_server
+# from this interpreter. run_relax drives the ASE optimizer in the server's own
+# process, so it needs ase and numpy here too; the models run in their envs.
 
 mcp>=1.0
+ase
+numpy

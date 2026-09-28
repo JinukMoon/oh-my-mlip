@@ -78,5 +78,7 @@ It is done when Claude reports energy and forces computed on your GPU.
 - **Gated models** (UMA, eSEN): Claude shows the license page to accept and
   asks you to log in to Hugging Face yourself; it never asks you to paste a
   token. See [Gated models](gated_models.md).
-- An optional MCP server (`python -m oh_my_mlip.mcp_server`) offers structured
-  registry queries; the plugin does not need it.
+- An optional MCP server (`python -m oh_my_mlip.mcp_server`, from an
+  interpreter with `requirements-mcp.txt` installed) offers the registry and
+  the run, install-check and verify steps as typed tools; the plugin does not
+  need it.

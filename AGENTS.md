@@ -574,7 +574,11 @@ to the recipes; model facts stay in `models.json`.
 
 The **MCP server** (`python -m oh_my_mlip.mcp_server`) is optional: it offers the
 same registry information and run/install entry points as typed tools, as a thin
-adapter (see `oh_my_mlip/mcp_server.py`).
+adapter (see `oh_my_mlip/mcp_server.py`). Launch it from an interpreter with
+`requirements-mcp.txt` installed, with `OH_MY_MLIP_HOME` exported. Every tool
+answers `{"ok": true, ...}` or `{"ok": false, "error": ...}`; `install_model`
+only reports the command (a build is launched and polled per §9.4), and
+`verify_model` is the done-check.
 
 | Section | MCP tool |
 |---|---|
@@ -582,6 +586,7 @@ adapter (see `oh_my_mlip/mcp_server.py`).
 | §0 one model's `resolve()` dict | `describe_model` |
 | §5 gated / weights status | `model_status` |
 | §1, §6 is an env installed / the command that builds it | `install_model` |
+| §9.4 step 4 verify an install on the GPU | `verify_model` |
 | §3A single point | `run_singlepoint` |
 | §3A relaxation | `run_relax` |
 | §3B CatBench across models | `run_catbench` |

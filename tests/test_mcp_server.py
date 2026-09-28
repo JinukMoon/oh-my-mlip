@@ -78,6 +78,7 @@ def test_mcp_server_module_constants_present():
         "run_singlepoint",
         "run_relax",
         "install_model",
+        "verify_model",
         "run_catbench",
     )
     assert mcp_server.GPU_FREE_TOOLS == {
@@ -266,7 +267,9 @@ def test_install_model_reports_the_recipe_command_not_a_download(monkeypatch, tm
     monkeypatch.setattr(mcp_server.registry, "resolve", lambda m, version=None, **k: dict(spec))
     out = install("MACE")
     assert out["ok"] is False
-    assert out["command"] == 'bash "$OH_MY_MLIP_HOME/install.sh" mace'
+    from oh_my_mlip import registry
+    assert out["command"] == f'bash "{registry.home()}/install.sh" mace'   # absolute, runnable as given
+    assert "$OH_MY_MLIP_HOME" not in out["command"]
     py = tmp_path / "envs" / "mace" / "bin" / "python"
     py.parent.mkdir(parents=True)
     py.write_text("")
@@ -274,3 +277,60 @@ def test_install_model_reports_the_recipe_command_not_a_download(monkeypatch, tm
     assert out["ok"] is True and out["python"] == str(py)
     monkeypatch.undo()  # the real registry: an unknown model is an error, not a crash
     assert install("NotAModel")["ok"] is False
+
+
+
+@requires_mcp
+def test_every_tool_answers_in_one_envelope(monkeypatch):
+    server = mcp_server.build_server()
+    assert _tool(server, "list_models")()["ok"] is True
+    assert _tool(server, "describe_model")("MACE")["ok"] is True
+    out = _tool(server, "describe_model")("NotAModel")          # used to raise RegistryError
+    assert out["ok"] is False and "RegistryError" in out["error"]
+    monkeypatch.setattr(mcp_server, "_env_python_exists", lambda *a, **k: True)
+    import oh_my_mlip
+    from oh_my_mlip.provider import WorkerError
+    monkeypatch.setattr(oh_my_mlip, "run", lambda *a, **k: (_ for _ in ()).throw(WorkerError("boom")))
+    out = _tool(server, "run_singlepoint")("MACE", {"symbols": "Cu", "positions": [[0, 0, 0]]})
+    assert out == {"ok": False, "error": "WorkerError: boom"}
+
+
+@requires_mcp
+def test_run_singlepoint_passes_the_device(monkeypatch):
+    server = mcp_server.build_server()
+    monkeypatch.setattr(mcp_server, "_env_python_exists", lambda *a, **k: True)
+    seen = {}
+    import oh_my_mlip
+    monkeypatch.setattr(oh_my_mlip, "run", lambda *a, **k: seen.update(k) or {"energy": 0.0})
+    _tool(server, "run_singlepoint")("MACE", {"symbols": "Cu", "positions": [[0, 0, 0]]}, device="cpu")
+    assert seen["device"] == "cpu"
+
+
+@requires_mcp
+def test_run_catbench_runs_emitted_job_files_not_python_c(monkeypatch, tmp_path):
+    server = mcp_server.build_server()
+    (tmp_path / "raw_data").mkdir()
+    (tmp_path / "raw_data" / "demo_adsorption.json").write_text("{}")
+    spec = dict(mcp_server.registry.resolve("MACE"), python=str(tmp_path / "py"))
+    (tmp_path / "py").write_text("")
+    import oh_my_mlip
+    monkeypatch.setattr(oh_my_mlip, "resolve", lambda m, *a, **k: dict(spec))
+    monkeypatch.setattr(oh_my_mlip, "list_models", lambda: ["MACE"])
+    ran = []
+    import subprocess
+    monkeypatch.setattr(subprocess, "run", lambda argv, **k: ran.append(argv) or subprocess.CompletedProcess(argv, 0))
+    out = _tool(server, "run_catbench")("demo", str(tmp_path), models=["MACE"])
+    assert out["ok"] is True and ran and ran[0][0] == "sh" and ran[0][1].endswith(".sh")
+    assert all("-c" not in argv for argv in ran)
+    assert (tmp_path / "jobs").is_dir() and "catbench_report.py" in out["aggregate_hint"]
+
+
+@requires_mcp
+def test_verify_model_returns_the_setup_verify_verdict(monkeypatch):
+    server = mcp_server.build_server()
+    import subprocess
+    verdict = {"pass": True, "device": "cuda", "degraded": False}
+    monkeypatch.setattr(subprocess, "run", lambda argv, **k: subprocess.CompletedProcess(
+        argv, 0, stdout="log line\n" + __import__("json").dumps(verdict) + "\n", stderr=""))
+    out = _tool(server, "verify_model")("MACE-MPA-0")
+    assert out == {"ok": True, "verdict": verdict}
