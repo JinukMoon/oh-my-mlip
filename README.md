@@ -88,6 +88,12 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 
 Weights, gating, licenses and upstream repositories: [Supported models](https://jinukmoon.github.io/oh-my-mlip/model_status/).
 
+## Contributing
+
+New models and new tools are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers how
+to add a model to the registry, how to add a tool or workflow on top of the hub, and
+the GPU proof a pull request needs.
+
 ## License
 
 MIT ([`LICENSE`](LICENSE)). Frameworks and weights keep their upstream licenses; the
