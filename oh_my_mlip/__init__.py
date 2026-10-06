@@ -2,7 +2,8 @@
 
 A path-importable (NOT pip) package that turns the trusted ``models.json``
 registry into a tiered, machine-readable interface for
-running 20 frameworks / 31 model variants, each in its own conda env. The four
+running every registered framework and model variant, each in its own conda env
+(the current list is generated from models.json into README.md). The four
 layers:
 
   1. resolve(model, version=None)              -> codegen dict  (registry)

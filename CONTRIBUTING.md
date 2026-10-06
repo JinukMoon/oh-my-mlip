@@ -1,8 +1,9 @@
 # Contributing to oh-my-mlip
 
 Thank you for helping improve oh-my-mlip.
-This document covers the trust-boundary policy, how to add a model, how to run
-the GPU-free checks locally, and the deferred GPU/compute checkpoint.
+This document covers the trust-boundary policy, how to add a model, how to add
+a tool or workflow, how to run the GPU-free checks locally, and the GPU proof a
+change needs.
 
 ---
 
@@ -138,22 +139,82 @@ CI must be green before merging.  A reviewer will check:
 
 ---
 
-## Deferred GPU/compute checkpoint
+## How to add a tool or workflow
 
-The following acceptance checks **require human action** (a GPU machine with
-the appropriate driver, and an
-`HF_TOKEN`) and are therefore **not run in CI**:
+The five existing workflows (`setup`, `run`, `catbench`, `finetune`, `distill`)
+all have the same shape. A new tool follows it; there is no plugin framework to
+learn. Not every tool needs all of it: a script that serves an existing
+workflow only extends that workflow's recipe and tests.
 
-- GPU validate: `install.sh <env>` on a GPU box and verify D3 compiles or
-  degrades gracefully.
-- End-to-end: `run("MACE", atoms)` and `run("SevenNet", atoms)` on a
-  **foreign** GPU host (different driver/glibc than the build host) returning
-  finite energy within tolerance of the `ref_energy_*` fixtures.
-- Worker 100-call loop: one long-lived MACE worker returns 100 results
-  without a respawn (persistent-worker protocol proof).
-- Upgrading `validation` from `gpu_pending` to `validated_sm86/sm89`: must be
-  done by the maintainer after a successful GPU single-point run and recorded
-  in `models.json` via a PR.
+| Part | Where | What it holds |
+|---|---|---|
+| Scripts | `scripts/<tool>.py` (or `run_examples/`) | every action the workflow executes, as a file a user can rerun without an agent |
+| Recipe | `recipes/<tool>.md` | the agent procedure: inputs to ask for, the plan, approval, the commands, and the evidence that counts as done |
+| Agent section | `AGENTS.md` §3 (a new request kind) and the §10 recipe map | when this workflow applies and which recipe it follows |
+| Skill | `skills/<tool>/SKILL.md` | the trigger description and a pointer to its `AGENTS.md` section and recipe; no procedure of its own |
+| How-to page | `docs/howto/<tool>.md`, plus a `mkdocs.yml` nav entry | the user's view: what to ask, what to prepare, what it asks, what you get, and a "Run it yourself" block |
+| Tests | `tests/test_<tool>*.py` | GPU-free tests of the scripts, run in CI |
+
+Rules every tool keeps:
+
+- **Models only through the hub API.** Get a calculator or a result with
+  `oh_my_mlip.resolve()`, `run()`, `Worker` or `get_calculator()`, and run
+  model code with the interpreter `resolve()` returns. Never hard-code an env
+  path, a weight path or a calculator constructor; the registry owns them.
+- **Files, not inline code.** Anything the tool executes is written to disk
+  first (a `.sh`, `.py` or config) and then run; never `python -c` with a
+  generated body.
+- **Refuse rather than guess.** Unsupported inputs stop with a message that
+  names the next command; exit codes are documented in the recipe.
+- **`--help` works anywhere.** Parse arguments before importing numpy, ase or
+  a framework, and point at the right interpreter when one is missing.
+- **One source per fact.** A skill names its `AGENTS.md` section and recipe;
+  it does not restate them (`tests/test_onramp_contract_no_dup.py` and
+  `tests/test_skill_contract_paths.py` check this).
+
+Separately licensed engines stay in their own repository. oh-my-mlip is MIT;
+distillation runs the GPL-2.0 [onthefly-distill](https://github.com/JinukMoon/onthefly-distill)
+engine from its own checkout (`--repo <path>`), never copies its code into
+this repository, and records the engine commit in the run's provenance. A
+tool built on another licensed engine does the same, and its how-to page
+names the engine and its license.
+
+Registering a new skill with the Claude Code plugin:
+
+1. add `./skills/<tool>/` to `skills` in `.claude-plugin/plugin.json` and
+   mention it in the plugin description in `.claude-plugin/marketplace.json`;
+2. run `python3 scripts/plugin_version.py --bump` (any change under
+   `skills/` or to `AGENTS.md` needs a new plugin version, or installed
+   plugins never receive it; `tests/test_plugin_manifest.py` enforces this);
+3. add the `AGENTS.md` §3 section the skill points to, and the how-to page
+   to the docs navigation.
+
+A tool PR carries GPU-free tests that pass in CI and, if it runs models, a
+GPU proof (next section).
+
+---
+
+## GPU proof
+
+CI has no GPU, driver or Hugging Face token, so a change that installs or runs
+models also needs a real run on a GPU host. Put the command, the commit it ran
+at and the JSON verdict in the PR description.
+
+- **A model or env change:** `python3 scripts/setup_verify.py <variant> --json`
+  passes with `"degraded": false` (energy and forces computed, GPU use
+  confirmed). Several variants: `python3 scripts/setup_sweep.py --targets
+  <A,B,...>`. A new row enters `models.json` as `validation: "gpu_pending"`;
+  the maintainer changes it to `validated_<arch>` (for example
+  `validated_sm89`) in a PR once that verdict exists.
+- **A tool:** the tool's own verifier on a real run, as the existing
+  workflows do: `scripts/ft_verify.py` for a fine-tuned checkpoint,
+  `scripts/distill_verify.py` for a distilled student,
+  `scripts/catbench_report.py` for a benchmark.
+- **Gated models** need your own Hugging Face login and an accepted license;
+  never put a token in the PR.
+
+Public docs state what the hub does, not measurements from one machine: keep
+timings and host details in the PR, not in `docs/` or the README.
 
 ---
 
