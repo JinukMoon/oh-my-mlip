@@ -1,6 +1,6 @@
 site_name: oh-my-mlip
 site_description: One registry for many machine-learning interatomic potentials — install, run, benchmark, fine-tune, distill.
-site_url: https://jinukmoon.github.io/oh-my-mlip/
+site_url: https://oh-my-mlip.org/
 repo_url: https://github.com/JinukMoon/oh-my-mlip
 repo_name: JinukMoon/oh-my-mlip
 edit_uri: edit/main/docs/

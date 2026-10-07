@@ -29,7 +29,7 @@ gets there. Details: [Host requirements](host_requirements.md).
 
     ```text
     Clone https://github.com/JinukMoon/oh-my-mlip, read its AGENTS.md and the
-    documentation at https://jinukmoon.github.io/oh-my-mlip/, and use it for the
+    documentation at https://oh-my-mlip.org/, and use it for the
     MLIP work I ask for.
     ```
 

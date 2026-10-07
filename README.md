@@ -5,7 +5,7 @@
 </p>
 
 [![CI (GPU-free)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml/badge.svg)](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/ci.yml)
-[![Docs](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/docs.yml/badge.svg)](https://jinukmoon.github.io/oh-my-mlip/)
+[![Docs](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/docs.yml/badge.svg)](https://oh-my-mlip.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 20
@@ -15,8 +15,8 @@ every one is installed, used, benchmarked, fine-tuned and distilled the same
 way. Ask Claude Code or Codex, and it does the whole job for you. It drives the
 real upstream frameworks and never reimplements a model.
 
-**Documentation: https://jinukmoon.github.io/oh-my-mlip/**
-· [Troubleshooting and help](https://jinukmoon.github.io/oh-my-mlip/help/) · [Issues](https://github.com/JinukMoon/oh-my-mlip/issues)
+**Documentation: https://oh-my-mlip.org/**
+· [Troubleshooting and help](https://oh-my-mlip.org/help/) · [Issues](https://github.com/JinukMoon/oh-my-mlip/issues)
 
 ## Quick start
 
@@ -34,7 +34,7 @@ real upstream frameworks and never reimplements a model.
 
 ```text
 Clone https://github.com/JinukMoon/oh-my-mlip, read its AGENTS.md and the
-documentation at https://jinukmoon.github.io/oh-my-mlip/, and use it for the
+documentation at https://oh-my-mlip.org/, and use it for the
 MLIP work I ask for.
 ```
 
@@ -47,17 +47,17 @@ source env.sh
 python scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on your GPU
 ```
 
-Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](https://jinukmoon.github.io/oh-my-mlip/gated_models/).
+Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](https://oh-my-mlip.org/gated_models/).
 
 ## What it does
 
 | | |
 |---|---|
-| [**Install**](https://jinukmoon.github.io/oh-my-mlip/howto/install/) | every framework in its own env from a pinned recipe, with exact replay from lock files |
-| [**Use a model**](https://jinukmoon.github.io/oh-my-mlip/howto/use-a-model/) | the exact interpreter and calculator lines for your own scripts, or one call across models |
-| [**Benchmark**](https://jinukmoon.github.io/oh-my-mlip/howto/catbench/) | CatBench adsorption benchmarks across models, including your own VASP calculations |
-| [**Fine-tuning**](https://jinukmoon.github.io/oh-my-mlip/howto/finetune/) | one command drives each framework's own trainer, config and dataset format |
-| [**Distillation**](https://jinukmoon.github.io/oh-my-mlip/howto/distill/) | any hub model into an NN-MTP student that runs in LAMMPS |
+| [**Install**](https://oh-my-mlip.org/howto/install/) | every framework in its own env from a pinned recipe, with exact replay from lock files |
+| [**Use a model**](https://oh-my-mlip.org/howto/use-a-model/) | the exact interpreter and calculator lines for your own scripts, or one call across models |
+| [**Benchmark**](https://oh-my-mlip.org/howto/catbench/) | CatBench adsorption benchmarks across models, including your own VASP calculations |
+| [**Fine-tuning**](https://oh-my-mlip.org/howto/finetune/) | one command drives each framework's own trainer, config and dataset format |
+| [**Distillation**](https://oh-my-mlip.org/howto/distill/) | any hub model into an NN-MTP student that runs in LAMMPS |
 
 ## Supported MLIPs
 
@@ -86,7 +86,7 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | TACE | TACE-OAM-L |
 <!-- STATUS_TABLE_END -->
 
-Weights, gating, licenses and upstream repositories: [Supported models](https://jinukmoon.github.io/oh-my-mlip/model_status/).
+Weights, gating, licenses and upstream repositories: [Supported models](https://oh-my-mlip.org/model_status/).
 
 ## Contributing
 

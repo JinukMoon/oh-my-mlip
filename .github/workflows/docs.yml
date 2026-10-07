@@ -1,7 +1,7 @@
 name: Docs
 
 # Builds the MkDocs site from docs/ and publishes it to GitHub Pages
-# (https://jinukmoon.github.io/oh-my-mlip/). The generated reference pages
+# (https://oh-my-mlip.org/). The generated reference pages
 # (docs/recipes.md, docs/finetune.md, docs/model_status.md) are kept in sync
 # with models.json by the GPU-free CI, so the site renders them as committed.
 

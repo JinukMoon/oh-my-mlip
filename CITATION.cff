@@ -9,7 +9,7 @@ authors:
     email: jumoon@snu.ac.kr
     affiliation: Seoul National University
 repository-code: "https://github.com/JinukMoon/oh-my-mlip"
-url: "https://jinukmoon.github.io/oh-my-mlip/"
+url: "https://oh-my-mlip.org/"
 license: MIT
 keywords:
   - machine-learning interatomic potentials
