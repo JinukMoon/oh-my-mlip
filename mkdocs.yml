@@ -10,7 +10,9 @@ docs_dir: docs
 theme:
   name: material
   logo: assets/icon.png
-  favicon: assets/icon.png
+  # Google shows a site icon only if it is square and a multiple of 48 px; the
+  # 128 px icon.png was ignored (generic globe in search results, 2026-10-17)
+  favicon: assets/favicon.png
   features:
     # top tabs for the five sections on every page; the left sidebar also lists
     # every section, expanded, with its pages indented (docs/stylesheets/extra.css
