@@ -18,7 +18,10 @@ Distill UMA-s-1p2-OMAT into an NN-MTP student for 300 K NVT MD of slab.vasp.
 ## What you prepare
 
 - **the teacher** — an installed model;
-- **a structure file** with at most four chemical elements;
+- **a structure file** with at most four chemical elements — or several, if
+  the student must hold for several compositions (a slab with different
+  numbers of water molecules, say): one composition alone fixes only its own
+  total energy, not the energy of each element;
 - **a LAMMPS binary with the NN-MTP pair style** — the agent can build it once
   with `scripts/build_lammps_nnmtp.sh`;
 - **an onthefly-distill checkout**.
@@ -89,6 +92,11 @@ not a setting:
     ```bash
     "$PY" scripts/distill_verify.py --work ./distill --json
     ```
+
+    Repeat `--structure` to seed the pool from several structures; the student
+    MD runs the first. Held-out frames you supply (`--heldout-file`) must lie
+    within the compositions the pool spans, and must mark their `FixAtoms`
+    atoms if the structure has any.
 
     `--mode fixture` (at most 3 rounds) only exercises the loop: even a passing
     fixture says nothing about the student's accuracy. Use `--mode production`

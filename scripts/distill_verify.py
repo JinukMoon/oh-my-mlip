@@ -301,8 +301,9 @@ def load_contract(work: Path, log: Log) -> tuple[dict, dict, dict]:
 
 def provenance_drift(prov: dict) -> dict:
     """Every file identity the proposal recorded, recomputed: generated files
-    (config.yaml, run_distill.sh, omm_teacher.py), the structure, the engine
-    files that were invoked. {name: {recorded, actual}} for each mismatch
+    (config.yaml, run_distill.sh, omm_teacher.py, the staged structures), the
+    structure and every other pool structure, the engine files that were
+    invoked. {name: {recorded, actual}} for each mismatch
     (actual None = missing). Ordinary post-approval drift only; acceptance.json
     itself is the reference, not something this can vouch for."""
     checks: dict[str, tuple[Path, str | None]] = {}
@@ -311,6 +312,9 @@ def provenance_drift(prov: dict) -> dict:
     structure = prov.get("structure") or {}
     if structure.get("path"):
         checks["structure"] = (Path(structure["path"]), structure.get("sha256"))
+    for k, ps in enumerate(prov.get("pool_structures") or []):
+        if ps.get("path") and ps["path"] != structure.get("path"):
+            checks[f"pool_structure:{k}"] = (Path(ps["path"]), ps.get("sha256"))
     engine = prov.get("engine") or {}
     for rel, sha in (engine.get("files") or {}).items():
         checks[f"engine:{rel}"] = (Path(engine["repo"]) / rel, sha)
@@ -693,11 +697,14 @@ def check_heldout(acc: dict, run_dir: Path, log: Log) -> dict:
     # config.yaml points at); older proposals recorded only the source
     struct_prov = (acc.get("provenance") or {}).get("structure") or {}
     structure = Path(struct_prov.get("staged_path") or struct_prov.get("path") or "")
+    pool_structures = [Path(ps["staged_path"]) for ps in ((acc.get("provenance") or {}).get("pool_structures") or [])
+                       if ps.get("staged_path") and Path(ps["staged_path"]) != structure]
     out = {"path": str(path), "source": h["source"], "seed": h.get("seed"), "pool_seed": pool_seed,
            "exists": path.is_file() and path.stat().st_size > 0, "sha256": None, "n_frames": 0,
            "outside_engine_work_dir": not _is_under(path, run_dir),
            "seed_distinct": h["source"] != "separate_teacher_md" or h.get("seed") != pool_seed,
-           "init_structure": str(structure) if structure.name else None, "contains_init_frame": None,
+           "init_structure": str(structure) if structure.name else None,
+           "pool_structures": [str(p) for p in pool_structures], "contains_init_frame": None,
            "pool_files": [], "n_pool_frames": 0, "n_overlap": None, "leak": None}
     log(f"step 4/7: held-out {path} (source={h['source']}, seed={h.get('seed')}; pool seed {pool_seed})")
     if not out["outside_engine_work_dir"]:
@@ -717,15 +724,19 @@ def check_heldout(acc: dict, run_dir: Path, log: Log) -> dict:
     # teacher_md.py's frame 0 is the init structure itself, for the pool's
     # seed and for any other: a held-out set that still carries it shares a
     # frame with the pool whether or not the pool file is on disk to show it.
-    if structure.is_file():
+    # With several pool structures every one of them starts a trajectory.
+    for init in [structure, *pool_structures]:
+        if not init.is_file():
+            continue
         try:
-            init_fp = next(iter(frame_fingerprints(structure)), None)
+            init_fp = next(iter(frame_fingerprints(init)), None)
         except Exception as exc:  # unreadable structure: provenance drift reports it; no init check possible
-            log(f"  init structure {structure} unreadable ({exc}); init-frame check skipped")
-        else:
-            out["contains_init_frame"] = init_fp in held
-            if out["contains_init_frame"]:
-                log(f"  a held-out frame IS the init structure {structure} (teacher_md.py's pre-MD frame 0) -- LEAK")
+            log(f"  init structure {init} unreadable ({exc}); init-frame check skipped")
+            continue
+        hit = init_fp in held
+        out["contains_init_frame"] = bool(out["contains_init_frame"]) or hit
+        if hit:
+            log(f"  a held-out frame IS the init structure {init} (teacher_md.py's pre-MD frame 0) -- LEAK")
     pool_files = [run_dir / "dataset.extxyz"] + sorted(run_dir.glob("al_iter*_labeled.extxyz"))
     pool: set[str] = set()
     for pf in pool_files:
@@ -787,11 +798,41 @@ stats = common.build_cache(args.heldout, args.cache_prefix + ".cache.pt", args.c
 ds = common.CachedDataset(args.cache_prefix + ".cache.pt")
 loader = DataLoader(ds, batch_size=common.BATCH_SIZE, shuffle=False, collate_fn=common.collate_fn)
 e_mae, f_mae = common.validate(model, loader, device)
+
+# Energy per composition (diagnostic, not gating): the same per-frame energy
+# validate() compares, grouped by atoms per species. One pool composition fixes
+# the total energy of that composition only, so a held-out composition the pool
+# does not span shows up here as a large constant signed error with a small
+# error once that constant is removed.
+from ase.data import chemical_symbols
+rows = []
+model.eval()
+with torch.no_grad():
+    for batch in loader:
+        sp, bidx, na = batch["species"].to(device), batch["batch_idx"].to(device), batch["n_atoms"].to(device)
+        out = model(batch["positions"].to(device), torch.eye(3, device=device), sp,
+                    batch["neighbor_indices"].to(device), batch["neighbor_shifts"].to(device), compute_forces=False)
+        pred = torch.zeros(len(na), device=device).scatter_add_(0, bidx, out["atomic_energies"])
+        for i in range(len(na)):
+            z, n = torch.unique(sp[bidx == i], return_counts=True)
+            key = " ".join(f"{chemical_symbols[int(a)]}{int(b)}" for a, b in zip(z.tolist(), n.tolist()))
+            rows.append((key, float(pred[i] - batch["energy"][i].to(device)), int(na[i])))
+by_comp, centred = [], []
+for key in sorted({r[0] for r in rows}):
+    group = [(de, n) for k, de, n in rows if k == key]
+    mean_de = sum(de for de, _ in group) / len(group)
+    centred += [abs(de - mean_de) / n * 1000 for de, n in group]
+    by_comp.append({"composition": key, "n_frames": len(group), "mean_signed_de_ev": mean_de,
+                    "energy_mae_mev_per_atom": sum(abs(de) / n for de, n in group) / len(group) * 1000,
+                    "energy_mae_centred_mev_per_atom": sum(abs(de - mean_de) / n for de, n in group) / len(group) * 1000})
+
 json.dump({
     "energy_mae_mev_per_atom": float(e_mae),
     "force_mae_mev_per_a": float(f_mae),
     "n_frames": int(len(ds)),
     "force_mae_scope": stats.get("force_scope", "all atoms (engine without frozen-atom masking)"),
+    "energy_by_composition": by_comp,
+    "energy_mae_composition_centred_mev_per_atom": sum(centred) / max(len(centred), 1),
     "n_frozen_atoms_per_frame": stats.get("n_frozen_atoms"),
     "cache_stats": stats,
     "device": device,
@@ -852,6 +893,10 @@ def run_heldout_eval(*, work: Path, python: Path, repo: Path, model_pt: str | No
             log(f"  E_MAE={e:.3f} meV/atom  F_MAE={f:.3f} meV/A  on {out['metrics'].get('n_frames')} frames "
                 f"(forces: {out['metrics'].get('force_mae_scope')}; frozen atoms per frame "
                 f"{out['metrics'].get('n_frozen_atoms_per_frame')})")
+            for row in out["metrics"].get("energy_by_composition") or []:
+                log(f"    {row['composition']}: {row['n_frames']} frames, E_MAE {row['energy_mae_mev_per_atom']:.2f} "
+                    f"meV/atom, mean signed dE {row['mean_signed_de_ev']:+.3f} eV, centred "
+                    f"{row['energy_mae_centred_mev_per_atom']:.2f} meV/atom (diagnostic)")
     except (ValueError, KeyError, TypeError) as exc:
         out["error"] = f"metrics.json unreadable: {exc}"
         log(f"  {out['error']}")

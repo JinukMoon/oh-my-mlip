@@ -94,7 +94,7 @@ def fake_d(tmp_path) -> Path:
     d = tmp_path / "onthefly-distill"
     (d / "scripts").mkdir(parents=True)
     (d / "scripts" / "al_loop_local.sh").write_text("#!/bin/bash\necho fake al_loop_local\n")
-    (d / "scripts" / "teacher_md.py").write_text("# fake teacher_md.py\n")
+    (d / "scripts" / "teacher_md.py").write_text("# fake teacher_md.py (reads $TEACHER_STRUCTURE)\n")
     (d / "ontheflydistill").mkdir()
     (d / "ontheflydistill" / "frozen.py").write_text("# fake frozen.py: this engine masks frozen atoms\n")
     example = textwrap.dedent(
@@ -440,7 +440,12 @@ def test_acceptance_json_schema_and_provenance(accepted, fake_d, cu_structure):
     pool, held = acc["split"]["pool"], acc["split"]["heldout"]
     assert pool == {"teacher_md_seed": db.POOL_TEACHER_SEED, "steps": 40, "save_every": 8,
                     "path": str(accepted / "run" / "dataset.extxyz"),
-                    "grows_by": "run/al_iter<K>_labeled.extxyz (teacher-relabelled pre-crash windows)"}
+                    "grows_by": "run/al_iter<K>_labeled.extxyz (teacher-relabelled pre-crash windows)",
+                    "structures": [{"structure": str(accepted / "structure_init.vasp"), "source": str(cu_structure),
+                                    "steps": 40, "trajectory": str(accepted / "run" / "teacher_md.extxyz"),
+                                    "composition": {"Cu": 32}}],
+                    "student_md_structure": str(accepted / "structure_init.vasp"),
+                    "composition_rule": db.COMPOSITION_SPAN_RULE}
     assert held["source"] == "separate_teacher_md" and held["seed"] == db.DEFAULT_HELDOUT_SEED
     assert held["path"] == str(accepted / "heldout" / "heldout.extxyz")
     assert held["outside_engine_work_dir"] is True
@@ -1012,6 +1017,243 @@ def test_term_to_the_supervised_group_is_engine_exit(tmp_path, fake_d, cu_struct
     else:
         os.kill(grandchild, 9)
         pytest.fail(f"grandchild {grandchild} survived TERM to its group")
+
+
+# ── a pool from several structures (--structure repeated) ─────────────────────
+FAKE_TEACHER_MD_MULTI = '''\
+"""Stand-in for D/scripts/teacher_md.py with a pool's load-bearing behaviour: the
+init structure ($TEACHER_STRUCTURE, else system.init_structure) is frame 0 for
+any seed, later frames are seed-dependent displacements of it."""
+import os, sys
+import numpy as np
+import yaml
+from ase.io import read, write
+out, steps, every = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+seed = int(os.environ.get("TEACHER_SEED", "42"))
+struct = os.environ.get("TEACHER_STRUCTURE") or yaml.safe_load(open(os.environ["ONTHEFLY_CONFIG"]))["system"]["init_structure"]
+atoms = read(struct, format="vasp")
+frames = []
+for k in range(steps // every + 1):
+    a = atoms.copy()
+    a.positions[0] += 0.001 * k * seed / 42
+    a.info["energy"] = -1.0
+    a.arrays["forces"] = np.zeros((len(a), 3))
+    frames.append(a)
+write(out, frames, format="extxyz")
+'''
+
+FAKE_MERGE_XYZ = '''\
+import sys
+out, inputs = sys.argv[1], sys.argv[2:]
+with open(out, "w") as fh:
+    for p in inputs:
+        fh.write(open(p).read())
+'''
+
+
+def _cu_au(n_au: int, cells=(2, 2, 2)) -> "Atoms":
+    atoms = bulk("Cu", "fcc", a=3.61, cubic=True) * cells
+    for i in range(n_au):
+        atoms[i].symbol = "Au"
+    return atoms
+
+
+def _structures(tmp_path, *atoms_list) -> list[Path]:
+    paths = []
+    for k, atoms in enumerate(atoms_list):
+        path = tmp_path / f"s{k}.vasp"
+        write(path, atoms, format="vasp")
+        paths.append(path)
+    return paths
+
+
+def _multi(tmp_path, fake_d, paths, *extra, work_name="work_multi", acceptance=True):
+    work = tmp_path / work_name
+    args = ["--teacher", "MACE-MPA-0", "--work", str(work), "--repo", str(fake_d)]
+    for p in paths:
+        args += ["--structure", str(p)]
+    rc = db.main(args + (["--acceptance", *extra] if acceptance else list(extra)))
+    assert rc == 0
+    return work.resolve()
+
+
+def test_two_structures_split_the_pool_and_the_heldout(tmp_path, fake_d):
+    paths = _structures(tmp_path, bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2), _cu_au(2, (2, 2, 3)))
+    work = _multi(tmp_path, fake_d, paths, *ACC_BASE, "--pool-steps", "41", "--pool-save-every", "10",
+                  "--heldout-steps", "40", "--heldout-save-every", "10")
+    staged2 = work / "pool_structure_1.vasp"
+    assert staged2.is_file() and len(read(staged2, format="vasp")) == 48
+    cfg = yaml.safe_load((work / "config.yaml").read_text())
+    assert cfg["system"]["init_structure"] == str(work / "structure_init.vasp")   # the student MD runs the first
+    assert cfg["system"]["specorder"] == ["Cu", "Au"] and cfg["system"]["species"] == [29, 79]
+    text = (work / "run_distill.sh").read_text()
+    teacher_md = db._q(fake_d.resolve() / "scripts" / "teacher_md.py")
+    assert f'    python {teacher_md} "$WORK/teacher_md.extxyz" 21 10' in text
+    assert f'    TEACHER_STRUCTURE={db._q(staged2)} python {teacher_md} "$WORK/teacher_md_pool1.extxyz" 20 10' in text
+    assert ('python -m ontheflydistill.merge_xyz "$WORK/dataset.extxyz" "$WORK/teacher_md.extxyz" '
+            '"$WORK/teacher_md_pool1.extxyz"') in text
+    assert f"TEACHER_SEED=4242 TEACHER_STRUCTURE={db._q(staged2)} python {teacher_md}" in text
+    acc = json.loads((work / "acceptance.json").read_text())
+    pool = acc["split"]["pool"]
+    assert [(st["steps"], st["composition"]) for st in pool["structures"]] == [(21, {"Cu": 32, "Au": 0}),
+                                                                             (20, {"Cu": 46, "Au": 2})]
+    assert pool["student_md_structure"] == str(work / "structure_init.vasp")
+    assert [st["steps"] for st in acc["split"]["heldout"]["structures"]] == [20, 20]
+    prov = acc["provenance"]
+    assert [ps["path"] for ps in prov["pool_structures"]] == [str(p.resolve()) for p in paths]
+    assert prov["pool_structures"][1]["staged_sha256"] == db._sha256(staged2)
+    assert prov["generated_files"]["pool_structure_1.vasp"]["sha256"] == db._sha256(staged2)
+    assert "Pool structures:" in (work / "PLAN.md").read_text()
+    assert "the student MD runs the first" in (work / "PLAN.md").read_text()
+    shellcheck = _find_shellcheck()
+    if shellcheck:
+        assert subprocess.run([shellcheck, str(work / "run_distill.sh")], capture_output=True).returncode == 0
+
+
+def test_two_structures_run_end_to_end_and_verify(tmp_path, fake_d):
+    import distill_verify as dv
+    (fake_d / "scripts" / "teacher_md.py").write_text(FAKE_TEACHER_MD_MULTI)
+    (fake_d / "ontheflydistill" / "__init__.py").write_text("")
+    (fake_d / "ontheflydistill" / "merge_xyz.py").write_text(FAKE_MERGE_XYZ)
+    (fake_d / "scripts" / "al_loop_local.sh").write_text(textwrap.dedent("""\
+        #!/bin/bash
+        RUN="$(dirname "$ONTHEFLY_CONFIG")/run"
+        echo "SUCCESS round0 stable" > "$RUN/.al_status"
+        """))
+    (fake_d / "scripts" / "al_loop_local.sh").chmod(0o755)
+    paths = _structures(tmp_path, bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2), _cu_au(2, (2, 2, 3)))
+    work = _multi(tmp_path, fake_d, paths, *ACC_BASE, "--pool-steps", "40", "--pool-save-every", "10",
+                  "--heldout-steps", "40", "--heldout-save-every", "10", "--wallclock-max-h", "1")
+    proc = _run_sh(work)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    pool = read(work / "run" / "dataset.extxyz", index=":")
+    held = read(work / "heldout" / "heldout.extxyz", index=":")
+    assert sorted(len(a) for a in pool) == [32, 32, 32, 48, 48, 48]   # 20 steps every 10 = 3 frames each
+    assert sorted(len(a) for a in held) == [32, 32, 48, 48]           # each trajectory's init frame dropped
+    dv.main(["--work", str(work), "--no-lmp-witness"])
+    report = json.loads((work / "verify" / "distill_verify.json").read_text())
+    h = report["heldout"]
+    assert h["pool_structures"] == [str(work / "pool_structure_1.vasp")]
+    assert h["contains_init_frame"] is False and h["leak"] is False and h["n_overlap"] == 0
+    assert report["contract"]["provenance_drift"] == {}
+    # a held-out frame equal to the SECOND structure's init frame is a leak too
+    write(work / "heldout" / "heldout.extxyz", held + [read(work / "pool_structure_1.vasp", format="vasp")],
+          format="extxyz")
+    dv.main(["--work", str(work), "--no-lmp-witness"])
+    report = json.loads((work / "verify" / "distill_verify.json").read_text())
+    assert report["heldout"]["contains_init_frame"] is True
+    assert (report["state"], report["reason"]) == ("failed", "heldout_leak")
+
+
+def test_editing_a_pool_structure_after_approval_is_provenance_drift(tmp_path, fake_d):
+    import distill_verify as dv
+    paths = _structures(tmp_path, bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2), _cu_au(2, (2, 2, 3)))
+    work = _multi(tmp_path, fake_d, paths, *ACC_BASE, "--pool-steps", "40", "--pool-save-every", "10")
+    paths[1].write_text(paths[1].read_text() + "\n")
+    drift = dv.provenance_drift(json.loads((work / "acceptance.json").read_text())["provenance"])
+    assert list(drift) == ["pool_structure:1"]
+    (work / "pool_structure_1.vasp").write_text("edited")
+    drift = dv.provenance_drift(json.loads((work / "acceptance.json").read_text())["provenance"])
+    assert set(drift) == {"pool_structure:1", "pool_structure_1.vasp"}
+
+
+def test_more_than_4_species_over_all_structures_is_refused(tmp_path, fake_d):
+    a = bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2)
+    b = a.copy()
+    a[0].symbol, a[1].symbol = "Au", "Ag"
+    b[0].symbol, b[1].symbol = "Pt", "Pd"
+    work = tmp_path / "w"
+    with pytest.raises(SystemExit, match="5 distinct species .*together.*Nothing was written"):
+        db.main(["--teacher", "MACE-MPA-0", "--repo", str(fake_d), "--work", str(work),
+                 *sum((["--structure", str(p)] for p in _structures(tmp_path, a, b)), [])])
+    assert not work.exists()
+
+
+def test_the_same_structure_twice_is_refused(tmp_path, fake_d, cu_structure):
+    copy_ = tmp_path / "copy.vasp"
+    copy_.write_bytes(cu_structure.read_bytes())
+    work = tmp_path / "w"
+    with pytest.raises(SystemExit, match="is the same structure as --structure"):
+        db.main(["--teacher", "MACE-MPA-0", "--repo", str(fake_d), "--work", str(work),
+                 "--structure", str(cu_structure), "--structure", str(copy_)])
+    assert not work.exists()
+
+
+def test_several_structures_need_an_engine_that_reads_teacher_structure(tmp_path, fake_d):
+    (fake_d / "scripts" / "teacher_md.py").write_text("# an older teacher_md.py\n")
+    paths = _structures(tmp_path, bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2), _cu_au(2))
+    with pytest.raises(SystemExit, match=r"reads \$TEACHER_STRUCTURE.*Nothing was written"):
+        db.main(["--teacher", "MACE-MPA-0", "--repo", str(fake_d), "--work", str(tmp_path / "w"),
+                 *sum((["--structure", str(p)] for p in paths), [])])
+
+
+@pytest.mark.parametrize("extra,needle", [
+    (["--pool-steps", "15", "--pool-save-every", "10"], "split across 2 structures leaves 7 steps each"),
+    (["--heldout-steps", "15", "--heldout-save-every", "10"], "per structure"),
+])
+def test_step_shares_too_small_for_the_save_interval_are_refused(tmp_path, fake_d, extra, needle, capsys):
+    paths = _structures(tmp_path, bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2), _cu_au(2))
+    with pytest.raises(SystemExit) as exc:
+        db.main(["--teacher", "MACE-MPA-0", "--repo", str(fake_d), "--work", str(tmp_path / "w"),
+                 *sum((["--structure", str(p)] for p in paths), []), "--acceptance", *ACC_BASE, *extra])
+    assert exc.value.code == 2 and needle in capsys.readouterr().err
+
+
+def _heldout_of(tmp_path, atoms, n=2) -> Path:
+    frames = []
+    for k in range(n):
+        a = atoms.copy()
+        a.rattle(0.05, seed=20 + k)
+        frames.append(a)
+    path = tmp_path / f"held_{atoms.get_chemical_formula()}.extxyz"
+    write(path, frames, format="extxyz")
+    return path
+
+
+def test_production_heldout_outside_the_pool_composition_span_is_refused(tmp_path, fake_d):
+    # one pool composition (Cu28Au4): Cu30Au2 is not a multiple of it, so the
+    # pool fixes no per-species energy for it -- the paper run's failure shape
+    (s0,) = _structures(tmp_path, _cu_au(4))
+    held = _heldout_of(tmp_path, _cu_au(2))
+    work = tmp_path / "w"
+    with pytest.raises(SystemExit, match=r"outside the span of the pool composition.*Add a --structure.*Nothing was"):
+        db.main(["--teacher", "MACE-MPA-0", "--repo", str(fake_d), "--work", str(work), "--structure", str(s0),
+                 "--acceptance", *ACC_BASE, "--heldout-file", str(held)])
+    assert not work.exists()
+
+
+def test_heldout_inside_the_span_of_two_pool_compositions_is_accepted(tmp_path, fake_d):
+    # Cu29Au3 is no pool composition, but it is half of Cu28Au4 + Cu30Au2
+    paths = _structures(tmp_path, _cu_au(4), _cu_au(2))
+    held = _heldout_of(tmp_path, _cu_au(3))
+    work = _multi(tmp_path, fake_d, paths, *ACC_BASE, "--pool-steps", "40", "--pool-save-every", "10",
+                  "--heldout-file", str(held))
+    cc = json.loads((work / "acceptance.json").read_text())["split"]["heldout"]["composition_check"]
+    assert cc["outside"] == [] and cc["action"] == "none"
+    assert cc["heldout"] == [{"composition": {"Au": 3, "Cu": 29}, "n_frames": 2, "in_pool_span": True}]
+    assert "all inside the span of the pool compositions" in (work / "PLAN.md").read_text()
+
+
+def test_fixture_heldout_outside_the_span_is_warned_and_recorded(tmp_path, fake_d):
+    (s0,) = _structures(tmp_path, _cu_au(4))
+    held = _heldout_of(tmp_path, _cu_au(2))
+    fixture = ["--mode", "fixture", "--energy-mae-max", "5", "--force-mae-max", "100", "--target-ps", "0.5",
+               "--max-iter", "3", "--no-progress-limit", "2"]
+    work = _multi(tmp_path, fake_d, [s0], *fixture, "--heldout-file", str(held))
+    cc = json.loads((work / "acceptance.json").read_text())["split"]["heldout"]["composition_check"]
+    assert cc["action"] == "warned" and cc["outside"] == [{"Au": 2, "Cu": 30}]
+    assert "WARNING" in (work / "bootstrap.log").read_text()
+    assert "OUTSIDE the span of the pool compositions" in (work / "PLAN.md").read_text()
+
+
+def test_user_heldout_equal_to_a_later_pool_structure_is_refused(tmp_path, fake_d):
+    paths = _structures(tmp_path, _cu_au(4), _cu_au(2))
+    held = tmp_path / "held.extxyz"
+    write(held, [_cu_au(2)], format="extxyz")
+    with pytest.raises(SystemExit, match=r"frame\(s\) \[0\] are the init structure .*s1.vasp"):
+        db.main(["--teacher", "MACE-MPA-0", "--repo", str(fake_d), "--work", str(tmp_path / "w"),
+                 *sum((["--structure", str(p)] for p in paths), []), "--acceptance", *ACC_BASE,
+                 "--pool-steps", "40", "--pool-save-every", "10", "--heldout-file", str(held)])
 
 
 # ── every rendered path is shell-quoted: spaces, apostrophes, $(...) ──────────

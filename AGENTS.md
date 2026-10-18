@@ -273,6 +273,14 @@ with **at most 4 elements**) if missing.
    For a run whose result must be judged, add `--acceptance` with every target
    stated explicitly (`recipes/distill.md`) and check it afterwards with
    `scripts/distill_verify.py --work <dir> --json`.
+   Repeat `--structure` to seed the pool from several structures; the student
+   MD runs the first. A pool of one composition fixes only that composition's
+   total energy, so when the student must also hold for other compositions (a
+   slab with another number of water molecules, say), add a structure of
+   another composition: with `--acceptance --mode production`, held-out frames
+   whose composition is outside the span of the pool compositions are refused.
+   Atoms under `FixAtoms` are labelled with real forces but not trained on, and
+   held-out frames you supply must mark them.
 3. **Run it:** `cd <work> && bash run_distill.sh`, in the background with its
    output logged; it takes long (teacher MD, then rounds of training, student MD
    and relabelling). It stops by itself when the student survives the target MD

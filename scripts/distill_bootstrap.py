@@ -93,6 +93,17 @@ killer, `kill -9`, ...), recorded as `engine_exit`, never as exhaustion.
 Any `engine_exit` is `failed(supervisor_exit)` at verify time, whatever
 `.al_status` says.
 
+`--structure` may be repeated to seed the pool from several structures (for
+example the same slab with different water counts): the pool's teacher-MD
+steps are split across them (`teacher_md.py` runs once per structure, the
+2nd and later through `$TEACHER_STRUCTURE`), the generated held-out set is
+split the same way, and the trajectories are merged into the pool. The first
+structure is the one the student MD runs (`system.init_structure`). One
+composition alone leaves the per-species energies unidentifiable: a student
+trained on it reproduces energies of that composition only, so with
+`--acceptance` a `--heldout-file` composition outside the linear span of the
+pool compositions is refused in production (a warning in a fixture).
+
 The structure is staged: whatever ase-readable file `--structure` names is
 re-written once as `<work>/structure_init.vasp` (the source is never
 touched) because D's `teacher_md.py` reads its init structure with
@@ -239,14 +250,25 @@ WALLCLOCK_RC_RULE = ("rc 124 => exhausted (timeout_term); rc 137 => exhausted wh
                      "whatever .al_status says")
 WALLCLOCK_COVERS = "run_distill.sh end to end: pool seeding, held-out generation, AL loop"
 STAGED_STRUCTURE = "structure_init.vasp"  # D/scripts/teacher_md.py reads with format="vasp" hard-coded
+POOL_STRUCTURE = "pool_structure_{k}.vasp"  # the 2nd, 3rd, ... --structure, staged the same way
+# teacher_md.py's override of system.init_structure for one run (engine 39fd8f7+);
+# a pool from several structures needs it.
+ENGINE_TEACHER_STRUCTURE = "TEACHER_STRUCTURE"
+# A held-out composition h is scored for energy only when h lies in the linear
+# span of the pool compositions: per-species energies are fixed by the pool only
+# along those directions (one composition fixes one total, nothing per species).
+COMPOSITION_SPAN_RULE = ("each held-out composition (atoms per species) must be a linear combination of the pool "
+                         "compositions; outside that span the pool does not identify per-species energies, so the "
+                         "energy error there is a per-composition constant, not the student's")
+COMPOSITION_SPAN_RTOL = 1e-8
 # Everything this script creates under --work. It creates them only in a work
 # directory that is new or empty (checked before the first write), each with
 # O_CREAT|O_EXCL|O_NOFOLLOW, and it never removes anything: a source structure
 # or held-out file that resolves to one of these names, a symlink or hardlink
 # parked there, or a previous bootstrap's output is refused, never overwritten,
 # never regenerated.
-BOOTSTRAP_OUTPUTS = ("bootstrap.log", STAGED_STRUCTURE, "omm_teacher.py", "config.yaml", "run_distill.sh",
-                    "acceptance.json", "PLAN.md")
+BOOTSTRAP_OUTPUTS = ("bootstrap.log", STAGED_STRUCTURE, "pool_structure_<k>.vasp", "omm_teacher.py", "config.yaml",
+                     "run_distill.sh", "acceptance.json", "PLAN.md")
 WORK_DIR_POLICY = ("--work must be new or empty at bootstrap; every output is created exclusively (O_EXCL, no "
                    "symlink following) and nothing preexisting is overwritten, regenerated or deleted -- a "
                    "non-empty work directory is refused before any write; bootstrap.log is created once, "
@@ -419,7 +441,8 @@ def _write_new(path: Path, text: str, mode: int = 0o644) -> None:
         fh.write(text)
 
 
-def refuse_unowned_work(work: Path, *, structure_abs: Path, heldout_abs: Path | None) -> None:
+def refuse_unowned_work(work: Path, *, structure_abs: Path, heldout_abs: Path | None,
+                        pool_abs: list[Path] | tuple = ()) -> None:
     """Fail closed before the first write: --work must not exist, or exist as an
     empty directory. Anything already inside -- a previous bootstrap's outputs,
     a run/ tree, the user's source structure staged under this very name, a
@@ -434,7 +457,8 @@ def refuse_unowned_work(work: Path, *, structure_abs: Path, heldout_abs: Path | 
     if not entries:
         return
     inside = []
-    for label, p in (("--structure", structure_abs), ("--heldout-file", heldout_abs)):
+    for label, p in (("--structure", structure_abs), *(("--structure", q) for q in pool_abs),
+                     ("--heldout-file", heldout_abs)):
         if p is not None and (p == work or work in p.parents):
             inside.append(f"{label} {p} lives inside it")
     shown = ", ".join(entries[:8]) + (f", ... ({len(entries)} entries)" if len(entries) > 8 else "")
@@ -449,7 +473,9 @@ def refuse_unowned_work(work: Path, *, structure_abs: Path, heldout_abs: Path | 
 def parse_args(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--teacher", required=True, help="oh-my-mlip model or version, e.g. MACE-MPA-0")
-    ap.add_argument("--structure", required=True, type=Path, help="anything ase.io.read handles, <=4 species")
+    ap.add_argument("--structure", required=True, type=Path, action="append",
+                    help="anything ase.io.read handles, <=4 species over all structures; repeat it to seed the pool "
+                         "from several structures (steps split across them; the student MD runs the first)")
     ap.add_argument("--work", required=True, type=Path, help="work dir (created; rendered ABSOLUTE)")
     ap.add_argument("--repo", type=Path, default=Path(DEFAULT_REPO) if DEFAULT_REPO else None,
                     help="onthefly-distill checkout (D); required unless $ONTHEFLY_REPO is set")
@@ -538,13 +564,15 @@ def parse_args(argv=None) -> argparse.Namespace:
                           ("--heldout-steps", args.heldout_steps), ("--heldout-save-every", args.heldout_save_every)):
             if val < 1:
                 ap.error(f"{flag} must be >= 1, got {val}")
-        if args.heldout_file is None and args.heldout_steps < args.heldout_save_every:
+        n_struct = len(args.structure)
+        if args.heldout_file is None and args.heldout_steps // n_struct < args.heldout_save_every:
             # teacher_md.py saves the init structure as frame 0 before the
             # first MD step; run_distill.sh drops that frame (the pool starts
             # with the same one). Fewer steps than the save interval leaves
-            # nothing after the drop.
+            # nothing after the drop. Several structures share the steps.
+            per = "" if n_struct == 1 else f" per structure (--heldout-steps // {n_struct} structures)"
             ap.error(f"--heldout-steps ({args.heldout_steps}) must be >= --heldout-save-every "
-                     f"({args.heldout_save_every}): the generated held-out MD saves only the pre-MD init frame "
+                     f"({args.heldout_save_every}){per}: the generated held-out MD saves only the pre-MD init frame "
                      "otherwise, and that frame is dropped because the AL pool starts with it too")
         if args.wallclock_max_h is not None:
             if args.wallclock_max_h <= 0:
@@ -558,6 +586,10 @@ def parse_args(argv=None) -> argparse.Namespace:
                          "install coreutils.")
     elif args.target_ps is None:
         args.target_ps = 1.0
+    if len(args.structure) > 1 and args.pool_steps // len(args.structure) < args.pool_save_every:
+        ap.error(f"--pool-steps ({args.pool_steps}) split across {len(args.structure)} structures leaves "
+                 f"{args.pool_steps // len(args.structure)} steps each, fewer than --pool-save-every "
+                 f"({args.pool_save_every}): a structure would contribute only its init frame")
     if args.repo is None:
         ap.error("--repo is required (or set $ONTHEFLY_REPO): an onthefly-distill checkout, "
                  "https://github.com/JinukMoon/onthefly-distill")
@@ -627,6 +659,70 @@ def read_structure(path: Path):
     species = [z_by_symbol[s] for s in specorder]
     masses = [round(float(atomic_masses[z]), 6) for z in species]
     return atoms, specorder, species, masses
+
+
+def read_structures(paths: list[Path]):
+    """Every --structure validated as read_structure() does; species, specorder
+    and masses over all of them, first-seen order (the first structure's own
+    order when there is only one)."""
+    atoms_list, z_by_symbol = [], {}
+    for path in paths:
+        atoms = read_structure(path)[0]
+        atoms_list.append(atoms)
+        for sym, z in zip(atoms.get_chemical_symbols(), atoms.get_atomic_numbers()):
+            z_by_symbol.setdefault(sym, int(z))
+    specorder = list(z_by_symbol)
+    if len(specorder) > MAX_SPECIES:
+        raise SystemExit(f"the {len(paths)} --structure files have {len(specorder)} distinct species {specorder} "
+                         f"together, but pair_nnmtp v1 hard-codes `species_Z[4]` -- the pool may span at most "
+                         f"{MAX_SPECIES} species. Nothing was written.")
+    species = [z_by_symbol[sym] for sym in specorder]
+    masses = [round(float(atomic_masses[z]), 6) for z in species]
+    seen = {}
+    for path, atoms in zip(paths, atoms_list):
+        fp = frame_fingerprint(atoms)
+        if fp in seen:
+            raise SystemExit(f"--structure {path} is the same structure as --structure {seen[fp]}: it would seed "
+                             "the same teacher trajectory twice. Nothing was written.")
+        seen[fp] = path
+    return atoms_list, specorder, species, masses
+
+
+def composition(atoms, specorder: list[str]) -> list[int]:
+    symbols = atoms.get_chemical_symbols()
+    return [symbols.count(sym) for sym in specorder]
+
+
+def in_composition_span(pool: list[list[int]], comps: list[list[int]]) -> list[bool]:
+    """For each composition, whether it is a linear combination of the pool
+    compositions (least squares, relative residual <= COMPOSITION_SPAN_RTOL)."""
+    basis = np.array(pool, dtype=float).T
+    out = []
+    for comp in comps:
+        h = np.array(comp, dtype=float)
+        x = np.linalg.lstsq(basis, h, rcond=None)[0]
+        out.append(bool(np.linalg.norm(basis @ x - h) <= COMPOSITION_SPAN_RTOL * max(1.0, np.linalg.norm(h))))
+    return out
+
+
+def refuse_engine_without_teacher_structure(repo: Path, n_structures: int) -> None:
+    """A pool from several structures runs teacher_md.py once per structure
+    through $TEACHER_STRUCTURE; an older engine ignores it and would run the
+    first structure every time."""
+    teacher_md = repo / "scripts" / "teacher_md.py"
+    if n_structures < 2 or not teacher_md.is_file():
+        return
+    if ENGINE_TEACHER_STRUCTURE not in teacher_md.read_text(encoding="utf-8", errors="replace"):
+        raise SystemExit(f"{n_structures} --structure files need an onthefly-distill teacher_md.py that reads "
+                         f"${ENGINE_TEACHER_STRUCTURE}; the one at {teacher_md} does not and would run the first "
+                         "structure every time. Update the checkout (git -C <repo> pull) and bootstrap again. "
+                         "Nothing was written.")
+
+
+def split_steps(total: int, n: int) -> list[int]:
+    """`total` MD steps over n structures, the remainder to the first ones."""
+    base, extra = divmod(total, n)
+    return [base + (1 if k < extra else 0) for k in range(n)]
 
 
 def _fixed_indices(atoms) -> list[int]:
@@ -702,6 +798,15 @@ def structure_identity(atoms) -> dict:
 
 
 def stage_structure(atoms, work: Path) -> Path:
+    return _stage(atoms, work, STAGED_STRUCTURE)
+
+
+def stage_pool_structure(atoms, work: Path, k: int) -> Path:
+    """The k-th extra --structure (k >= 1), staged and read back like the first."""
+    return _stage(atoms, work, POOL_STRUCTURE.format(k=k))
+
+
+def _stage(atoms, work: Path, name: str) -> Path:
     """`<work>/structure_init.vasp`: the init structure D actually reads.
     teacher_md.py opens `system.init_structure` with `format="vasp"`
     hard-coded, so an .xyz/.cif accepted by ase here would fail only at run
@@ -714,7 +819,7 @@ def stage_structure(atoms, work: Path) -> Path:
     exclusively (O_EXCL|O_NOFOLLOW -- see _write_new): whatever sits at that
     name already, including the source itself, is never overwritten; a copy
     that fails the read-back is retained and reported, never unlinked."""
-    staged = work / STAGED_STRUCTURE
+    staged = work / name
     buf = io.StringIO()
     ase_write(buf, atoms, format="vasp", direct=False, sort=False)
     _write_new(staged, buf.getvalue())
@@ -863,12 +968,15 @@ def heldout_path(work_dir_abs: Path) -> Path:
 
 
 def render_heldout_block(*, repo_abs: str, work_dir_abs: Path, heldout_file: Path | None,
-                         heldout_seed: int, heldout_steps: int, heldout_save_every: int) -> str:
+                         heldout_seed: int, heldout_steps: int, heldout_save_every: int,
+                         pool_structures: list[Path] | tuple = ()) -> str:
     """The held-out step of run_distill.sh (acceptance mode only). Either a
     second teacher MD under a DIFFERENT seed (`teacher_md.py` reads
     $TEACHER_SEED), or the user's own frames relabelled by the same teacher
     through D's `label.py` so the labels sit on the teacher's PES. Idempotent:
-    skipped once the file exists, like the pool seeding."""
+    skipped once the file exists, like the pool seeding. With extra pool
+    structures (staged copies of the 2nd and later --structure) the generated
+    set is split across all structures like the pool, one trajectory each."""
     out = heldout_path(work_dir_abs)
     if heldout_file is not None:
         make = (f'    python {_q(f"{repo_abs}/scripts/label.py")} {_q(heldout_file.resolve())} "$HELDOUT"')
@@ -876,12 +984,17 @@ def render_heldout_block(*, repo_abs: str, work_dir_abs: Path, heldout_file: Pat
         # in the filename would otherwise end the comment and run the rest)
         how = f"relabel user frames {_c(heldout_file.resolve())} with the configured teacher (label.py)"
     else:
-        raw = heldout_raw_path(work_dir_abs)
-        make = (f'    TEACHER_SEED={heldout_seed} python {_q(f"{repo_abs}/scripts/teacher_md.py")} '
-                f'{_q(raw)} {heldout_steps} {heldout_save_every}\n'
-                f"{render_drop_frame0(raw=str(raw))}")
+        teacher_md = _q(f"{repo_abs}/scripts/teacher_md.py")
+        steps = split_steps(heldout_steps, 1 + len(pool_structures))
+        raws = [heldout_raw_path(work_dir_abs, k) for k in range(len(steps))]
+        lines = [f"    TEACHER_SEED={heldout_seed} python {teacher_md} {_q(raws[0])} {steps[0]} {heldout_save_every}"]
+        lines += [f"    TEACHER_SEED={heldout_seed} {ENGINE_TEACHER_STRUCTURE}={_q(ps)} python {teacher_md} "
+                  f"{_q(raw)} {n} {heldout_save_every}"
+                  for ps, raw, n in zip(pool_structures, raws[1:], steps[1:])]
+        make = "\n".join(lines) + "\n" + render_drop_frame0(raws=[str(r) for r in raws])
+        split = "" if not pool_structures else f" split over {len(steps)} structures ({'/'.join(map(str, steps))})"
         how = (f"separate teacher MD, TEACHER_SEED={heldout_seed} (pool uses {POOL_TEACHER_SEED}), "
-               f"{heldout_steps} steps, every {heldout_save_every}, pre-MD frame 0 dropped")
+               f"{heldout_steps} steps{split}, every {heldout_save_every}, pre-MD frame 0 dropped")
     return f"""
 # Held-out set (recipes/distill.md §2 item 4): {how}.
 # Written OUTSIDE $WORK so the trainer's al_iter*_labeled.extxyz glob and the
@@ -895,11 +1008,12 @@ fi
 """
 
 
-def heldout_raw_path(work_dir_abs: Path) -> Path:
-    return work_dir_abs / "heldout" / "heldout_md_raw.extxyz"
+def heldout_raw_path(work_dir_abs: Path, k: int = 0) -> Path:
+    """Raw held-out trajectory of the k-th structure (0 = the first)."""
+    return work_dir_abs / "heldout" / ("heldout_md_raw.extxyz" if k == 0 else f"heldout_md_raw_pool{k}.extxyz")
 
 
-def render_drop_frame0(*, raw: str) -> str:
+def render_drop_frame0(*, raws: list[str]) -> str:
     """The hub-owned step between D's teacher_md.py and the held-out file.
     teacher_md.py calls save_frame() once BEFORE dyn.run() for every
     TEACHER_SEED, and the same observer is attached to the dynamics, which ASE
@@ -908,39 +1022,46 @@ def render_drop_frame0(*, raw: str) -> str:
     the same way. A held-out set that keeps any of those frames shares a frame
     with the pool; this drops frame 0 and every following frame whose atom block
     is identical to it (nothing else), and refuses an empty remainder. Pure
-    python, no ase: extxyz is `natoms / comment / natoms lines` per frame."""
+    python, no ase: extxyz is `natoms / comment / natoms lines` per frame.
+    With several structures each raw trajectory starts with its own init
+    structure: the drop is done per trajectory, the rest concatenated."""
     return textwrap.dedent(f'''\
         # teacher_md.py saves the init structure before the first MD step, and its
         # step-0 observer call can save it again: drop every leading copy here,
         # hub-owned, engine untouched. Empty remainder => exit 1.
-        python - {_q(raw)} "$HELDOUT" <<'PY'
+        python - {" ".join(_q(r) for r in raws)} "$HELDOUT" <<'PY'
     import sys
-    raw, out = sys.argv[1], sys.argv[2]
-    lines = open(raw, encoding="utf-8").read().splitlines(keepends=True)
-    frames, i = [], 0
-    while i < len(lines):
-        if not lines[i].strip():
-            i += 1
-            continue
-        n = int(lines[i].split()[0])
-        frames.append(lines[i:i + n + 2])
-        i += n + 2
-    drop = 1 if frames else 0
-    while drop < len(frames) and frames[drop][2:] == frames[0][2:]:
-        drop += 1
-    if len(frames) - drop < 1:
-        sys.exit(f"[run_distill] held-out MD wrote {{len(frames)}} frame(s) to {{raw}}; dropping the init "
-                 "structure frames (shared with the pool) leaves nothing -- raise --heldout-steps (>= --heldout-save-every)")
+    raws, out = sys.argv[1:-1], sys.argv[-1]
+    kept = []
+    for raw in raws:
+        lines = open(raw, encoding="utf-8").read().splitlines(keepends=True)
+        frames, i = [], 0
+        while i < len(lines):
+            if not lines[i].strip():
+                i += 1
+                continue
+            n = int(lines[i].split()[0])
+            frames.append(lines[i:i + n + 2])
+            i += n + 2
+        drop = 1 if frames else 0
+        while drop < len(frames) and frames[drop][2:] == frames[0][2:]:
+            drop += 1
+        if len(frames) - drop < 1:
+            sys.exit(f"[run_distill] held-out MD wrote {{len(frames)}} frame(s) to {{raw}}; dropping the init "
+                     "structure frames (shared with the pool) leaves nothing -- raise --heldout-steps (>= --heldout-save-every)")
+        kept += frames[drop:]
+        print(f"[run_distill] held-out: dropped {{drop}} leading init-structure frame(s) (shared with the pool); "
+              f"kept {{len(frames) - drop}} of {{len(frames)}} from {{raw}}", flush=True)
     with open(out, "w", encoding="utf-8") as fh:
-        fh.writelines(line for frame in frames[drop:] for line in frame)
-    print(f"[run_distill] held-out: dropped {{drop}} leading init-structure frame(s) (shared with the pool); "
-          f"kept {{len(frames) - drop}} of {{len(frames)}} -> {{out}}", flush=True)
+        fh.writelines(line for frame in kept for line in frame)
+    print(f"[run_distill] held-out: {{len(kept)}} frame(s) -> {{out}}", flush=True)
     PY''')
 
 
 def render_run_distill_sh(*, teacher_python: str, repo: Path, work_dir_abs: Path,
                           pool_steps: int = TEACHER_MD_STEPS, pool_save_every: int = TEACHER_MD_SAVE_EVERY,
-                          heldout_block: str = "", wallclock: dict | None = None) -> str:
+                          heldout_block: str = "", wallclock: dict | None = None,
+                          pool_structures: list[Path] | tuple = ()) -> str:
     """run_distill.sh: the AC7 rerun unit. All three environment facts are
     load-bearing (F16/F17/F21-N3); see the module docstring for which silent
     failure each one prevents. Seeds `<work_dir>/dataset.extxyz` the same way
@@ -948,7 +1069,9 @@ def render_run_distill_sh(*, teacher_python: str, repo: Path, work_dir_abs: Path
     before handing off to D's own loop -- al_loop_local.sh itself REQUIRES
     that file to already exist and never builds it. `heldout_block` (acceptance
     mode) is spliced in between the pool seeding and the hand-off; `wallclock`
-    (from wallclock_plan) wraps the WHOLE script in the supervised re-exec."""
+    (from wallclock_plan) wraps the WHOLE script in the supervised re-exec.
+    `pool_structures` (staged copies of the 2nd and later --structure) split
+    the pool steps: one teacher MD per structure, all merged."""
     teacher_bin = str(Path(teacher_python).parent)
     repo_abs = str(repo.resolve())
     workdir_abs = str(work_dir_abs)
@@ -956,6 +1079,20 @@ def render_run_distill_sh(*, teacher_python: str, repo: Path, work_dir_abs: Path
     config_path = f"{workdir_abs}/config.yaml"
     supervisor = render_supervisor(work_dir_abs=work_dir_abs, wallclock=wallclock)
     launch = f'exec {_q(f"{repo_abs}/scripts/al_loop_local.sh")}\n'
+    teacher_md = _q(f"{repo_abs}/scripts/teacher_md.py")
+    steps = split_steps(pool_steps, 1 + len(pool_structures))
+    seed_lines = [f'    python {teacher_md} "$WORK/teacher_md.extxyz" {steps[0]} {pool_save_every}']
+    trajectories = ['"$WORK/teacher_md.extxyz"']
+    for k, (ps, n) in enumerate(zip(pool_structures, steps[1:]), start=1):
+        seed_lines.append(f'    {ENGINE_TEACHER_STRUCTURE}={_q(ps)} python {teacher_md} "$WORK/teacher_md_pool{k}.extxyz" '
+                          f'{n} {pool_save_every}')
+        trajectories.append(f'"$WORK/teacher_md_pool{k}.extxyz"')
+    seed_lines.append(f'    python -m ontheflydistill.merge_xyz "$WORK/dataset.extxyz" {" ".join(trajectories)}')
+    seeding = "\n".join(seed_lines)
+    split_note = ("" if not pool_structures else
+                  f"\n# The pool is split over {len(steps)} structures ({'/'.join(map(str, steps))} steps): the 2nd "
+                  f"and later run\n# through ${ENGINE_TEACHER_STRUCTURE}; the student MD runs the first "
+                  "(system.init_structure).")
     # Every host/operator-derived path below is shell-quoted (_q); no comment
     # line carries raw operator text (a `#` comment ends at a newline whatever
     # the quoting -- anything host-derived in a comment goes through _c).
@@ -988,10 +1125,9 @@ mkdir -p "$WORK"
 # Seed the initial AL-pool dataset -- exactly the two commands
 # examples/ptwater_acid/README.md documents, automated and made idempotent
 # (skipped on rerun once dataset.extxyz exists). al_loop_local.sh itself
-# never builds this file; it exits 1 if it is missing.
+# never builds this file; it exits 1 if it is missing.{split_note}
 if [ ! -s "$WORK/dataset.extxyz" ]; then
-    python {_q(f"{repo_abs}/scripts/teacher_md.py")} "$WORK/teacher_md.extxyz" {pool_steps} {pool_save_every}
-    python -m ontheflydistill.merge_xyz "$WORK/dataset.extxyz" "$WORK/teacher_md.extxyz"
+{seeding}
 fi
 {heldout_block}
 {launch}"""
@@ -1132,12 +1268,18 @@ def run_command(work: Path) -> str:
 
 def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Path, staged: Path, spec: dict,
                       specorder: list[str], generated: dict[str, Path], wallclock: dict | None = None,
-                      identity: dict | None = None) -> dict:
+                      identity: dict | None = None, pool: list[dict] | None = None,
+                      heldout_composition: dict | None = None) -> dict:
     """acceptance.json -- the approved contract distill_verify.py judges
     against. Nothing in here is a default: every threshold and budget came
     from a flag the operator typed (parse_args refuses otherwise)."""
     repo_abs = args.repo.resolve()
     heldout = heldout_path(work)
+    # every structure that seeds the pool: {path, staged, identity, composition};
+    # the first is the student-MD structure
+    pool = pool or [{"path": structure_abs, "staged": staged, "identity": identity or {}, "composition": None}]
+    pool_steps = split_steps(args.pool_steps, len(pool))
+    trajectories = ["teacher_md.extxyz"] + [f"teacher_md_pool{k}.extxyz" for k in range(1, len(pool))]
     if args.heldout_file is not None:
         split_heldout = {
             "source": "user_frames_relabelled_by_teacher",
@@ -1154,10 +1296,14 @@ def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Pa
             "steps": args.heldout_steps,
             "save_every": args.heldout_save_every,
             "raw_path": str(heldout_raw_path(work)),
+            "structures": [{"structure": str(ps["staged"]), "steps": n, "raw_path": str(heldout_raw_path(work, k))}
+                           for k, (ps, n) in enumerate(zip(pool, split_steps(args.heldout_steps, len(pool))))],
             "drops_frame0": "teacher_md.py saves the init structure before its first MD step for any seed, and "
                             "its step-0 observer call can save it again; run_distill.sh drops every leading copy "
                             "(the pool starts with the same frames)",
         }
+    if heldout_composition is not None:
+        split_heldout["composition_check"] = heldout_composition
     split_heldout.update({
         "path": str(heldout),
         "outside_engine_work_dir": True,
@@ -1186,7 +1332,12 @@ def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Pa
         "split": {
             "pool": {"teacher_md_seed": POOL_TEACHER_SEED, "steps": args.pool_steps,
                      "save_every": args.pool_save_every, "path": str(work / "run" / "dataset.extxyz"),
-                     "grows_by": "run/al_iter<K>_labeled.extxyz (teacher-relabelled pre-crash windows)"},
+                     "grows_by": "run/al_iter<K>_labeled.extxyz (teacher-relabelled pre-crash windows)",
+                     "structures": [{"structure": str(ps["staged"]), "source": str(ps["path"]), "steps": n,
+                                     "trajectory": str(work / "run" / t), "composition": ps["composition"]}
+                                    for ps, n, t in zip(pool, pool_steps, trajectories)],
+                     "student_md_structure": str(staged),
+                     "composition_rule": COMPOSITION_SPAN_RULE},
             "heldout": split_heldout,
         },
         "verdict_rule": {
@@ -1213,6 +1364,10 @@ def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Pa
                           "refused_at_bootstrap": "partial pbc, nonzero initial magmoms/charges, constraints "
                                                   "other than FixAtoms (the VASP staging would silently change "
                                                   "them; nothing is converted)"},
+            # every pool structure, the first included; distill_verify.py rehashes each source
+            "pool_structures": [{"path": str(ps["path"]), "sha256": _sha256(ps["path"]),
+                                 "staged_path": str(ps["staged"]), "staged_sha256": _sha256(ps["staged"]),
+                                 "identity": ps["identity"], "composition": ps["composition"]} for ps in pool],
             "lmp_bin": str(args.lmp_bin),
             # the binary's identity (scripts/build_lammps_nnmtp.sh records no --ref
             # into the work dir; the hash pins WHICH build the witness will run)
@@ -1261,6 +1416,14 @@ def render_plan_md(acc: dict, *, work: Path) -> str:
                     else f"user frames {_c(h['input_file'])} relabelled by the teacher")
     ident = p["structure"].get("identity") or {}
     ef = p["engine_facts"]
+    pool_structs = acc["split"]["pool"].get("structures") or []
+    pool_line = ("; ".join(f"{_c(st['source'])}: {st['steps']} steps, composition {st['composition']}"
+                           for st in pool_structs) + " (the student MD runs the first)") if pool_structs else "one"
+    cc = h.get("composition_check")
+    comp_line = (("all inside the span of the pool compositions" if not cc["outside"] else
+                  f"OUTSIDE the span of the pool compositions: {cc['outside']} ({cc['action']})")
+                 + f" -- {cc['rule']}" if cc else
+                 "generated from the pool structures, so inside the span of the pool compositions")
     w = b.get("wallclock_enforcement")
     wall = (f"{b['wallclock_max_h']} h = {w['limit_s']} s, enforced over the whole run ({w['covers']}) by "
             f"run_distill.sh re-running itself under GNU `timeout -k {w['grace_s']} {w['limit_s']}` (one process "
@@ -1304,7 +1467,9 @@ def render_plan_md(acc: dict, *, work: Path) -> str:
         ## 4. Split
 
         - AL pool: teacher MD seed {acc['split']['pool']['teacher_md_seed']}, {acc['split']['pool']['steps']} steps every {acc['split']['pool']['save_every']} -> `{acc['split']['pool']['path']}`, grown by {acc['split']['pool']['grows_by']}
+        - Pool structures: {pool_line}
         - Held-out: {heldout_line} -> `{h['path']}` (outside the engine work dir; {h['independence_rule']})
+        - Held-out compositions: {comp_line}
 
         ## Identity
 
@@ -1334,14 +1499,23 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     _require_deps()
     work = args.work.resolve()
-    structure_abs = args.structure.resolve()
+    structures_abs = [p.resolve() for p in args.structure]
+    structure_abs = structures_abs[0]   # the student MD's structure (system.init_structure)
 
-    # Validate the structure BEFORE creating the work dir or its log: a
+    # Validate the structures BEFORE creating the work dir or its log: a
     # too-many-species structure must be refused with nothing written to
     # disk yet, not after a work dir and bootstrap.log already exist.
-    atoms, specorder, species, masses = read_structure(structure_abs)
-    identity = structure_identity(atoms)
-    refuse_engine_without_frozen_masking(args.repo.resolve(), identity["fixed_atoms"], structure_abs)
+    atoms_list, specorder, species, masses = read_structures(structures_abs)
+    atoms = atoms_list[0]
+    identities = [structure_identity(a) for a in atoms_list]
+    identity = identities[0]
+    comps = [composition(a, specorder) for a in atoms_list]
+    for path, ident in zip(structures_abs, identities):
+        refuse_engine_without_frozen_masking(args.repo.resolve(), ident["fixed_atoms"], path)
+    refuse_engine_without_teacher_structure(args.repo.resolve(), len(structures_abs))
+    fixed_any = any(ident["fixed_atoms"] for ident in identities)
+    heldout_composition = None
+    composition_warning = None
     if args.acceptance and args.heldout_file is not None:
         # Read it here, before any output: an unreadable/empty held-out set is
         # refused with an actionable message, not a traceback and not a work
@@ -1357,7 +1531,7 @@ def main(argv=None) -> int:
         if not user_frames:
             raise SystemExit(f"--heldout-file {args.heldout_file} carries no frames; nothing to hold out. "
                              "Nothing was written.")
-        # The student only knows the structure's species (config system.species);
+        # The student only knows the structures' species (config system.species);
         # a held-out frame with an element outside that set cannot be evaluated.
         extra = sorted({s for fr in user_frames for s in fr.get_chemical_symbols()} - set(specorder))
         if extra:
@@ -1365,38 +1539,69 @@ def main(argv=None) -> int:
                 f"--heldout-file {args.heldout_file} contains species {extra} absent from "
                 f"--structure ({specorder}); the student cannot be evaluated on them."
             )
-        # The AL pool's teacher MD starts with the init structure itself
-        # (teacher_md.py frame 0): a user held-out set containing that frame
-        # would share it with the pool. Refuse now rather than fail at verify.
         # Frozen atoms are left out of the held-out force MAE frame by frame,
         # so a frame that does not say which atoms are frozen cannot be scored
         # against a student trained on a FixAtoms structure: refuse, never guess.
-        if identity["fixed_atoms"]:
+        if fixed_any:
             unmarked = [i for i, fr in enumerate(user_frames) if not has_frozen_info(fr)]
             if unmarked:
                 shown = ", ".join(map(str, unmarked[:10])) + (" ..." if len(unmarked) > 10 else "")
+                frozen_counts = "/".join(str(len(ident["fixed_atoms"])) for ident in identities)
                 raise SystemExit(
                     f"--heldout-file {args.heldout_file}: frame(s) {shown} do not say which atoms are frozen "
                     f"(no FixAtoms constraint, no per-atom `frozen` or `move_mask` array), while --structure "
-                    f"freezes {len(identity['fixed_atoms'])} atoms. The force MAE leaves frozen atoms out frame by "
+                    f"freezes {frozen_counts} atoms. The force MAE leaves frozen atoms out frame by "
                     "frame, so mark them in every frame -- a FixAtoms constraint (an ase .traj keeps it on every "
                     "ase version), or a boolean per-atom `frozen` column in extxyz (False on every atom where none "
                     "is frozen). Nothing was written.")
-        init_fp = frame_fingerprint(atoms)
-        shared = [i for i, fr in enumerate(user_frames) if frame_fingerprint(fr) == init_fp]
-        if shared:
-            raise SystemExit(
-                f"--heldout-file {args.heldout_file}: frame(s) {shared} are the init structure "
-                f"{structure_abs}, which the AL pool's teacher MD saves as its frame 0 -- a held-out set "
-                "may not share a frame with the pool; remove them."
-            )
+        # Each pool teacher MD starts with its init structure (teacher_md.py
+        # frame 0): a user held-out set containing one of them would share it
+        # with the pool. Refuse now rather than fail at verify.
+        for path, struct in zip(structures_abs, atoms_list):
+            init_fp = frame_fingerprint(struct)
+            shared = [i for i, fr in enumerate(user_frames) if frame_fingerprint(fr) == init_fp]
+            if shared:
+                raise SystemExit(
+                    f"--heldout-file {args.heldout_file}: frame(s) {shared} are the init structure "
+                    f"{path}, which the AL pool's teacher MD saves as its frame 0 -- a held-out set "
+                    "may not share a frame with the pool; remove them."
+                )
+        # Per-species energies are fixed by the pool only along its
+        # compositions: a held-out composition outside their span gets a
+        # per-composition energy constant the pool never constrained.
+        held = {}
+        for fr in user_frames:
+            key = tuple(composition(fr, specorder))
+            held[key] = held.get(key, 0) + 1
+        pool_unique = sorted({tuple(c) for c in comps})
+        inside = in_composition_span([list(c) for c in pool_unique], [list(k) for k in held])
+        named = lambda c: dict(zip(specorder, (int(n) for n in c)))  # noqa: E731
+        outside = [named(k) for k, ok in zip(held, inside) if not ok]
+        heldout_composition = {
+            "rule": COMPOSITION_SPAN_RULE,
+            "pool": [named(c) for c in pool_unique],
+            "heldout": [{"composition": named(k), "n_frames": n, "in_pool_span": ok}
+                        for (k, n), ok in zip(held.items(), inside)],
+            "outside": outside,
+            "action": "none" if not outside else ("refused" if args.mode == "production" else "warned"),
+        }
+        if outside:
+            what = (f"--heldout-file {args.heldout_file}: composition(s) {outside} lie outside the span of the pool "
+                    f"composition(s) {[named(c) for c in pool_unique]}. The pool does not identify per-species "
+                    "energies there, so the held-out energy error on those frames is a per-composition constant, "
+                    "not the student's accuracy.")
+            if args.mode == "production":
+                raise SystemExit(what + " Add a --structure whose composition spans them (for example the same "
+                                 "system with another number of solvent molecules), or hold out frames of the pool "
+                                 "compositions. Nothing was written.")
+            composition_warning = what + " A fixture does not gate on the thresholds; recorded, not refused."
 
     # Output ownership, before the first write: a non-empty --work (a previous
     # bootstrap, a run/ tree, the source parked at structure_init.vasp, a
     # symlink/hardlink at an output name) is refused; nothing is overwritten,
     # regenerated or deleted. Every write below is O_EXCL|O_NOFOLLOW.
     heldout_abs = args.heldout_file.resolve() if (args.acceptance and args.heldout_file is not None) else None
-    refuse_unowned_work(work, structure_abs=structure_abs, heldout_abs=heldout_abs)
+    refuse_unowned_work(work, structure_abs=structure_abs, heldout_abs=heldout_abs, pool_abs=structures_abs[1:])
     work.mkdir(parents=True, exist_ok=True)
     # The log is created exclusively once, here, and every later line goes to
     # this retained stream -- the pathname is never reopened, so nothing
@@ -1408,6 +1613,17 @@ def main(argv=None) -> int:
         staged = stage_structure(atoms, work)
         _log(log, f"  staged as {staged} (D's teacher_md.py reads format=vasp only; source untouched; read back and "
                    f"compared: pbc={identity['pbc']}, fixed atoms={identity['fixed_atoms']})")
+        pool_staged = []
+        for k, (path, struct, ident) in enumerate(zip(structures_abs[1:], atoms_list[1:], identities[1:]), start=1):
+            pool_staged.append(stage_pool_structure(struct, work, k))
+            _log(log, f"  pool structure {k}: {path} staged as {pool_staged[-1]} (read back and compared: "
+                       f"pbc={ident['pbc']}, fixed atoms={ident['fixed_atoms']}, composition "
+                       f"{dict(zip(specorder, comps[k]))})")
+        if pool_staged:
+            _log(log, f"  pool of {len(structures_abs)} structures, {'/'.join(map(str, split_steps(args.pool_steps, len(structures_abs))))} "
+                       "teacher-MD steps; the student MD runs the first")
+        if composition_warning:
+            _log(log, f"  WARNING: {composition_warning}")
 
         loop, example_cfg = check_repo(args.repo, log)
         spec = resolve_teacher(args.teacher, log)
@@ -1441,7 +1657,7 @@ def main(argv=None) -> int:
             heldout_block = render_heldout_block(
                 repo_abs=str(args.repo.resolve()), work_dir_abs=work, heldout_file=args.heldout_file,
                 heldout_seed=args.heldout_seed, heldout_steps=args.heldout_steps,
-                heldout_save_every=args.heldout_save_every,
+                heldout_save_every=args.heldout_save_every, pool_structures=pool_staged,
             )
         _log(log, "step 4/4: write run_distill.sh")
         run_sh = render_run_distill_sh(
@@ -1449,6 +1665,7 @@ def main(argv=None) -> int:
             pool_steps=args.pool_steps, pool_save_every=args.pool_save_every,
             heldout_block=heldout_block,
             wallclock=wallclock,
+            pool_structures=pool_staged,
         )
         run_path = work / "run_distill.sh"
         _write_new(run_path, run_sh, mode=0o755)
@@ -1457,8 +1674,12 @@ def main(argv=None) -> int:
             _log(log, f"acceptance ({args.mode}): write acceptance.json + PLAN.md")
             generated = {"config.yaml": work / "config.yaml", "run_distill.sh": run_path,
                          "omm_teacher.py": work / "omm_teacher.py", STAGED_STRUCTURE: staged}
+            generated.update({p.name: p for p in pool_staged})
+            pool = [{"path": path, "staged": st, "identity": ident, "composition": dict(zip(specorder, comp))}
+                    for path, st, ident, comp in zip(structures_abs, [staged, *pool_staged], identities, comps)]
             acc = render_acceptance(args, work=work, structure_abs=structure_abs, staged=staged, spec=spec,
-                                    specorder=specorder, generated=generated, wallclock=wallclock, identity=identity)
+                                    specorder=specorder, generated=generated, wallclock=wallclock, identity=identity,
+                                    pool=pool, heldout_composition=heldout_composition)
             if wallclock:
                 _log(log, f"  wall-clock: {wallclock['limit_s']} s enforced by {wallclock['timeout_bin']} "
                            f"(-k {wallclock['grace_s']}); marker {wallclock['marker']}")
