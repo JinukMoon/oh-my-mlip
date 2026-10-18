@@ -256,7 +256,9 @@ with **at most 4 elements**) if missing.
 1. **Once:** `scripts/build_lammps_nnmtp.sh --repo <engine>` builds LAMMPS with
    `pair_style nnmtp` under `$HOME/.cache/oh-my-mlip/lammps`. It is long and
    unattended; skip it if `$HOME/.cache/oh-my-mlip/lammps/build/lmp -h` already
-   lists `nnmtp`.
+   lists `nnmtp` and the engine has not been updated since. After an engine
+   update, run it again (it recompiles only the pair style): a binary that
+   cannot read the engine's model format is refused by `distill_bootstrap.py`.
 2. **`scripts/distill_bootstrap.py --teacher <variant> --structure <file> --work
    <dir> --repo <engine> [--target-ps F]`** writes three files into a new or empty
    work dir and runs nothing:

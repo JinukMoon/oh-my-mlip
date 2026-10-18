@@ -1256,6 +1256,49 @@ def test_user_heldout_equal_to_a_later_pool_structure_is_refused(tmp_path, fake_
                  "--pool-steps", "40", "--pool-save-every", "10", "--heldout-file", str(held)])
 
 
+# ── a LAMMPS that cannot read the engine's model format is refused up front ──
+def _engine_exporting(fake_d: Path, magic: str) -> None:
+    (fake_d / "ontheflydistill" / "common.py").write_text(f'EXPORT_MAGIC = {{"form": b"{magic}"}}\n')
+
+
+def _lmp_reading(tmp_path: Path, *magics: str) -> Path:
+    lmp = tmp_path / "lmp"
+    lmp.write_bytes(b"\x7fELF fake lmp\0" + b"".join(m.encode() + b"\0" for m in magics))
+    lmp.chmod(0o755)
+    return lmp
+
+
+def test_lmp_older_than_the_engine_format_is_refused_before_anything_is_written(tmp_path, fake_d, cu_structure):
+    _engine_exporting(fake_d, "NNMTPF")
+    work = tmp_path / "w"
+    with pytest.raises(SystemExit, match=r"cannot read the students this engine exports.*writes NNMTPF.*reads "
+                                         r"\['NNMTP1'\].*build_lammps_nnmtp.sh.*Nothing was written"):
+        db.main(["--teacher", "MACE-MPA-0", "--structure", str(cu_structure), "--work", str(work),
+                 "--repo", str(fake_d), "--lmp-bin", str(_lmp_reading(tmp_path, "NNMTP1"))])
+    assert not work.exists()
+
+
+def test_current_lmp_is_accepted_and_both_formats_are_recorded(tmp_path, fake_d, cu_structure):
+    _engine_exporting(fake_d, "NNMTPF")
+    lmp = _lmp_reading(tmp_path, "NNMTP1", "NNMTPF")
+    work = _acc_main(tmp_path, fake_d, cu_structure, *ACC_BASE, "--lmp-bin", str(lmp))
+    prov = json.loads((work / "acceptance.json").read_text())["provenance"]
+    assert prov["engine_export_magic"] == "NNMTPF" and prov["lmp_bin_reads"] == ["NNMTP1", "NNMTPF"]
+    assert "(reads ['NNMTP1', 'NNMTPF']; the engine exports NNMTPF)" in (work / "PLAN.md").read_text()
+
+
+@pytest.mark.parametrize("engine,lmp_magics", [("NNMTP1", ("NNMTP1",)), ("NNMTPF", None), (None, ("NNMTP1",))])
+def test_formats_are_not_judged_when_the_engine_is_older_or_the_lmp_absent(tmp_path, fake_d, cu_structure,
+                                                                         engine, lmp_magics):
+    if engine:
+        _engine_exporting(fake_d, engine)
+    lmp = _lmp_reading(tmp_path, *lmp_magics) if lmp_magics else tmp_path / "not_built_yet" / "lmp"
+    work = _acc_main(tmp_path, fake_d, cu_structure, *ACC_BASE, "--lmp-bin", str(lmp))
+    prov = json.loads((work / "acceptance.json").read_text())["provenance"]
+    assert prov["engine_export_magic"] == engine
+    assert prov["lmp_bin_reads"] == (list(lmp_magics) if lmp_magics else None)
+
+
 # ── every rendered path is shell-quoted: spaces, apostrophes, $(...) ──────────
 HOSTILE = "a b'c$(touch pwned)d"
 

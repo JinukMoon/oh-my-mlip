@@ -316,6 +316,47 @@ ENGINE_FROZEN_ATOMS = ("FixAtoms atoms are labelled with the teacher's real forc
                        "ontheflydistill/frozen.py, common.compute_loss/validate; each frame carries them as a "
                        "boolean per-atom `frozen` array")
 
+# The .bin magic names the nu=2 descriptor a student was trained with:
+# NNMTP1 = tr(M2) (engines before d02aa2e), NNMTPF = ||M2||_F^2. The engine's
+# exporter (ontheflydistill/common.py) writes one of them, and pair_style nnmtp
+# carries the magics it accepts as string literals, so both are read from the
+# files themselves. A LAMMPS that cannot read what the engine exports would
+# only fail at the first student MD, after the teacher MD and the training.
+NNMTP_MAGICS = ("NNMTP1", "NNMTPF")
+
+
+def engine_export_magic(repo: Path) -> str | None:
+    """The magic the engine's export_v1 writes for new students, None if unknown."""
+    common = repo / "ontheflydistill" / "common.py"
+    if not common.is_file():
+        return None
+    text = common.read_text(encoding="utf-8", errors="replace")
+    return "NNMTPF" if "NNMTPF" in text else ("NNMTP1" if "NNMTP1" in text else None)
+
+
+def lmp_reads(lmp_bin: Path) -> list[str] | None:
+    """The .bin magics a LAMMPS binary's pair_style nnmtp accepts, None if absent."""
+    if not lmp_bin.is_file():
+        return None
+    data = lmp_bin.read_bytes()
+    return [m for m in NNMTP_MAGICS if m.encode() in data]
+
+
+def refuse_stale_lmp(repo: Path, lmp_bin: Path) -> None:
+    """A LAMMPS built from pair_nnmtp sources older than the engine cannot read
+    the students the engine exports; refuse it before anything is written. A
+    binary that does not exist yet is left to the run (as before)."""
+    magic, reads = engine_export_magic(repo), lmp_reads(lmp_bin)
+    if magic is None or reads is None or magic in reads:
+        return
+    raise SystemExit(
+        f"--lmp-bin {lmp_bin} cannot read the students this engine exports: {repo}/ontheflydistill/common.py writes "
+        f"{magic} model files and this binary's pair_style nnmtp reads {reads or 'no known NN-MTP format'} -- it "
+        "was built from older pair_nnmtp sources, and the student MD would fail ('Invalid model file') after the "
+        f"teacher MD and the training. Rebuild it from this engine (scripts/build_lammps_nnmtp.sh --repo {repo}) "
+        "or pass --lmp-bin to a current build. Nothing was written.")
+
+
 # Per-frame identity shared with distill_verify.frame_fingerprints: Z + positions
 # rounded to 1e-4 A. Kept in sync by hand (D is invoked, the two hub scripts
 # stay import-free of each other).
@@ -1372,6 +1413,10 @@ def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Pa
             # the binary's identity (scripts/build_lammps_nnmtp.sh records no --ref
             # into the work dir; the hash pins WHICH build the witness will run)
             "lmp_bin_sha256": _sha256(args.lmp_bin) if args.lmp_bin.is_file() else None,
+            # the .bin formats: what the engine exports, what this LAMMPS reads
+            # (checked at bootstrap -- refuse_stale_lmp)
+            "engine_export_magic": engine_export_magic(repo_abs),
+            "lmp_bin_reads": lmp_reads(args.lmp_bin),
             "generated_files": {name: {"path": str(p), "sha256": _sha256(p)} for name, p in generated.items()},
             "work_dir_policy": WORK_DIR_POLICY,
             "identity_rule": "distill_verify.py recomputes every sha256 above (generated files, structure, "
@@ -1447,7 +1492,7 @@ def render_plan_md(acc: dict, *, work: Path) -> str:
         - Physical contract (engine design, disclosed not reconciled): labels {ef['labeling_pbc']}; student MD `{ef['student_md_boundary']}`; input requirement: {ef['input_requirement']}. {ef['boundary_note']}. Frozen atoms: {ef['frozen_atoms']}
         - Engine: `{p['engine']['repo']}` @ {p['engine']['head'] or 'not a git checkout'} ({p['engine']['licence']})
         - Hub: {p['hub']['head'] or 'not a git checkout'}{' (dirty working tree)' if p['hub']['dirty'] else ''}
-        - LAMMPS: `{p['lmp_bin']}`
+        - LAMMPS: `{p['lmp_bin']}` (reads {p.get('lmp_bin_reads')}; the engine exports {p.get('engine_export_magic')})
 
         ## 1. Accuracy targets (held-out)
 
@@ -1513,6 +1558,7 @@ def main(argv=None) -> int:
     for path, ident in zip(structures_abs, identities):
         refuse_engine_without_frozen_masking(args.repo.resolve(), ident["fixed_atoms"], path)
     refuse_engine_without_teacher_structure(args.repo.resolve(), len(structures_abs))
+    refuse_stale_lmp(args.repo.resolve(), args.lmp_bin)
     fixed_any = any(ident["fixed_atoms"] for ident in identities)
     heldout_composition = None
     composition_warning = None
