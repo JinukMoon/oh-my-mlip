@@ -212,8 +212,8 @@ ACCEPTANCE_MODES = ("fixture", "production")
 WALLCLOCK_GRACE_S = 60
 WALLCLOCK_MARKER = ".distill/wallclock.json"
 WALLCLOCK_ATTEMPT = ".distill/attempt.json"
-WALLCLOCK_SCHEMA = "oh-my-mlip.distill.wallclock/3"  # /3: carries `attribution`
-ATTEMPT_SCHEMA = "oh-my-mlip.distill.attempt/1"
+WALLCLOCK_SCHEMA = "oh-my-mlip.distill.wallclock/4"  # /4: boot-clock stamps + .al_status end snapshot
+ATTEMPT_SCHEMA = "oh-my-mlip.distill.attempt/2"      # /2: boot-clock start + .al_status start snapshot
 WALLCLOCK_EXHAUSTED_RCS = (124, 137)  # GNU timeout: expired (TERM) / had to KILL
 # rc 137 is also what a SIGKILLed engine returns (OOM killer, `kill -9`, ...)
 # at any time. rc + elapsed can only place a 137 before or at/after the
@@ -1006,25 +1006,41 @@ if [ -z "${{OMM_DISTILL_ATTEMPT:-}}" ]; then
     MARKER={_q(w['marker'])}
     ATTEMPT_FILE={_q(w['attempt'])}
     mkdir -p "$(dirname "$MARKER")"
+    STATUS={_q(work_dir_abs / "run" / ".al_status")}
     ATTEMPT="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-    # elapsed comes from the boot-time clock: the wall clock can be stepped
-    # back by time sync (WSL does this under load), which once turned a 2 s
-    # timeout into elapsed_s 0; the epoch stamps stay wall-clock for the record
-    _omm_mono() {{ if [ -r /proc/uptime ]; then cut -d. -f1 /proc/uptime; else date +%s; fi; }}
+    # Time comes from the boot clock (/proc/uptime): the wall clock can be
+    # stepped by time sync (WSL steps it by minutes under load), so elapsed_s
+    # and the *_boot_s stamps use the boot clock and the epoch stamps are kept
+    # for the record only. The engine's .al_status is bound to this attempt by
+    # content + mtime snapshots taken here and after the run, not by comparing
+    # its mtime with wall-clock stamps.
+    if [ -r /proc/uptime ]; then CLOCK=boot; else CLOCK=epoch; fi
+    _omm_mono() {{ if [ "$CLOCK" = boot ]; then cut -d. -f1 /proc/uptime; else date +%s; fi; }}
+    _omm_status() {{
+        if [ -f "$STATUS" ]; then
+            printf '{{"present": true, "sha256": "%s", "mtime_ns": %s}}' \\
+                "$(sha256sum "$STATUS" | cut -d ' ' -f 1)" "$(date -r "$STATUS" +%s%N)"
+        else
+            printf '{{"present": false}}'
+        fi
+    }}
     START_M=$(_omm_mono)
     START_S=$(date +%s)
     START_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     SELF_SHA=$(sha256sum "$SELF" | cut -d ' ' -f 1)
+    STATUS_BEFORE=$(_omm_status)
     rm -f "$MARKER"
-    printf '{{"schema": "{ATTEMPT_SCHEMA}", "attempt": "%s", "started_utc": "%s", "started_epoch_s": %d, "limit_s": {w['limit_s']}, "grace_s": {w['grace_s']}, "run_script": %s, "run_script_sha256": "%s", "supervisor_pid": %d, "covers": "{WALLCLOCK_COVERS}"}}\\n' \\
-        "$ATTEMPT" "$START_UTC" "$START_S" {self_json} "$SELF_SHA" "$$" > "$ATTEMPT_FILE"
+    printf '{{"schema": "{ATTEMPT_SCHEMA}", "attempt": "%s", "started_utc": "%s", "started_epoch_s": %d, "clock": "%s", "started_boot_s": %d, "limit_s": {w['limit_s']}, "grace_s": {w['grace_s']}, "run_script": %s, "run_script_sha256": "%s", "supervisor_pid": %d, "al_status_before": %s, "covers": "{WALLCLOCK_COVERS}"}}\\n' \\
+        "$ATTEMPT" "$START_UTC" "$START_S" "$CLOCK" "$START_M" {self_json} "$SELF_SHA" "$$" "$STATUS_BEFORE" > "$ATTEMPT_FILE"
     echo "[run_distill] attempt $ATTEMPT: wall-clock bound {w['limit_s']} s over the whole run -> $ATTEMPT_FILE"
     set +e
     OMM_DISTILL_ATTEMPT="$ATTEMPT" {_q(w['timeout_bin'])} -k {w['grace_s']} {w['limit_s']} /bin/sh "$SELF"
     RC=$?
     set -e
+    END_M=$(_omm_mono)
     END_S=$(date +%s)
-    ELAPSED_S=$(( $(_omm_mono) - START_M ))
+    ELAPSED_S=$(( END_M - START_M ))
+    STATUS_AFTER=$(_omm_status)
     if [ "$RC" -eq 124 ]; then
         STATE=exhausted; WHY=timeout_term
     elif [ "$RC" -eq 137 ] && [ "$ELAPSED_S" -ge {w['limit_s']} ]; then
@@ -1036,8 +1052,8 @@ if [ -z "${{OMM_DISTILL_ATTEMPT:-}}" ]; then
     else
         STATE=engine_exit; WHY=exit_nonzero
     fi
-    printf '{{"schema": "{WALLCLOCK_SCHEMA}", "attempt": "%s", "state": "%s", "attribution": "%s", "returncode": %d, "limit_h": {w['limit_h']}, "limit_s": {w['limit_s']}, "grace_s": {w['grace_s']}, "started_utc": "%s", "started_epoch_s": %d, "ended_utc": "%s", "ended_epoch_s": %d, "elapsed_s": %d, "run_script_sha256": "%s", "covers": "{WALLCLOCK_COVERS}"}}\\n' \\
-        "$ATTEMPT" "$STATE" "$WHY" "$RC" "$START_UTC" "$START_S" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$END_S" "$ELAPSED_S" "$SELF_SHA" > "$MARKER"
+    printf '{{"schema": "{WALLCLOCK_SCHEMA}", "attempt": "%s", "state": "%s", "attribution": "%s", "returncode": %d, "limit_h": {w['limit_h']}, "limit_s": {w['limit_s']}, "grace_s": {w['grace_s']}, "started_utc": "%s", "started_epoch_s": %d, "ended_utc": "%s", "ended_epoch_s": %d, "clock": "%s", "started_boot_s": %d, "ended_boot_s": %d, "elapsed_s": %d, "run_script_sha256": "%s", "al_status_after": %s, "covers": "{WALLCLOCK_COVERS}"}}\\n' \\
+        "$ATTEMPT" "$STATE" "$WHY" "$RC" "$START_UTC" "$START_S" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$END_S" "$CLOCK" "$START_M" "$END_M" "$ELAPSED_S" "$SELF_SHA" "$STATUS_AFTER" > "$MARKER"
     echo "[run_distill] wall-clock $STATE ($WHY): rc=$RC after $ELAPSED_S s of {w['limit_s']} s -> $MARKER"
     exit "$RC"
 fi

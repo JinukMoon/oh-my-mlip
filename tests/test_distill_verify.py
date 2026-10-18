@@ -660,17 +660,25 @@ def _with_wallclock(run: FakeRun, marker_state: str | None, *, hours: float = 1.
     rc = {"exhausted": 124, "within": 0, "engine_exit": 2, None: None}[marker_state]
     elapsed = limit_s + 1 if marker_state == "exhausted" else 12
     started = now - elapsed + 1
+    boot0 = 5000  # the boot clock (/proc/uptime) at the attempt's start
     if attempt:
         (d / "attempt.json").write_text(json.dumps({
             "schema": db.ATTEMPT_SCHEMA, "attempt": attempt_id, "started_utc": "x", "started_epoch_s": started,
+            "clock": "boot", "started_boot_s": boot0,
             "limit_s": limit_s, "grace_s": 60, "run_script": str(run.work / "run_distill.sh"),
-            "run_script_sha256": script_sha, "supervisor_pid": 1, "covers": db.WALLCLOCK_COVERS}))
+            "run_script_sha256": script_sha, "supervisor_pid": 1, "al_status_before": {"present": False},
+            "covers": db.WALLCLOCK_COVERS}))
     if marker_state is not None:
         marker = {"schema": db.WALLCLOCK_SCHEMA, "attempt": attempt_id, "state": marker_state, "returncode": rc,
                   "limit_h": hours, "limit_s": limit_s, "grace_s": 60, "started_utc": "x", "started_epoch_s": started,
-                  "ended_utc": "y", "ended_epoch_s": started + elapsed, "elapsed_s": elapsed,
-                  "run_script_sha256": script_sha, "covers": db.WALLCLOCK_COVERS}
+                  "ended_utc": "y", "ended_epoch_s": started + elapsed, "clock": "boot", "started_boot_s": boot0,
+                  "elapsed_s": elapsed, "run_script_sha256": script_sha,
+                  "al_status_after": dv.status_snapshot(status), "covers": db.WALLCLOCK_COVERS}
         marker.update(marker_edit or {})
+        # the supervisor computes elapsed_s as ended_boot_s - started_boot_s
+        # (an edit may set its own to fake a disagreement)
+        marker.setdefault("ended_boot_s", boot0 + marker["elapsed_s"]
+                          if isinstance(marker.get("elapsed_s"), int) else None)
         # the supervisor's attribution for the FINAL rc/elapsed (an edit may
         # set its own to fake a disagreeing token)
         marker.setdefault("attribution", dv.wallclock_attribution(marker["returncode"], marker["elapsed_s"], limit_s)
@@ -749,8 +757,13 @@ def test_wallclock_corrupt_or_old_schema_marker_cannot_pass(prod, monkeypatch, t
     ({"limit_s": 7200}, "limit/grace"),                                  # not the approved bound
     ({"run_script_sha256": "0" * 64}, "not the approved run_distill.sh"),  # a different script ran
     ({"returncode": 124}, "says within but rc=124"),                     # state/rc inconsistent
-    ({"elapsed_s": 99999}, "!= ended - started"),                        # timestamps inconsistent
-    ({"started_epoch_s": 1, "ended_epoch_s": 13}, "outside this attempt's window"),  # .al_status not this attempt's
+    ({"ended_boot_s": 5001}, "!= ended_boot_s - started_boot_s"),        # elapsed not the boot-clock difference
+    ({"started_boot_s": 7}, "boot-clock start != start record"),         # boot stamps from another start
+    ({"clock": "tsc"}, "marker clock 'tsc'"),                            # unknown clock
+    ({"elapsed_s": 99999}, "exceeds the 3600 s bound"),                  # within, yet longer than the bound
+    ({"started_epoch_s": 1}, "marker start time != start record"),       # epoch start from another attempt
+    ({"al_status_after": {"present": False}}, "absent when this attempt ended but present now"),
+    ({"al_status_after": None}, "al_status_after missing or malformed"),
 ])
 def test_wallclock_fabricated_within_marker_cannot_pass(prod, monkeypatch, edit, needle):
     prod.happy()
@@ -770,7 +783,94 @@ def test_wallclock_stale_marker_over_a_newer_status_cannot_pass(prod, monkeypatc
     os.utime(status, (time.time() + 600, time.time() + 600))
     rc, report = prod.verify(monkeypatch)
     assert (report["state"], report["reason"]) == ("failed", "wallclock_evidence")
+    assert "changed after this attempt ended" in report["detail"]
+
+
+def test_wall_clock_stepped_back_is_reported_not_judged(prod, monkeypatch):
+    # the paper run's shape: elapsed 10361 s on the boot clock, 10069 s between
+    # the epoch stamps (WSL time sync stepped the wall clock back 292 s)
+    prod.happy()
+    _with_wallclock(prod, "within", hours=4.0, marker_edit={"elapsed_s": 10361})
+    marker = json.loads((prod.work / ".distill" / "wallclock.json").read_text())
+    marker["ended_epoch_s"] = marker["started_epoch_s"] + 10069
+    (prod.work / ".distill" / "wallclock.json").write_text(json.dumps(marker))
+    rc, report = prod.verify(monkeypatch)
+    assert rc == 0 and report["state"] == "passed", report["detail"]
+    assert report["wallclock"] == {**report["wallclock"], "valid": True, "wall_clock_step_s": -292, "clock": "boot",
+                                   "al_status_binding": "start/end content+mtime snapshots"}
+    assert "stepped by -292 s" in (prod.work / "verify" / "verify.log").read_text()
+    row = json.loads((prod.work / ".distill" / "ledger.jsonl").read_text().splitlines()[-1])
+    assert row["evidence"]["wall_clock_step_s"] == -292
+
+
+def test_status_unchanged_since_the_attempt_started_cannot_pass(prod, monkeypatch):
+    # the loop never rewrote .al_status in this attempt: the SUCCESS on disk is
+    # an earlier attempt's, whatever the clocks say
+    prod.happy()
+    _with_wallclock(prod, "within")
+    attempt = json.loads((prod.work / ".distill" / "attempt.json").read_text())
+    attempt["al_status_before"] = dv.status_snapshot(prod.run / ".al_status")
+    (prod.work / ".distill" / "attempt.json").write_text(json.dumps(attempt))
+    rc, report = prod.verify(monkeypatch)
+    assert rc == 1 and (report["state"], report["reason"]) == ("failed", "wallclock_evidence")
+    assert "unchanged since this attempt started" in report["detail"]
+
+
+def test_status_gone_after_the_attempt_cannot_pass(prod, monkeypatch):
+    prod.happy()
+    _with_wallclock(prod, "within")
+    (prod.run / ".al_status").unlink()
+    _, report = prod.verify(monkeypatch)
+    assert (report["state"], report["reason"]) == ("failed", "wallclock_evidence")
+    assert "is gone now" in report["detail"]
+
+
+def _legacy_records(run: FakeRun, *, elapsed: int, epoch_diff: int, status_offset_s: int) -> None:
+    """attempt/1 + wallclock/3 as the previous supervisor wrote them: no boot
+    stamps, no snapshots; .al_status written `status_offset_s` after ended."""
+    _with_wallclock(run, "within", hours=4.0)
+    d = run.work / ".distill"
+    attempt = json.loads((d / "attempt.json").read_text())
+    marker = json.loads((d / "wallclock.json").read_text())
+    for rec in (attempt, marker):
+        for key in ("clock", "started_boot_s", "ended_boot_s", "al_status_before", "al_status_after"):
+            rec.pop(key, None)
+    attempt["schema"], marker["schema"] = dv.ATTEMPT_SCHEMA_V1, dv.WALLCLOCK_SCHEMA_V3
+    marker.update(elapsed_s=elapsed, ended_epoch_s=marker["started_epoch_s"] + epoch_diff)
+    (d / "attempt.json").write_text(json.dumps(attempt))
+    (d / "wallclock.json").write_text(json.dumps(marker))
+    t = marker["ended_epoch_s"] + status_offset_s
+    os.utime(run.run / ".al_status", (t, t))
+
+
+def test_legacy_marker_with_a_stepped_clock_is_read_and_its_window_widened(prod, monkeypatch):
+    # a /3 marker from the previous supervisor: the step is reported, and a
+    # status written before the step (up to 292 s past the stepped end) is in
+    prod.happy()
+    _legacy_records(prod, elapsed=10361, epoch_diff=10069, status_offset_s=200)
+    rc, report = prod.verify(monkeypatch)
+    assert rc == 0 and report["state"] == "passed", report["detail"]
+    assert report["wallclock"]["wall_clock_step_s"] == -292 and report["wallclock"]["clock"] == "epoch (legacy /3)"
+    assert "legacy /3" in report["wallclock"]["al_status_binding"]
+
+
+def test_legacy_marker_window_still_rejects_a_status_far_outside_it(prod, monkeypatch):
+    prod.happy()
+    _legacy_records(prod, elapsed=10361, epoch_diff=10069, status_offset_s=1000)
+    _, report = prod.verify(monkeypatch)
+    assert (report["state"], report["reason"]) == ("failed", "wallclock_evidence")
     assert "outside this attempt's window" in report["detail"]
+
+
+def test_marker_schema_must_pair_with_the_start_record(prod, monkeypatch):
+    prod.happy()
+    _with_wallclock(prod, "within")
+    attempt = json.loads((prod.work / ".distill" / "attempt.json").read_text())
+    attempt["schema"] = dv.ATTEMPT_SCHEMA_V1
+    (prod.work / ".distill" / "attempt.json").write_text(json.dumps(attempt))
+    _, report = prod.verify(monkeypatch)
+    assert (report["state"], report["reason"]) == ("failed", "wallclock_evidence")
+    assert "does not pair with start record schema" in report["detail"]
 
 
 def test_wallclock_exhausted_marker_that_is_unbound_is_failed_not_unmet(prod, monkeypatch):

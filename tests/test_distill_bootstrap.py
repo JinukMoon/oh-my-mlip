@@ -607,11 +607,16 @@ def _assert_bound_marker(work: Path, *, state: str, rc: int, limit_s: int) -> di
     assert attempt["run_script_sha256"] == marker["run_script_sha256"] == approved == db._sha256(work / "run_distill.sh")
     assert marker["state"] == state and marker["returncode"] == rc
     assert marker["limit_s"] == attempt["limit_s"] == limit_s and marker["grace_s"] == db.WALLCLOCK_GRACE_S
-    # elapsed_s is measured on the boot-time clock, the epoch stamps on the wall
-    # clock: they agree to within the verifier's slack, not to the second
+    # elapsed_s and the *_boot_s stamps come from the boot clock (/proc/uptime)
+    # and agree exactly; the epoch stamps are wall clock, kept for the record
+    # (time sync may step it, so they are not compared with elapsed here)
     import distill_verify as dv
-    assert marker["elapsed_s"] >= 0
-    assert abs(marker["elapsed_s"] - (marker["ended_epoch_s"] - marker["started_epoch_s"])) <= dv.MTIME_SLACK_S
+    assert marker["clock"] == attempt["clock"] == ("boot" if os.access("/proc/uptime", os.R_OK) else "epoch")
+    assert marker["started_boot_s"] == attempt["started_boot_s"]
+    assert marker["elapsed_s"] == marker["ended_boot_s"] - marker["started_boot_s"] >= 0
+    # the engine's status as the attempt left it: the end snapshot is what is on disk
+    assert marker["al_status_after"] == dv.status_snapshot(work / "run" / ".al_status")
+    assert isinstance(attempt["al_status_before"]["present"], bool)
     assert marker["covers"] == db.WALLCLOCK_COVERS
     # the supervisor's attribution token is the one the verifier recomputes
     assert marker["attribution"] == dv.wallclock_attribution(rc, marker["elapsed_s"], limit_s)
@@ -700,6 +705,65 @@ def test_wallclock_new_attempt_removes_the_previous_marker_first(tmp_path, fake_
     attempt = json.loads((work / ".distill" / "attempt.json").read_text())
     assert second["attempt"] == attempt["attempt"] != first["attempt"]
     assert (first["state"], second["state"]) == ("within", "exhausted")
+
+
+def _fake_date_stepping_back(tmp_path: Path, step_s: int) -> Path:
+    """A `date` on PATH that returns the real wall clock for the first `+%s`
+    call and the real clock minus `step_s` for every later one: the supervisor's
+    START_S is real, its END_S comes after a time-sync step back. Every other
+    form (`-u +FMT`, `-r FILE`) goes to the real date."""
+    real = shutil.which("date")
+    d = tmp_path / "steppedbin"
+    d.mkdir()
+    count = d / "count"
+    (d / "date").write_text(textwrap.dedent(f"""\
+        #!/bin/sh
+        if [ "$#" -eq 1 ] && [ "$1" = "+%s" ]; then
+            n=$(cat {db._q(count)} 2>/dev/null || echo 0)
+            echo $((n + 1)) > {db._q(count)}
+            if [ "$n" -eq 0 ]; then exec {db._q(real)} +%s; fi
+            echo $(( $({db._q(real)} +%s) - {step_s} ))
+            exit 0
+        fi
+        exec {db._q(real)} "$@"
+        """))
+    (d / "date").chmod(0o755)
+    return d
+
+
+@pytest.mark.skipif(db._find_gnu_timeout() is None or not os.access("/proc/uptime", os.R_OK),
+                    reason="GNU coreutils timeout and /proc/uptime needed")
+def test_wall_clock_stepped_back_during_the_run_is_reported_not_judged(tmp_path, fake_d, cu_structure):
+    # the shape of a WSL time-sync step: the wall clock goes back 300 s while the
+    # run is going; the boot clock does not. The loop writes its status BEFORE
+    # the step, so its mtime lies after the stepped-back end stamp: an epoch
+    # window would reject it, the content+mtime snapshot binding does not.
+    import distill_verify as dv
+    (fake_d / "scripts" / "al_loop_local.sh").write_text(textwrap.dedent("""\
+        #!/bin/bash
+        RUN="$(dirname "$ONTHEFLY_CONFIG")/run"
+        echo "SUCCESS round0 stable" > "$RUN/.al_status"
+        sleep 1
+        exit 0
+        """))
+    (fake_d / "scripts" / "al_loop_local.sh").chmod(0o755)
+    work = _acc_main(tmp_path, fake_d, cu_structure, *ACC_BASE, "--wallclock-max-h", "1")
+    _prime_for_launch(work)
+    stepped = _fake_date_stepping_back(tmp_path, 300)
+    env = {**os.environ, "PATH": f"{stepped}:{Path(sys.executable).parent}:{os.environ.get('PATH', '')}"}
+    proc = subprocess.run(["sh", str(work / "run_distill.sh")], capture_output=True, text=True, timeout=60, env=env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    marker = _assert_bound_marker(work, state="within", rc=0, limit_s=3600)
+    step = (marker["ended_epoch_s"] - marker["started_epoch_s"]) - marker["elapsed_s"]
+    assert -302 <= step <= -298  # the epoch stamps carry the step; elapsed does not
+    assert int((work / "run" / ".al_status").stat().st_mtime) > marker["ended_epoch_s"] + dv.MTIME_SLACK_S
+    dv.main(["--work", str(work), "--no-lmp-witness"])
+    report = json.loads((work / "verify" / "distill_verify.json").read_text())
+    assert report["wallclock"]["valid"] is True and report["wallclock"]["problems"] == []
+    assert report["wallclock"]["state"] == "within" and report["wallclock"]["wall_clock_step_s"] == step
+    assert report["reason"] != "wallclock_evidence"
+    log = (work / "verify" / "verify.log").read_text()
+    assert "the wall clock was stepped by" in log
 
 
 # ── the bound covers the WHOLE run, and the held-out drops teacher_md's frame 0 ──

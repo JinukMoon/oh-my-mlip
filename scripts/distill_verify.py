@@ -30,8 +30,16 @@ written. What it adds, in order, each step logged to `<work>/verify/verify.log`:
                       to the approved contract: same attempt id and start
                       time, limit/grace as approved, sha256 of the script that
                       ran == the approved run_distill.sh, returncode/state
-                      consistent, elapsed == ended - started, and `.al_status`
-                      last written inside the attempt's window. Missing,
+                      consistent, elapsed == the boot-clock difference
+                      (elapsed is measured on /proc/uptime; the epoch stamps
+                      are the record only, since time sync can step the wall
+                      clock -- a step is reported, not judged), and the
+                      `.al_status` on disk equal to the marker's end snapshot
+                      and not the start snapshot unchanged (content + mtime,
+                      no wall-clock comparison). A marker of the previous
+                      schema (/3, no boot stamps) is still read: its elapsed
+                      cannot be cross-checked, and `.al_status` must fall in
+                      the epoch window widened by the observed step. Missing,
                       unreadable or unbound evidence => `failed(wallclock_evidence)`
                       (a marker absent while the loop is still running is
                       `incomplete`); `exhausted` => `unmet(budget:wallclock)`
@@ -146,8 +154,16 @@ def _require_deps() -> None:
         raise SystemExit(2)
 
 ACCEPTANCE_SCHEMA = "oh-my-mlip.distill.acceptance/1"
-WALLCLOCK_SCHEMA = "oh-my-mlip.distill.wallclock/3"  # /3: carries `attribution`
-ATTEMPT_SCHEMA = "oh-my-mlip.distill.attempt/1"
+WALLCLOCK_SCHEMA = "oh-my-mlip.distill.wallclock/4"  # /4: boot-clock stamps + .al_status end snapshot
+ATTEMPT_SCHEMA = "oh-my-mlip.distill.attempt/2"      # /2: boot-clock start + .al_status start snapshot
+# Records written by the previous supervisor (no boot-clock stamps, no
+# snapshots) are still read: their elapsed_s cannot be cross-checked, so a
+# wall-clock step is reported rather than judged, and .al_status is bound by
+# its mtime inside the epoch window widened by that step.
+WALLCLOCK_SCHEMA_V3 = "oh-my-mlip.distill.wallclock/3"
+ATTEMPT_SCHEMA_V1 = "oh-my-mlip.distill.attempt/1"
+SCHEMA_PAIRS = {ATTEMPT_SCHEMA: WALLCLOCK_SCHEMA, ATTEMPT_SCHEMA_V1: WALLCLOCK_SCHEMA_V3}
+CLOCKS = ("boot", "epoch")  # boot = /proc/uptime; epoch = date +%s where /proc/uptime is absent
 WALLCLOCK_EXHAUSTED_RCS = (124, 137)
 WALLCLOCK_STATES = ("exhausted", "within", "engine_exit")
 # The supervisor's rc/elapsed table (distill_bootstrap.WALLCLOCK_ATTRIBUTION,
@@ -186,7 +202,7 @@ def wallclock_attribution(rc: int, elapsed_s: int, limit_s: int) -> str:
     if rc == 0:
         return "clean"
     return "exit_nonzero"
-MTIME_SLACK_S = 2  # .al_status mtime vs the attempt's [started, ended] window
+MTIME_SLACK_S = 2  # legacy /3 markers: .al_status mtime vs the attempt's [started, ended] window
 FINGERPRINT_DECIMALS = 4  # positions rounded to 1e-4 A before hashing
 
 _STATUS_RE = {
@@ -330,7 +346,8 @@ def wallclock_evidence(work: Path, acc: dict, run_dir: Path, log: Log) -> dict:
     enf = budget.get("wallclock_enforcement")
     out = {"limit_h": budget.get("wallclock_max_h"), "enforced": bool(enf), "attempt_record": None, "marker": None,
            "attempt": None, "state": None, "attribution": None, "attribution_note": None, "elapsed_s": None,
-           "returncode": None, "limit_s": None, "exhausted": False, "valid": True, "pending": False, "problems": []}
+           "returncode": None, "limit_s": None, "exhausted": False, "valid": True, "pending": False, "problems": [],
+           "schema": None, "clock": None, "wall_clock_step_s": None, "al_status_binding": None}
     if not enf:
         if budget.get("wallclock_max_h"):
             out["valid"] = False
@@ -351,8 +368,8 @@ def wallclock_evidence(work: Path, acc: dict, run_dir: Path, log: Log) -> dict:
         attempt, err = _read_json(attempt_path)
         if err:
             problems.append(err)
-        elif attempt.get("schema") != ATTEMPT_SCHEMA:
-            problems.append(f"start record schema {attempt.get('schema')!r} != {ATTEMPT_SCHEMA!r}")
+        elif attempt.get("schema") not in SCHEMA_PAIRS:
+            problems.append(f"start record schema {attempt.get('schema')!r} not one of {tuple(SCHEMA_PAIRS)}")
         else:
             out["attempt"] = attempt.get("attempt")
             if attempt.get("limit_s") != enf.get("limit_s") or attempt.get("grace_s") != enf.get("grace_s"):
@@ -371,14 +388,28 @@ def wallclock_evidence(work: Path, acc: dict, run_dir: Path, log: Log) -> dict:
         info, err = _read_json(marker_path)
         if err:
             problems.append(err)
-        elif info.get("schema") != WALLCLOCK_SCHEMA:
-            problems.append(f"marker schema {info.get('schema')!r} != {WALLCLOCK_SCHEMA!r}")
+        elif info.get("schema") not in SCHEMA_PAIRS.values():
+            problems.append(f"marker schema {info.get('schema')!r} not one of {tuple(SCHEMA_PAIRS.values())}")
+        elif attempt is not None and SCHEMA_PAIRS.get(attempt.get("schema")) != info.get("schema"):
+            problems.append(f"marker schema {info.get('schema')!r} does not pair with start record schema "
+                            f"{attempt.get('schema')!r}")
         else:
             problems.extend(_marker_problems(info, attempt, enf, approved_sha, run_dir))
             out.update({"state": info.get("state"), "elapsed_s": info.get("elapsed_s"),
                         "returncode": info.get("returncode"), "limit_s": info.get("limit_s"),
                         "attribution": info.get("attribution"),
-                        "attribution_note": WALLCLOCK_ATTRIBUTION.get(info.get("attribution"))})
+                        "attribution_note": WALLCLOCK_ATTRIBUTION.get(info.get("attribution")),
+                        "schema": info.get("schema"),
+                        "clock": info.get("clock") if info.get("schema") == WALLCLOCK_SCHEMA else "epoch (legacy /3)",
+                        "wall_clock_step_s": _wall_clock_step(info),
+                        "al_status_binding": ("start/end content+mtime snapshots"
+                                              if info.get("schema") == WALLCLOCK_SCHEMA else
+                                              "mtime inside the epoch window widened by the wall-clock step "
+                                              "(legacy /3)")})
+            step = out["wall_clock_step_s"]
+            if isinstance(step, int) and abs(step) > MTIME_SLACK_S:
+                log(f"step 1b/7: the wall clock was stepped by {step:+d} s during the attempt (time sync); "
+                    "elapsed_s is measured on the boot clock, the epoch stamps are the record only")
 
     out["problems"] = problems
     out["valid"] = not problems
@@ -442,21 +473,97 @@ def _marker_problems(info: dict, attempt: dict | None, enf: dict, approved_sha: 
     started, ended, elapsed = info.get("started_epoch_s"), info.get("ended_epoch_s"), info.get("elapsed_s")
     if not all(isinstance(v, int) for v in (started, ended, elapsed)):
         p.append("marker timestamps missing")
-    else:
-        if ended < started or abs((ended - started) - elapsed) > MTIME_SLACK_S:
-            p.append(f"marker elapsed {elapsed} s != ended - started ({ended - started} s)")
-        if state == "within" and elapsed > limit + grace + MTIME_SLACK_S:
-            p.append(f"marker says within but elapsed {elapsed} s exceeds the {limit} s bound")
-        if state == "exhausted" and elapsed < limit - MTIME_SLACK_S:
-            p.append(f"marker says exhausted after {elapsed} s, before the {limit} s bound"
-                     + (" -- an early rc 137 is a SIGKILL of the engine (source unknown), not expiry"
-                        if rc == 137 else ""))
-        status_path = run_dir / ".al_status"
+        return p
+    legacy = info.get("schema") == WALLCLOCK_SCHEMA_V3
+    if not legacy:
+        # elapsed_s and the boot stamps come from one clock and one subtraction
+        # in the supervisor: they agree exactly. The epoch stamps are wall
+        # clock, which time sync may have stepped; they are not judged.
+        boot0, boot1 = info.get("started_boot_s"), info.get("ended_boot_s")
+        if info.get("clock") not in CLOCKS:
+            p.append(f"marker clock {info.get('clock')!r} not one of {CLOCKS}")
+        if not (isinstance(boot0, int) and isinstance(boot1, int)):
+            p.append("marker boot-clock stamps missing")
+        elif boot1 - boot0 != elapsed:
+            p.append(f"marker elapsed {elapsed} s != ended_boot_s - started_boot_s ({boot1 - boot0} s)")
+        if attempt is not None and (attempt.get("started_boot_s") != boot0 or attempt.get("clock") != info.get("clock")):
+            p.append("marker boot-clock start != start record")
+    if elapsed < 0:
+        p.append(f"marker elapsed {elapsed} s is negative")
+    if state == "within" and elapsed > limit + grace + MTIME_SLACK_S:
+        p.append(f"marker says within but elapsed {elapsed} s exceeds the {limit} s bound")
+    if state == "exhausted" and elapsed < limit - MTIME_SLACK_S:
+        p.append(f"marker says exhausted after {elapsed} s, before the {limit} s bound"
+                 + (" -- an early rc 137 is a SIGKILL of the engine (source unknown), not expiry"
+                    if rc == 137 else ""))
+    status_path = run_dir / ".al_status"
+    if legacy:
+        # no snapshots: the status mtime must fall inside the attempt's epoch
+        # window, widened by the wall-clock step the stamps show (a step of
+        # one sign moves every wall reading inside the attempt by at most it)
+        widen = MTIME_SLACK_S + abs(_wall_clock_step(info))
         if status_path.is_file():
             mtime = int(status_path.stat().st_mtime)
-            if not (started - MTIME_SLACK_S <= mtime <= ended + MTIME_SLACK_S):
+            if not (started - widen <= mtime <= ended + widen):
                 p.append(f".al_status last written at epoch {mtime}, outside this attempt's window "
-                         f"[{started}, {ended}] -- the status is not this attempt's")
+                         f"[{started}, {ended}] (+/- {widen} s) -- the status is not this attempt's")
+    else:
+        p.extend(_status_binding_problems((attempt or {}).get("al_status_before"), info.get("al_status_after"),
+                                          status_snapshot(status_path), attempt_known=attempt is not None))
+    return p
+
+
+def _wall_clock_step(info: dict) -> int | None:
+    """How far the wall clock moved beyond the boot clock during the attempt
+    ((ended - started) - elapsed; negative = stepped back), None if unknown."""
+    started, ended, elapsed = info.get("started_epoch_s"), info.get("ended_epoch_s"), info.get("elapsed_s")
+    if not all(isinstance(v, int) for v in (started, ended, elapsed)):
+        return None
+    return (ended - started) - elapsed
+
+
+def status_snapshot(path: Path) -> dict:
+    """What the supervisor records for .al_status: presence, sha256, mtime in ns."""
+    if not path.is_file():
+        return {"present": False}
+    return {"present": True, "sha256": _sha256(path), "mtime_ns": path.stat().st_mtime_ns}
+
+
+def _snapshot_ok(snap) -> bool:
+    if not isinstance(snap, dict) or not isinstance(snap.get("present"), bool):
+        return False
+    if not snap["present"]:
+        return True
+    return (isinstance(snap.get("sha256"), str) and len(snap["sha256"]) == 64
+            and isinstance(snap.get("mtime_ns"), int))
+
+
+def _same_file(a: dict, b: dict) -> bool:
+    return a.get("sha256") == b.get("sha256") and a.get("mtime_ns") == b.get("mtime_ns")
+
+
+def _status_binding_problems(before, after, now: dict, *, attempt_known: bool) -> list[str]:
+    """Is the .al_status on disk the one this attempt left? Compared by
+    content and mtime, never by wall-clock order: it must equal the marker's
+    end snapshot, and it must not be the start snapshot unchanged (an earlier
+    attempt's status the loop never rewrote)."""
+    p = []
+    if attempt_known and not _snapshot_ok(before):
+        p.append("start record al_status_before missing or malformed")
+    if not _snapshot_ok(after):
+        p.append("marker al_status_after missing or malformed")
+        return p
+    if after["present"]:
+        if not now["present"]:
+            p.append(".al_status was present when this attempt ended and is gone now")
+        elif not _same_file(now, after):
+            p.append(".al_status changed after this attempt ended (its sha256/mtime differ from the marker's end "
+                     "snapshot) -- the status on disk is not this attempt's")
+        if _snapshot_ok(before) and before["present"] and _same_file(before, after):
+            p.append(".al_status unchanged since this attempt started -- the loop never wrote it in this attempt, "
+                     "so the status on disk is an earlier attempt's")
+    elif now["present"]:
+        p.append(".al_status absent when this attempt ended but present now -- written after the attempt, not by it")
     return p
 
 
@@ -1140,6 +1247,7 @@ def main(argv=None) -> int:
                         "wallclock": wallclock["state"], "wallclock_marker": wallclock["marker"],
                         "wallclock_attempt": wallclock["attempt"], "wallclock_valid": wallclock["valid"],
                         "wallclock_attribution": wallclock.get("attribution"),
+                        "wall_clock_step_s": wallclock.get("wall_clock_step_s"),
                         "wallclock_returncode": wallclock.get("returncode"),
                         "provenance_drift": sorted(contract["provenance_drift"]),
                         "malformed_files": relabel.get("malformed_files") or [],
