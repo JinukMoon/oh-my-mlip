@@ -66,6 +66,8 @@ def fake_d(tmp_path) -> Path:
     (d / "scripts").mkdir(parents=True)
     (d / "scripts" / "al_loop_local.sh").write_text("#!/bin/bash\necho fake al_loop_local\n")
     (d / "scripts" / "teacher_md.py").write_text("# fake teacher_md.py\n")
+    (d / "ontheflydistill").mkdir()
+    (d / "ontheflydistill" / "frozen.py").write_text("# fake frozen.py: this engine masks frozen atoms\n")
     (d / "config.example.yaml").write_text(textwrap.dedent("""\
         lmp_bin: /path/to/lmp
         python_bin: python

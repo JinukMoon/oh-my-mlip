@@ -758,7 +758,9 @@ Evaluates a student .pt on a held-out extxyz through onthefly-distill's own
 `ontheflydistill.common` (same NNMTP class, same neighbour-list cache, same
 validate() that reports the trainer's E/F MAE) so the number is comparable to
 the trainer's, but computed on frames the student never saw. The Fmax filter
-is disabled: every held-out frame counts.
+is disabled: every held-out frame counts. With an engine that masks frozen
+(FixAtoms) atoms the force MAE is over mobile atoms; `force_mae_scope` says
+which, from the cache statistics the engine wrote.
 """
 import argparse, json, platform, sys
 import numpy, torch
@@ -789,6 +791,8 @@ json.dump({
     "energy_mae_mev_per_atom": float(e_mae),
     "force_mae_mev_per_a": float(f_mae),
     "n_frames": int(len(ds)),
+    "force_mae_scope": stats.get("force_scope", "all atoms (engine without frozen-atom masking)"),
+    "n_frozen_atoms_per_frame": stats.get("n_frozen_atoms"),
     "cache_stats": stats,
     "device": device,
     "versions": {"python": platform.python_version(), "torch": torch.__version__, "numpy": numpy.__version__},
@@ -845,7 +849,9 @@ def run_heldout_eval(*, work: Path, python: Path, repo: Path, model_pt: str | No
             out["error"] = f"non-finite held-out metrics E={e} F={f}"
             log(f"  {out['error']}")
         else:
-            log(f"  E_MAE={e:.3f} meV/atom  F_MAE={f:.3f} meV/A  on {out['metrics'].get('n_frames')} frames")
+            log(f"  E_MAE={e:.3f} meV/atom  F_MAE={f:.3f} meV/A  on {out['metrics'].get('n_frames')} frames "
+                f"(forces: {out['metrics'].get('force_mae_scope')}; frozen atoms per frame "
+                f"{out['metrics'].get('n_frozen_atoms_per_frame')})")
     except (ValueError, KeyError, TypeError) as exc:
         out["error"] = f"metrics.json unreadable: {exc}"
         log(f"  {out['error']}")

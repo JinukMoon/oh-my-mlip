@@ -95,6 +95,8 @@ def fake_d(tmp_path) -> Path:
     (d / "scripts").mkdir(parents=True)
     (d / "scripts" / "al_loop_local.sh").write_text("#!/bin/bash\necho fake al_loop_local\n")
     (d / "scripts" / "teacher_md.py").write_text("# fake teacher_md.py\n")
+    (d / "ontheflydistill").mkdir()
+    (d / "ontheflydistill" / "frozen.py").write_text("# fake frozen.py: this engine masks frozen atoms\n")
     example = textwrap.dedent(
         """\
         lmp_bin: /path/to/lammps/build/lmp
@@ -454,7 +456,8 @@ def test_acceptance_json_schema_and_provenance(accepted, fake_d, cu_structure):
         assert p["generated_files"][name]["sha256"] == db._sha256(accepted / name)
     # the invoked engine files are pinned by hash (never copied)
     assert p["engine"]["files"] == {"scripts/al_loop_local.sh": db._sha256(fake_d / "scripts" / "al_loop_local.sh"),
-                                    "scripts/teacher_md.py": db._sha256(fake_d / "scripts" / "teacher_md.py")}
+                                    "scripts/teacher_md.py": db._sha256(fake_d / "scripts" / "teacher_md.py"),
+                                    "ontheflydistill/frozen.py": db._sha256(fake_d / "ontheflydistill" / "frozen.py")}
     assert "provenance_drift" in p["identity_rule"] and "not" in p["identity_rule"]
     assert p["engine_facts"]["student_md_temperature_K"] == 300.0
     assert p["lmp_bin"] == db.DEFAULT_LMP_BIN
@@ -1282,6 +1285,82 @@ def test_fixatoms_survive_staging_and_the_identity_is_recorded(tmp_path, fake_d)
     assert ident["pbc"] == [True, True, True] and ident["fixed_atoms"] == [0, 3, 5] and ident["n_atoms"] == 32
     assert "selective dynamics" in ident["fixed_atoms_note"] and ident["initial_momenta_present"] is False
     assert "partial pbc" in acc["provenance"]["structure"]["refused_at_bootstrap"]
+
+
+def _fixed_slab(tmp_path) -> Path:
+    from ase.constraints import FixAtoms
+    atoms = bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2)
+    atoms.set_constraint(FixAtoms(indices=[0, 3, 5]))
+    src = tmp_path / "fixed.traj"
+    write(src, atoms)
+    return src
+
+
+def test_fixatoms_structure_with_an_engine_that_zeroes_frozen_forces_is_refused(tmp_path, fake_d):
+    # an engine without ontheflydistill/frozen.py labels frozen atoms with
+    # ASE's constrained get_forces(), i.e. zero, and trains on those zeros
+    (fake_d / "ontheflydistill" / "frozen.py").unlink()
+    work = tmp_path / "work_old_engine"
+    with pytest.raises(SystemExit, match="has no ontheflydistill/frozen.py.*zero force.*Nothing was written"):
+        db.main(["--teacher", "MACE-MPA-0", "--structure", str(_fixed_slab(tmp_path)), "--work", str(work),
+                 "--repo", str(fake_d), "--acceptance", *ACC_BASE])
+    assert not work.exists()
+    # a structure without FixAtoms has no frozen atoms to mislabel
+    cu = tmp_path / "Cu.vasp"
+    write(cu, bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2), format="vasp")
+    assert db.main(["--teacher", "MACE-MPA-0", "--structure", str(cu), "--work", str(tmp_path / "w2"),
+                    "--repo", str(fake_d)]) == 0
+
+
+def test_frozen_atom_handling_is_recorded_in_the_contract(tmp_path, fake_d):
+    work = _acc_main(tmp_path, fake_d, _fixed_slab(tmp_path), *ACC_BASE)
+    acc = json.loads((work / "acceptance.json").read_text())
+    assert acc["provenance"]["engine_facts"]["frozen_atoms"] == db.ENGINE_FROZEN_ATOMS
+    assert "ontheflydistill/frozen.py" in acc["provenance"]["engine"]["files"]
+    assert "not trained on or scored" in acc["provenance"]["structure"]["identity"]["fixed_atoms_note"]
+    assert "Frozen atoms: FixAtoms atoms are labelled with the teacher's real forces" in (work / "PLAN.md").read_text()
+
+
+def _heldout_frames(n=2):
+    frames = [bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2) for _ in range(n)]
+    for k, fr in enumerate(frames):
+        fr.rattle(0.05, seed=10 + k)
+    return frames
+
+
+def test_user_heldout_without_frozen_info_is_refused_for_a_fixatoms_structure(tmp_path, fake_d):
+    user = tmp_path / "unmarked.extxyz"
+    write(user, _heldout_frames(), format="extxyz")
+    work = tmp_path / "work_unmarked"
+    with pytest.raises(SystemExit, match=r"frame\(s\) 0, 1 do not say which atoms are frozen.*Nothing was written"):
+        db.main(["--teacher", "MACE-MPA-0", "--structure", str(_fixed_slab(tmp_path)), "--work", str(work),
+                 "--repo", str(fake_d), "--acceptance", *ACC_BASE, "--heldout-file", str(user)])
+    assert not work.exists()
+
+
+@pytest.mark.parametrize("how", ["frozen_array", "fixatoms_traj", "all_false_array"])
+def test_user_heldout_marking_its_frozen_atoms_is_accepted(tmp_path, fake_d, how):
+    from ase.constraints import FixAtoms
+    frames = _heldout_frames()
+    if how == "fixatoms_traj":
+        for fr in frames:
+            fr.set_constraint(FixAtoms(indices=[0, 3, 5]))
+        user = tmp_path / "marked.traj"
+        write(user, frames)
+    else:
+        for fr in frames:
+            fr.arrays["frozen"] = np.isin(np.arange(len(fr)), [0, 3, 5] if how == "frozen_array" else [])
+        user = tmp_path / "marked.extxyz"
+        write(user, frames, format="extxyz")
+    work = _acc_main(tmp_path, fake_d, _fixed_slab(tmp_path), *ACC_BASE, "--heldout-file", str(user))
+    assert (work / "acceptance.json").is_file()
+
+
+def test_user_heldout_without_frozen_info_is_fine_when_nothing_is_frozen(tmp_path, fake_d, cu_structure):
+    user = tmp_path / "unmarked.extxyz"
+    write(user, _heldout_frames(), format="extxyz")
+    assert (_acc_main(tmp_path, fake_d, cu_structure, *ACC_BASE, "--heldout-file", str(user))
+            / "acceptance.json").is_file()
 
 
 def test_staging_that_does_not_round_trip_is_refused_and_the_copy_is_retained_not_unlinked(

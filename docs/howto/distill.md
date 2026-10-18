@@ -35,6 +35,9 @@ not a setting:
   student MD and the final LAMMPS check run with `boundary p p f` and
   reflecting walls in z, with the atoms marked `FixAtoms` held fixed. The plan
   states this split; it is the engine's design, not reconciled.
+- **Frozen atoms** — atoms marked `FixAtoms` are labelled with the teacher's
+  real forces but are not trained on, and the force error is reported over the
+  other atoms. Held-out frames you supply must mark their frozen atoms too.
 
 ## What it asks you
 

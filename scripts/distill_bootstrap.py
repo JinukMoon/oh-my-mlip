@@ -278,9 +278,21 @@ ENGINE_BOUNDARY_NOTE = ("the held-out accuracy is measured on periodic teacher l
 ENGINE_PROVENANCE_FILES = (
     "scripts/al_loop_local.sh", "scripts/teacher_md.py", "scripts/label.py", "scripts/can_relabel.py",
     "ontheflydistill/__init__.py", "ontheflydistill/config.py", "ontheflydistill/common.py",
+    "ontheflydistill/frozen.py",
     "ontheflydistill/train_student.py", "ontheflydistill/student_md_lammps.py", "ontheflydistill/merge_xyz.py",
 )
 ENGINE_PROVENANCE_GLOBS = ("ontheflydistill/teachers/*.py",)
+
+# Frozen (FixAtoms) atoms. An engine without ontheflydistill/frozen.py labels them
+# with ASE's constrained get_forces(), i.e. zero force, and trains on those zeros;
+# a structure with FixAtoms is refused with such an engine. With it, they are
+# labelled with the teacher's real forces and left out of the force loss and the
+# force MAE, so every held-out frame must say which of its atoms are frozen.
+ENGINE_FROZEN_MODULE = "ontheflydistill/frozen.py"
+ENGINE_FROZEN_ATOMS = ("FixAtoms atoms are labelled with the teacher's real forces (get_forces(apply_constraint="
+                       "False)) and left out of the force loss, the force MAE and the Fmax filter -- "
+                       "ontheflydistill/frozen.py, common.compute_loss/validate; each frame carries them as a "
+                       "boolean per-atom `frozen` array")
 
 # Per-frame identity shared with distill_verify.frame_fingerprints: Z + positions
 # rounded to 1e-4 A. Kept in sync by hand (D is invoked, the two hub scripts
@@ -621,6 +633,28 @@ def _fixed_indices(atoms) -> list[int]:
     return sorted({int(i) for c in atoms.constraints if isinstance(c, FixAtoms) for i in c.get_indices()})
 
 
+def has_frozen_info(atoms) -> bool:
+    """Does this frame say which of its atoms are frozen? The engine reads a
+    FixAtoms constraint, a boolean per-atom `frozen` array or an extxyz
+    `move_mask` column (ontheflydistill/frozen.py, kept in sync by hand)."""
+    return (any(isinstance(c, FixAtoms) for c in atoms.constraints)
+            or "frozen" in atoms.arrays or "move_mask" in atoms.arrays)
+
+
+def refuse_engine_without_frozen_masking(repo: Path, fixed: list[int], structure: Path) -> None:
+    """A FixAtoms structure needs an engine that labels frozen atoms with real
+    forces; an older one trains the student on zero forces there. Only judged
+    for a checkout (check_repo refuses anything else, with its own message)."""
+    if not fixed or not (repo / "scripts" / "al_loop_local.sh").is_file():
+        return
+    if not (repo / ENGINE_FROZEN_MODULE).is_file():
+        raise SystemExit(
+            f"--structure {structure} freezes {len(fixed)} atoms (FixAtoms), but the onthefly-distill checkout at "
+            f"{repo} has no {ENGINE_FROZEN_MODULE}: that engine labels frozen atoms with ASE's constrained "
+            "get_forces(), i.e. zero force, and trains the student on those zeros. Update the checkout "
+            "(git -C <repo> pull) and bootstrap again. Nothing was written.")
+
+
 def unsupported_identity(atoms) -> list[str]:
     """What the VASP staging (and the engine behind it) would silently change,
     each as one actionable sentence; empty when the structure round-trips.
@@ -654,8 +688,9 @@ def structure_identity(atoms) -> dict:
         "pbc": [bool(b) for b in atoms.pbc],
         "n_atoms": len(atoms),
         "fixed_atoms": fixed,
-        "fixed_atoms_note": ("FixAtoms carried as selective dynamics; teacher_md.py keeps it and the student MD "
-                             "freezes those ids" if fixed else
+        "fixed_atoms_note": ("FixAtoms carried as selective dynamics; teacher_md.py keeps it, the student MD "
+                             "freezes those ids, and their forces are labelled but not trained on or scored"
+                             if fixed else
                              "no constraint; config system.fixed_bottom_n=0, so the engine freezes nothing"),
         "initial_momenta_present": bool(np.any(atoms.get_momenta() != 0)),
         "initial_momenta_note": "ignored either way: teacher_md.py draws fresh Maxwell-Boltzmann velocities "
@@ -1193,6 +1228,7 @@ def render_acceptance(args: argparse.Namespace, *, work: Path, structure_abs: Pa
                                                "(not a config key); a 'hotter' fixture is not available "
                                                "without an engine change",
                 "labeling_pbc": ENGINE_LABELING_PBC,
+                "frozen_atoms": ENGINE_FROZEN_ATOMS,
                 "student_md_boundary": ENGINE_STUDENT_MD_BOUNDARY,
                 "boundary_note": ENGINE_BOUNDARY_NOTE,
                 "input_requirement": "fully periodic cell, pbc [T,T,T]; FixAtoms is the only constraint the "
@@ -1245,7 +1281,7 @@ def render_plan_md(acc: dict, *, work: Path) -> str:
         - Structure: {_c(p['structure']['path'])} (sha256 {p['structure']['sha256'][:12]}…, species {p['structure']['specorder']}); staged as {_c(p['structure']['staged_path'])} (sha256 {p['structure']['staged_sha256'][:12]}…) -- {p['structure']['staged_note']}
         - Structure identity carried: pbc {ident.get('pbc')}, {ident.get('n_atoms')} atoms, fixed atoms {ident.get('fixed_atoms')} ({ident.get('fixed_atoms_note')}); initial momenta present: {ident.get('initial_momenta_present')} ({ident.get('initial_momenta_note')}). Refused at bootstrap: {p['structure'].get('refused_at_bootstrap')}
         - Work directory ownership: {p['work_dir_policy']}
-        - Physical contract (engine design, disclosed not reconciled): labels {ef['labeling_pbc']}; student MD `{ef['student_md_boundary']}`; input requirement: {ef['input_requirement']}. {ef['boundary_note']}
+        - Physical contract (engine design, disclosed not reconciled): labels {ef['labeling_pbc']}; student MD `{ef['student_md_boundary']}`; input requirement: {ef['input_requirement']}. {ef['boundary_note']}. Frozen atoms: {ef['frozen_atoms']}
         - Engine: `{p['engine']['repo']}` @ {p['engine']['head'] or 'not a git checkout'} ({p['engine']['licence']})
         - Hub: {p['hub']['head'] or 'not a git checkout'}{' (dirty working tree)' if p['hub']['dirty'] else ''}
         - LAMMPS: `{p['lmp_bin']}`
@@ -1305,6 +1341,7 @@ def main(argv=None) -> int:
     # disk yet, not after a work dir and bootstrap.log already exist.
     atoms, specorder, species, masses = read_structure(structure_abs)
     identity = structure_identity(atoms)
+    refuse_engine_without_frozen_masking(args.repo.resolve(), identity["fixed_atoms"], structure_abs)
     if args.acceptance and args.heldout_file is not None:
         # Read it here, before any output: an unreadable/empty held-out set is
         # refused with an actionable message, not a traceback and not a work
@@ -1331,6 +1368,20 @@ def main(argv=None) -> int:
         # The AL pool's teacher MD starts with the init structure itself
         # (teacher_md.py frame 0): a user held-out set containing that frame
         # would share it with the pool. Refuse now rather than fail at verify.
+        # Frozen atoms are left out of the held-out force MAE frame by frame,
+        # so a frame that does not say which atoms are frozen cannot be scored
+        # against a student trained on a FixAtoms structure: refuse, never guess.
+        if identity["fixed_atoms"]:
+            unmarked = [i for i, fr in enumerate(user_frames) if not has_frozen_info(fr)]
+            if unmarked:
+                shown = ", ".join(map(str, unmarked[:10])) + (" ..." if len(unmarked) > 10 else "")
+                raise SystemExit(
+                    f"--heldout-file {args.heldout_file}: frame(s) {shown} do not say which atoms are frozen "
+                    f"(no FixAtoms constraint, no per-atom `frozen` or `move_mask` array), while --structure "
+                    f"freezes {len(identity['fixed_atoms'])} atoms. The force MAE leaves frozen atoms out frame by "
+                    "frame, so mark them in every frame -- a FixAtoms constraint (an ase .traj keeps it on every "
+                    "ase version), or a boolean per-atom `frozen` column in extxyz (False on every atom where none "
+                    "is frozen). Nothing was written.")
         init_fp = frame_fingerprint(atoms)
         shared = [i for i, fr in enumerate(user_frames) if frame_fingerprint(fr) == init_fp]
         if shared:
