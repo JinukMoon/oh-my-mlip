@@ -88,6 +88,7 @@ Upstream acquisition ([source](https://sevennet.readthedocs.io/en/latest/user_gu
 ```python
 from sevenn.calculator import SevenNetCalculator
 calc = SevenNetCalculator('7net-mf-ompa', modal='mpa', enable_oeq=True)
+if getattr(calc, 'modal', None) != 'mpa': raise RuntimeError(f"SevenNet-MF-OMPA: the calculator selected modal {getattr(calc, 'modal', None)!r}, not 'mpa'")
 atoms.calc = calc
 ```
 
@@ -96,6 +97,7 @@ atoms.calc = calc
 ```python
 from sevenn.calculator import SevenNetCalculator
 calc = SevenNetCalculator('7net-omni', modal='mpa', enable_oeq=True)
+if getattr(calc, 'modal', None) != 'mpa': raise RuntimeError(f"SevenNet-Omni: the calculator selected modal {getattr(calc, 'modal', None)!r}, not 'mpa'")
 atoms.calc = calc
 ```
 
@@ -160,6 +162,7 @@ atoms.calc = calc
 ```python
 from mace.calculators import mace_mp
 calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='omat_pbe')
+if getattr(calc, 'head', None) != 'omat_pbe': raise RuntimeError(f"MACE-MH-1-OMAT: the calculator selected head {getattr(calc, 'head', None)!r}, not 'omat_pbe'; available: {getattr(calc, 'available_heads', None)}")
 atoms.calc = calc
 ```
 
@@ -168,6 +171,7 @@ atoms.calc = calc
 ```python
 from mace.calculators import mace_mp
 calc = mace_mp(model='mh-1', default_dtype='float64', device='cuda', head='oc20_usemppbe')
+if getattr(calc, 'head', None) != 'oc20_usemppbe': raise RuntimeError(f"MACE-MH-1-OC20: the calculator selected head {getattr(calc, 'head', None)!r}, not 'oc20_usemppbe'; available: {getattr(calc, 'available_heads', None)}")
 atoms.calc = calc
 ```
 
@@ -894,6 +898,7 @@ hf auth login
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-m-1p1', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='oc20')
+if getattr(calc, 'task_name', None) != 'oc20': raise RuntimeError(f"UMA-m-1p1-OC20: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'oc20'")
 atoms.calc = calc
 ```
 
@@ -903,6 +908,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-m-1p1', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='omat')
+if getattr(calc, 'task_name', None) != 'omat': raise RuntimeError(f"UMA-m-1p1-OMAT: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'omat'")
 atoms.calc = calc
 ```
 
@@ -912,6 +918,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-s-1p1', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='oc20')
+if getattr(calc, 'task_name', None) != 'oc20': raise RuntimeError(f"UMA-s-1p1-OC20: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'oc20'")
 atoms.calc = calc
 ```
 
@@ -921,6 +928,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-s-1p1', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='omat')
+if getattr(calc, 'task_name', None) != 'omat': raise RuntimeError(f"UMA-s-1p1-OMAT: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'omat'")
 atoms.calc = calc
 ```
 
@@ -930,6 +938,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='oc20')
+if getattr(calc, 'task_name', None) != 'oc20': raise RuntimeError(f"UMA-s-1p2-OC20: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'oc20'")
 atoms.calc = calc
 ```
 
@@ -939,6 +948,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='oc22')
+if getattr(calc, 'task_name', None) != 'oc22': raise RuntimeError(f"UMA-s-1p2-OC22: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'oc22'")
 atoms.calc = calc
 ```
 
@@ -948,6 +958,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='oc25')
+if getattr(calc, 'task_name', None) != 'oc25': raise RuntimeError(f"UMA-s-1p2-OC25: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'oc25'")
 atoms.calc = calc
 ```
 
@@ -957,6 +968,7 @@ atoms.calc = calc
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 predictor = pretrained_mlip.get_predict_unit('uma-s-1p2', device='cuda')
 calc = FAIRChemCalculator(predictor, task_name='omat')
+if getattr(calc, 'task_name', None) != 'omat': raise RuntimeError(f"UMA-s-1p2-OMAT: the calculator selected task_name {getattr(calc, 'task_name', None)!r}, not 'omat'")
 atoms.calc = calc
 ```
 

@@ -38,6 +38,8 @@ __all__ = [
     "detect_host_arch",
     "parse_env_run",
     "ENV_RUN_ALLOWLIST",
+    "SELECTOR_KWARGS",
+    "selector_check_line",
 ]
 
 
@@ -331,6 +333,33 @@ def _resolve_family_and_version_name(
 # models.json is code-equivalent / trusted (PR-gated), but env_run must be
 # constrained: it is applied as a subprocess env, NEVER shell-interpolated.
 # Only bare KEY=VALUE tokens whose KEY is on this allowlist are accepted.
+# ── Multi-head selectors ─────────────────────────────────────────────────────
+# A multi-head checkpoint is told which head to use by one keyword of its
+# calculator: MACE `head`, fairchem/UMA `task_name`, SevenNet `modal`. The
+# calculator keeps the name it settled on in an attribute of the same name.
+# mace-torch does not refuse an unknown head: it logs a warning and computes
+# with the checkpoint's LAST head, so a misspelt name silently becomes another
+# model. Every such version therefore carries, in models.json:
+#   - "selector": {kwarg, value, choices, choices_source} -- the requested name
+#     and the names the checkpoint itself lists (CI: value in choices);
+#   - selector_check_line(...) as an inference line right after the calculator
+#     is built, so wherever the inference lines run (get_calculator, run(),
+#     setup_verify, catbench jobs, the distill teacher, a pasted snippet) a
+#     calculator that settled on another name raises instead of computing.
+SELECTOR_KWARGS: tuple[str, ...] = ("head", "task_name", "modal")
+
+
+def selector_check_line(version: str, kwarg: str, value: str) -> str:
+    """The inference line that refuses a calculator whose `kwarg` attribute is
+    not `value`. Self-contained (no import), so it runs in any model env."""
+    if kwarg not in SELECTOR_KWARGS:
+        raise RegistryError(f"selector kwarg {kwarg!r} is not one of {SELECTOR_KWARGS}")
+    got = f"getattr(calc, {kwarg!r}, None)"
+    extra = ("; available: {getattr(calc, 'available_heads', None)}" if kwarg == "head" else "")
+    return (f"if {got} != {value!r}: raise RuntimeError(f\"{version}: the calculator selected {kwarg} "
+            f"{{{got}!r}}, not {value!r}{extra}\")")
+
+
 ENV_RUN_ALLOWLIST: frozenset[str] = frozenset(
     {
         "LD_LIBRARY_PATH",

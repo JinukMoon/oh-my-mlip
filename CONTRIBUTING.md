@@ -74,6 +74,15 @@ Rules:
 - `env_run` (optional) must contain only allow-listed `KEY=VALUE` tokens —
   see `oh_my_mlip/registry.py:ENV_RUN_ALLOWLIST`.  Any shell metacharacter
   will be rejected by CI.
+- **Multi-head checkpoints** (MACE `head=`, UMA `task_name=`, SevenNet `modal=`)
+  also need a `"selector"` block — `{"kwarg", "value", "choices",
+  "choices_source"}`, where `choices` are the names the checkpoint itself lists
+  — and, right after the calculator line, the inference line
+  `oh_my_mlip.registry.selector_check_line(<version>, <kwarg>, <value>)` returns.
+  mace-torch does not refuse an unknown head: it warns and computes with the
+  checkpoint's last head, so a misspelt name silently becomes another model. The
+  check line makes such a calculator raise wherever the inference lines run;
+  `tests/test_selectors.py` enforces both.
 
 ### 2. Regenerate the status lists
 

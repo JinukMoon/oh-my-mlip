@@ -224,6 +224,18 @@
           "minItems": 1,
           "description": "arch-pinned inference for sm89 (L40S)"
         },
+        "selector": {
+          "type": "object",
+          "description": "multi-head checkpoints: the name the inference line selects (MACE head, UMA task_name, SevenNet modal) and the names the checkpoint itself lists. CI requires value in choices and oh_my_mlip.registry.selector_check_line(...) right after the calculator line, because mace-torch silently falls back to its last head for an unknown name.",
+          "required": ["kwarg", "value", "choices", "choices_source"],
+          "additionalProperties": false,
+          "properties": {
+            "kwarg": {"enum": ["head", "task_name", "modal"]},
+            "value": {"type": "string", "minLength": 1},
+            "choices": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+            "choices_source": {"type": "string", "minLength": 1}
+          }
+        },
         "arch_pinned": {
           "type": "boolean"
         },
