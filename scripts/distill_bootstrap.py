@@ -363,17 +363,31 @@ def refuse_stale_lmp(repo: Path, lmp_bin: Path) -> None:
 FINGERPRINT_DECIMALS = 4
 
 
+# Names a GNU coreutils `timeout` goes by. Ubuntu >= 25.10 makes `timeout` the
+# uutils (Rust) one and keeps GNU coreutils installed beside it with a `gnu`
+# prefix (package gnu-coreutils, a dependency of coreutils-from-uutils);
+# Homebrew installs it as `gtimeout`. uutils is not a substitute: when the
+# group gets an outside TERM before the deadline it still exits 124, and it
+# exits 124 for a child that died of SIGKILL after the deadline, so the marker
+# would record an operator stop as an exhausted budget (checked against uutils
+# 0.10.0 with the wall-clock tests in tests/test_distill_bootstrap.py).
+GNU_TIMEOUT_NAMES = ("timeout", "gnutimeout", "gtimeout")
+
+
 def _find_gnu_timeout() -> str | None:
-    """Path of a GNU coreutils `timeout` (the only one whose -k and
-    process-group semantics the supervision relies on), else None."""
-    found = shutil.which("timeout")
-    if not found:
-        return None
-    try:
-        out = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=10).stdout
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return found if "GNU coreutils" in out else None
+    """Path of a GNU coreutils `timeout` (the only one whose -k, process-group
+    and exit-status semantics the supervision relies on), else None."""
+    for name in GNU_TIMEOUT_NAMES:
+        found = shutil.which(name)
+        if not found:
+            continue
+        try:
+            out = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if "GNU coreutils" in out:
+            return found
+    return None
 
 
 def _q(path) -> str:
@@ -622,9 +636,10 @@ def parse_args(argv=None) -> argparse.Namespace:
                 # An accepted-but-unenforced bound would be a silent lie in the
                 # plan; refuse the option instead of recording it.
                 ap.error("--wallclock-max-h cannot be enforced on this host: no GNU coreutils `timeout` on PATH "
-                         "(its -k / process-group semantics are what run_distill.sh relies on). Refusing to "
+                         "(its -k / process-group semantics are what run_distill.sh relies on; looked for "
+                         + ", ".join(GNU_TIMEOUT_NAMES) + "). Refusing to "
                          "record an unenforced limit -- drop the flag (operator-supervised, unbounded) or "
-                         "install coreutils.")
+                         "install GNU coreutils (Ubuntu >= 25.10: package gnu-coreutils provides gnutimeout).")
     elif args.target_ps is None:
         args.target_ps = 1.0
     if len(args.structure) > 1 and args.pool_steps // len(args.structure) < args.pool_save_every:

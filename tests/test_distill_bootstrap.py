@@ -1997,3 +1997,30 @@ def test_production_defaults_to_a_pool_that_can_meet_an_accuracy_gate(tmp_path):
     assert (fixture.pool_steps, fixture.pool_save_every) == (db.TEACHER_MD_STEPS, db.TEACHER_MD_SAVE_EVERY)
     typed = _acc_args(tmp_path, "production", "--pool-steps", "400", "--pool-save-every", "4")
     assert (typed.pool_steps, typed.pool_save_every) == (400, 4)
+
+
+def _fake_timeout(path: Path, banner: str) -> None:
+    path.write_text(f"#!/bin/sh\necho '{banner}'\n")
+    path.chmod(0o755)
+
+
+def test_gnu_timeout_is_found_beside_uutils(tmp_path, monkeypatch):
+    # Ubuntu >= 25.10: `timeout` is uutils, GNU's is `gnutimeout` (gnu-coreutils)
+    _fake_timeout(tmp_path / "timeout", "timeout (uutils coreutils) 0.10.0")
+    _fake_timeout(tmp_path / "gnutimeout", "timeout (GNU coreutils) 9.7")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert db._find_gnu_timeout() == str(tmp_path / "gnutimeout")
+
+
+def test_uutils_timeout_alone_is_not_accepted(tmp_path, monkeypatch):
+    # its exit status after an outside TERM / a late SIGKILL is 124, which the
+    # marker's rc_rule would record as an exhausted budget
+    _fake_timeout(tmp_path / "timeout", "timeout (uutils coreutils) 0.10.0")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert db._find_gnu_timeout() is None
+
+
+def test_homebrew_gtimeout_is_found(tmp_path, monkeypatch):
+    _fake_timeout(tmp_path / "gtimeout", "timeout (GNU coreutils) 9.5")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert db._find_gnu_timeout() == str(tmp_path / "gtimeout")
