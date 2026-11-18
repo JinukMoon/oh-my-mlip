@@ -228,3 +228,62 @@ def test_every_arch_validation_value_is_known():
             for arch, state in (vinfo.get("arch_validation") or {}).items():
                 assert arch in TABLE, f"{fam}/{ver}: {arch} not in envs/_arch_recipes.json"
                 assert state in ("validated", "failed"), f"{fam}/{ver}: {arch}={state}"
+
+
+# ── no silent fallback when the recipe cannot be chosen ─────────────────────
+
+def _path_without_python(tmp_path: Path) -> str:
+    """A PATH with every tool of the host's but no python interpreter."""
+    bindir = tmp_path / "nopy_bin"
+    bindir.mkdir()
+    for d in os.environ["PATH"].split(os.pathsep):
+        if not d or not os.path.isdir(d):
+            continue
+        for entry in os.scandir(d):
+            name = entry.name
+            if name.startswith("python") or (bindir / name).exists():
+                continue
+            try:
+                (bindir / name).symlink_to(entry.path)
+            except OSError:
+                pass
+    return str(bindir)
+
+
+def _fake_conda_env(tmp_path: Path, path: str) -> tuple[dict, Path]:
+    fakebin = tmp_path / "fakeconda"
+    fakebin.mkdir()
+    log = tmp_path / "conda_calls"
+    (fakebin / "conda").write_text(f"#!/bin/sh\necho \"$@\" >> {log}\nexit 1\n")
+    (fakebin / "conda").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fakebin}:{path}", "OMM_INSTALL_ARCH": "sm89"}
+    env.pop("MAMBA_EXE", None)
+    env.pop("CONDA_EXE", None)
+    return env, log
+
+
+def test_no_python_stops_instead_of_using_the_base_recipe(mini_home, tmp_path):
+    env, log = _fake_conda_env(tmp_path, _path_without_python(tmp_path))
+    env["OH_MY_MLIP_HOME"] = str(mini_home)
+    dry = subprocess.run(["bash", str(mini_home / "install.sh"), "--dry-run", "mace"],
+                         capture_output=True, text=True, cwd=str(mini_home), env=env)
+    assert "STOP 'mace'" in dry.stdout and "no python3" in dry.stdout and "would create" not in dry.stdout
+    real = subprocess.run(["bash", str(mini_home / "install.sh"), "mace"],
+                          capture_output=True, text=True, cwd=str(mini_home), env=env)
+    assert real.returncode == 1 and "no python3" in real.stderr and "Nothing was downloaded" in real.stderr
+    assert not log.exists() and not (mini_home / "envs" / "mace").exists()
+
+
+def test_failing_select_recipe_stops_instead_of_using_the_base_recipe(mini_home, tmp_path):
+    (mini_home / "scripts" / "select_recipe.py").write_text("raise SystemExit('select_recipe exploded')\n")
+    env, log = _fake_conda_env(tmp_path, os.environ["PATH"])
+    env["OH_MY_MLIP_HOME"] = str(mini_home)
+    for args in (["--dry-run", "mace"], ["--status", "mace"]):
+        out = subprocess.run(["bash", str(mini_home / "install.sh"), *args],
+                             capture_output=True, text=True, cwd=str(mini_home), env=env).stdout
+        assert "select_recipe.py failed" in out and "select_recipe exploded" in out, out
+        assert "would create" not in out
+    real = subprocess.run(["bash", str(mini_home / "install.sh"), "mace"],
+                          capture_output=True, text=True, cwd=str(mini_home), env=env)
+    assert real.returncode == 1 and "select_recipe.py failed" in real.stderr
+    assert not log.exists() and not (mini_home / "envs" / "mace").exists()
