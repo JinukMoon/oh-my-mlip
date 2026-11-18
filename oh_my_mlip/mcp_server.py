@@ -202,15 +202,8 @@ def _arch_state(models: dict, framework: str, version: str, arch: str) -> str:
     if isinstance(entry, dict) and not entry.get("recipe"):
         return "unsupported"
     state = (models[framework]["versions"][version].get("arch_validation") or {}).get(arch)
-    if state == "validated" and isinstance(entry, dict):
-        # a `# build_status: candidate` recipe (e.g. on a nightly wheel) is not
-        # reported as plain validated
-        try:
-            head = (table_path.parent / f"{entry['recipe']}.yml").read_text(encoding="utf-8").splitlines()[:5]
-        except OSError:
-            head = []
-        if any(ln.strip().lower().replace(" ", "") == "#build_status:candidate" for ln in head):
-            return "candidate"
+    if state == "validated" and isinstance(entry, dict) and entry.get("status") == "candidate":
+        return "candidate"  # the arch table's marker (e.g. a nightly wheel), as gen_status_table
     return state if state in ("validated", "failed") else "not checked"
 
 

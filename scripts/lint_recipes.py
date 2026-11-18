@@ -88,6 +88,11 @@ def _check_siblings(envs_dir: Path, model_envs: dict, errors: list[str]) -> None
                     errors.append(f"{path.name}: {arch}/{env}: recipe null without a 'reason'")
                 continue
             named.add(stem)
+            status = (entry or {}).get("status")
+            if status is not None and status != "candidate":
+                errors.append(f"{path.name}: {arch}/{env}: unknown status {status!r} (only 'candidate')")
+            if status == "candidate" and not (entry or {}).get("reason"):
+                errors.append(f"{path.name}: {arch}/{env}: status 'candidate' without a 'reason'")
             if stem != env and not stem.startswith(env + "."):
                 errors.append(f"{path.name}: {arch}/{env}: recipe {stem!r} is not {env!r} or a sibling of it")
             if not (envs_dir / f"{stem}.yml").is_file():

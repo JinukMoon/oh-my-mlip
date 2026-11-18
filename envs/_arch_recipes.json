@@ -7,7 +7,8 @@
     "lock envs/locks/<stem>.*.txt) into envs/<env>/; {'recipe': null, 'reason': ...} = unsupported on",
     "that arch (install.sh stops with the reason); an env missing from the arch block = not checked (stop).",
     "This table says which recipe to build, not that it works: per-arch validation is",
-    "models.json 'arch_validation', set only after setup_verify passes on that GPU."
+    "models.json 'arch_validation', set only after setup_verify passes on that GPU.",
+    "An entry may carry \"status\": \"candidate\" with a \"reason\": the recipe works there but rests on something unreleased (a nightly wheel); the status tables then show 'candidate', never plain 'validated'."
   ],
   "base_max_arch": "sm90",
   "sm120": {
@@ -39,7 +40,9 @@
       "recipe": "fairchemv1.cu128"
     },
     "grace": {
-      "recipe": "grace.tfnightly"
+      "recipe": "grace.tfnightly",
+      "status": "candidate",
+      "reason": "TensorFlow nightly 2.23.0.dev20261117: no released TensorFlow runs on sm120, and PyPI may not keep a nightly"
     },
     "mace": {
       "recipe": "mace.cu128"

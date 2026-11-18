@@ -66,8 +66,8 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 |---|---|---|
 | SevenNet | SevenNet-MF-OMPA, SevenNet-Omni | validated |
 | MACE | MACE-MPA-0, MACE-MH-1-OMAT, MACE-MH-1-OC20 | validated |
-| NequIP | NequIP-OAM-XL, NequIP-OAM-L | candidate |
-| Allegro | Allegro-OAM-L | candidate |
+| NequIP | NequIP-OAM-XL, NequIP-OAM-L | validated |
+| Allegro | Allegro-OAM-L | validated |
 | Nequix | Nequix-MP-1 | validated |
 | DeePMD | DPA-3.1-3M-FT | validated |
 | ORB | ORB-v3 | validated |
@@ -81,9 +81,9 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT | validated |
 | PET | PET-OAM-XL | validated |
 | EquFlash | EquFlashV2, EquFlash-v1 | validated |
-| MatRIS | MatRIS-10M-OAM | candidate |
-| DPA4 | DPA-4.0.1-pro-MPtrj | candidate |
-| TACE | TACE-OAM-L | candidate |
+| MatRIS | MatRIS-10M-OAM | validated |
+| DPA4 | DPA-4.0.1-pro-MPtrj | validated |
+| TACE | TACE-OAM-L | validated |
 <!-- STATUS_TABLE_END -->
 
 The **sm120** column is the newest GPU generation (Blackwell): its state is measured

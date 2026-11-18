@@ -219,27 +219,27 @@ def test_status_states_per_arch():
     assert gen_status_table._framework_arch_state(models, "G", "sm120", table) == "partly validated"
 
 
-def test_candidate_recipe_is_never_shown_as_plain_validated(tmp_path):
-    envs = tmp_path / "envs"
-    envs.mkdir()
-    (envs / "grace.tfnightly.yml").write_text("# build_status: candidate\n# candidate-reason: nightly\nname: grace\n")
-    (envs / "mace.cu128.yml").write_text("# build_status: clean\nname: mace\n")
-    table = {"sm120": {"grace": {"recipe": "grace.tfnightly"}, "mace": {"recipe": "mace.cu128"}}}
+def test_candidate_comes_from_the_arch_table_marker_only():
+    table = {"sm120": {"grace": {"recipe": "grace.tfnightly", "status": "candidate", "reason": "nightly"},
+                       "nequip": {"recipe": "nequip"}}}
     models = {"G": {"env": "grace", "versions": {"a": {"arch_validation": {"sm120": "validated"}}, "b": {}}},
-              "M": {"env": "mace", "versions": {"a": {"arch_validation": {"sm120": "validated"}}}}}
-    assert gen_status_table.arch_state(models, "G", "a", "sm120", table, envs) == "candidate"
-    assert gen_status_table.arch_state(models, "G", "b", "sm120", table, envs) == "not checked"
-    assert gen_status_table.arch_state(models, "M", "a", "sm120", table, envs) == "validated"
+              "N": {"env": "nequip", "versions": {"a": {"arch_validation": {"sm120": "validated"}}}}}
+    assert gen_status_table.arch_state(models, "G", "a", "sm120", table) == "candidate"
+    assert gen_status_table.arch_state(models, "G", "b", "sm120", table) == "not checked"
+    # envs/nequip.yml says `# build_status: candidate` for a host reason (per-arch
+    # .pt2 compile); that must not make a validated variant a candidate
+    assert gen_status_table.arch_state(models, "N", "a", "sm120", table) == "validated"
 
 
-def test_grace_on_sm120_renders_as_candidate_in_the_committed_docs():
-    if not gen_status_table.recipe_is_candidate(TABLE["sm120"]["grace"]["recipe"] or ""):
-        pytest.skip("the GRACE sm120 recipe is no longer a candidate")
+def test_committed_docs_mark_only_grace_as_candidate():
+    flagged = {env for env, e in TABLE["sm120"].items() if (e or {}).get("status") == "candidate"}
+    assert flagged == {"grace"}
     doc = (REPO / "docs" / "model_status.md").read_text()
-    row = next(ln for ln in doc.splitlines() if ln.startswith("| GRACE-2L-OAM |"))
-    assert "| candidate |" in row and "| validated |" not in row
+    rows = [ln for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
+    assert [r.split(" | ")[0] for r in rows] == ["| GRACE-2L-OAM"]
     readme = (REPO / "README.md").read_text()
-    assert next(ln for ln in readme.splitlines() if ln.startswith("| GRACE |")).rstrip().endswith("| candidate |")
+    rows = [ln for ln in readme.splitlines() if ln.startswith("| ") and ln.rstrip().endswith("| candidate |")]
+    assert [r.split(" | ")[0] for r in rows] == ["| GRACE"]
 
 
 def test_mcp_status_agrees_with_the_generated_table():
