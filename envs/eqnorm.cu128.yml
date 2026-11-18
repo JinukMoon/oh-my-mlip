@@ -1,0 +1,51 @@
+# build_status: clean
+# sibling_of: eqnorm
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/eqnorm.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu118) ships no sm_120 kernels ("CUDA error: no
+# kernel image is available"), so install.sh selects THIS file instead when the
+# host GPU is sm120 (table: envs/_arch_recipes.json). The env is still built at
+# envs/eqnorm/ and the recipe used is recorded in envs/eqnorm/.omm_recipe.
+#
+# Changes against envs/eqnorm.yml: TORCH RAISED 2.6.0+cu118 -> 2.7.1+cu128
+#   (no cu128 build of torch 2.6.0 exists), torch-scatter +pt26cu118 -> +pt27cu128,
+#   cuda-nvcc 11.8 -> 12.8. A raised torch changes the numerical stack:
+#   energies/forces were compared with the base stack.
+# Added: gxx=14.4.0 + ninja (host compiler nvcc accepts, JIT build tool; see the
+#   dependency comment).
+# Everything else (framework pins, ase, extras) is identical to the base recipe.
+#
+name: eqnorm
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel, OpenEquivariance/extension JIT builds):
+  # CUDA 12.x accepts gcc <= 14, and a current distribution may ship a newer
+  # system gcc (Ubuntu 26.04: gcc 15 -> "unsupported GNU version"). The worker
+  # puts this env's bin/ first on PATH, so nvcc picks this gcc 14. torch's
+  # extension JIT (the D3 kernel) also runs `ninja` from PATH.
+  - gxx=14.4.0
+  - ninja=1.13.2
+  # ase is pinned to avoid upstream breakage; unpinned ase floats to breaking releases
+  - ase=3.25.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      # torch-scatter's +ptXXcuYYY wheels live on the PyG wheel index, not the
+      # pytorch index — without this find-links the pinned wheel is "not found".
+      - --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html
+      - torch==2.7.1+cu128
+      - eqnorm @ git+https://github.com/yzchen08/eqnorm.git@57527db44fee9fab3fb5775dd860ca4bbe014f44
+      - torch-geometric==2.6.1
+      - torch-scatter==2.1.2+pt27cu128
+      - e3nn==0.5.6
+      - vesin==0.3.7
+      # setuptools<81 ships pkg_resources (required by some packages); >=81 removed it.
+      - setuptools==78.1.1

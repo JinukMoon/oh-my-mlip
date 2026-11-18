@@ -18,7 +18,10 @@ Flow (deterministic, decided BEFORE any run):
      attribution walks /proc parent chains -- direct PID equality never works.
   2. Emit the verdict:
      {pass, device, degraded, reason, energy_ev, fmax_ev_a, forces_shape,
-      gpu_pid_confirmed}
+      gpu_pid_confirmed, arch, recipe}
+     ``arch`` is the GPU architecture it ran on and ``recipe`` the recipe the
+     env was built from (envs/<env>/.omm_recipe; e.g. mace.cu128 on sm120).
+     models.json ``arch_validation.<arch>`` is set from such verdicts only.
 
 Exit code: 0 iff ``pass`` -- a DELIBERATE divergence from the
 survey/guardrail always-exit-0 convention: verify is test-like (its exit IS
@@ -166,6 +169,24 @@ def decide_verdict(
     return verdict
 
 
+def verified_arch_and_recipe(env_name: str, home: Path) -> tuple[str | None, str]:
+    """(GPU arch of this host, recipe stem the env was built from)."""
+    recipe = env_name
+    marker = home / "envs" / env_name / ".omm_recipe"
+    try:
+        recipe = marker.read_text(encoding="utf-8").split()[0]
+    except (OSError, IndexError):
+        pass
+    arch = None
+    try:
+        sys.path.insert(0, str(home))
+        from oh_my_mlip.registry import detect_host_arch
+        arch = detect_host_arch()
+    except Exception:  # noqa: BLE001 - the verdict never fails on bookkeeping
+        pass
+    return arch, recipe
+
+
 def _known_hint(home: Path) -> str:
     """The names a user can pass, for an 'unknown model' message."""
     try:
@@ -237,6 +258,10 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
     verdict["model"] = model
     verdict["version"] = version
     verdict["env"] = env_name
+    # where this verdict holds: the GPU arch it ran on and the recipe the env
+    # was built from (install.sh writes envs/<env>/.omm_recipe; an env without
+    # it was built from the base recipe). A pass is an arch claim for that pair.
+    verdict["arch"], verdict["recipe"] = verified_arch_and_recipe(env_name, home)
 
     if verdict["pass"] and no_local_record:
         # Read-only witness: the verdict stands, the hub's local state is

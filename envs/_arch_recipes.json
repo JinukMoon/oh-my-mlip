@@ -1,0 +1,75 @@
+{
+  "_doc": [
+    "Recipe per GPU architecture, read by install.sh (and oh_my_mlip.recipes).",
+    "An arch NOT listed here uses the base recipe envs/<env>.yml if it is at or below 'base_max_arch';",
+    "above it, install.sh stops before building: no recipe has been checked for that GPU.",
+    "For a listed arch: {'recipe': '<stem>'} builds envs/<stem>.yml (sidecar envs/<stem>.build.sh,",
+    "lock envs/locks/<stem>.*.txt) into envs/<env>/; {'recipe': null, 'reason': ...} = unsupported on",
+    "that arch (install.sh stops with the reason); an env missing from the arch block = not checked (stop).",
+    "This table says which recipe to build, not that it works: per-arch validation is",
+    "models.json 'arch_validation', set only after setup_verify passes on that GPU."
+  ],
+  "base_max_arch": "sm90",
+  "sm120": {
+    "allegro": {
+      "recipe": "allegro"
+    },
+    "alphanet": {
+      "recipe": "alphanet.cu128"
+    },
+    "chgnet": {
+      "recipe": "chgnet.cu128"
+    },
+    "deepmd": {
+      "recipe": "deepmd"
+    },
+    "dpa4": {
+      "recipe": "dpa4"
+    },
+    "eqnorm": {
+      "recipe": "eqnorm.cu128"
+    },
+    "equflash": {
+      "recipe": "equflash.cu128"
+    },
+    "equiformer_v3": {
+      "recipe": "equiformer_v3"
+    },
+    "fairchemv1": {
+      "recipe": "fairchemv1.cu128"
+    },
+    "grace": {
+      "recipe": "grace.tfnightly"
+    },
+    "mace": {
+      "recipe": "mace.cu128"
+    },
+    "matris": {
+      "recipe": "matris"
+    },
+    "mattersim": {
+      "recipe": "mattersim.cu128"
+    },
+    "nequip": {
+      "recipe": "nequip"
+    },
+    "nequix": {
+      "recipe": "nequix.cu128"
+    },
+    "orb": {
+      "recipe": "orb.cu128"
+    },
+    "pet": {
+      "recipe": "pet"
+    },
+    "sevennet": {
+      "recipe": "sevennet.cu128"
+    },
+    "tace": {
+      "recipe": "tace"
+    },
+    "uma": {
+      "recipe": "uma"
+    }
+  }
+}

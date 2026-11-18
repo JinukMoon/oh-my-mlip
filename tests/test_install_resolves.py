@@ -11,6 +11,7 @@ no GPU. Model names are resolved to envs via models.json by install.sh itself.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -24,8 +25,10 @@ ENVS_DIR = REPO_ROOT / "envs"
 
 
 def _env_names() -> list[str]:
-    """The 20 recipe stems (excludes _expected.json and other underscore files)."""
-    return sorted(p.stem for p in ENVS_DIR.glob("*.yml") if not p.name.startswith("_"))
+    """The 20 recipe stems (excludes _expected.json and other underscore files,
+    and sibling recipes such as mace.cu128, which are not envs of their own)."""
+    return sorted(p.stem for p in ENVS_DIR.glob("*.yml")
+                  if not p.name.startswith("_") and "." not in p.stem)
 
 
 def _model_names() -> list[str]:
@@ -38,6 +41,10 @@ def _dry_run(targets: list[str]) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
+        # the plan depends on the host GPU (envs/_arch_recipes.json): pin an
+        # arch every base recipe covers, so the result is the same on any host.
+        # tests/test_arch_recipes.py covers the sm120 plan.
+        env={**os.environ, "OMM_INSTALL_ARCH": "sm89"},
     )
 
 
@@ -126,7 +133,7 @@ def test_bare_install_refuses_and_names_the_all_flag() -> None:
 
 def test_all_flag_still_plans_every_recipe() -> None:
     proc = subprocess.run(["bash", str(INSTALL_SH), "--dry-run", "--all"], capture_output=True,
-                          text=True, cwd=str(REPO_ROOT))
+                          text=True, cwd=str(REPO_ROOT), env={**os.environ, "OMM_INSTALL_ARCH": "sm89"})
     assert proc.returncode == 0
     planned = sum(1 for ln in proc.stdout.splitlines()
                   if "would create env" in ln or "would build env" in ln)

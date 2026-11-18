@@ -1,0 +1,52 @@
+# build_status: clean
+# sibling_of: fairchemv1
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/fairchemv1.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu121) ships no sm_120 kernels ("CUDA error: no
+# kernel image is available"), so install.sh selects THIS file instead when the
+# host GPU is sm120 (table: envs/_arch_recipes.json). The env is still built at
+# envs/fairchemv1/ and the recipe used is recorded in envs/fairchemv1/.omm_recipe.
+#
+# Changes against envs/fairchemv1.yml: TORCH RAISED 2.4.1+cu121 -> 2.7.1+cu128
+#   (no cu128 build of torch 2.4.1 exists), PyG wheels +pt24cu121 -> +pt27cu128,
+#   cuda-nvcc 12.1 -> 12.8. fairchem-core 1.10.0 declares torch~=2.4.0, so a single
+#   resolve is impossible: the sidecar envs/fairchemv1.cu128.build.sh installs it
+#   --no-deps (the equflash pattern). A raised torch changes the numerical stack:
+#   energies/forces were compared with the base stack.
+# Added: gxx=14.4.0 + ninja (host compiler nvcc accepts, JIT build tool; see the
+#   dependency comment).
+# Everything else (framework pins, ase, extras) is identical to the base recipe.
+#
+name: fairchemv1
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel, OpenEquivariance/extension JIT builds):
+  # CUDA 12.x accepts gcc <= 14, and a current distribution may ship a newer
+  # system gcc (Ubuntu 26.04: gcc 15 -> "unsupported GNU version"). The worker
+  # puts this env's bin/ first on PATH, so nvcc picks this gcc 14. torch's
+  # extension JIT (the D3 kernel) also runs `ninja` from PATH.
+  - gxx=14.4.0
+  - ninja=1.13.2
+  - ase=3.25.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      # torch_scatter/torch_sparse +ptXXcuYYY wheels are on the PyG wheel index.
+      - --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html
+      - torch==2.7.1+cu128
+      - fairchem-core==1.10.0
+      # fairchem-core 1.10 uses scipy.special.sph_harm, removed in scipy 1.17 -> pin <1.17.
+      - scipy==1.16.0
+      - torch-geometric==2.6.1
+      - torch_scatter==2.1.2+pt27cu128
+      - torch_sparse==0.6.18+pt27cu128
+      - e3nn==0.5.6
+      - setuptools==78.1.1

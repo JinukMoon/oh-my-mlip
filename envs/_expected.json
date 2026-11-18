@@ -7,9 +7,17 @@
     "python": "3.11.13",
     "cu": "cu121"
   },
+  "alphanet.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
+  },
   "chgnet": {
     "python": "3.11.13",
     "cu": "cu126"
+  },
+  "chgnet.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
   },
   "deepmd": {
     "python": "3.11.13",
@@ -23,9 +31,17 @@
     "python": "3.11.13",
     "cu": "cu118"
   },
+  "eqnorm.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
+  },
   "equflash": {
     "python": "3.12.13",
     "cu": "cu126"
+  },
+  "equflash.cu128": {
+    "python": "3.12.13",
+    "cu": "cu128"
   },
   "equiformer_v3": {
     "python": "3.11.15",
@@ -35,12 +51,23 @@
     "python": "3.11.13",
     "cu": "cu121"
   },
+  "fairchemv1.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
+  },
   "grace": {
+    "python": "3.11.11"
+  },
+  "grace.tfnightly": {
     "python": "3.11.11"
   },
   "mace": {
     "python": "3.11.13",
     "cu": "cu126"
+  },
+  "mace.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
   },
   "matris": {
     "python": "3.11.15",
@@ -50,6 +77,10 @@
     "python": "3.10.16",
     "cu": "cu124"
   },
+  "mattersim.cu128": {
+    "python": "3.10.16",
+    "cu": "cu128"
+  },
   "nequip": {
     "python": "3.11.13",
     "cu": "cu128"
@@ -58,9 +89,17 @@
     "python": "3.11.13",
     "cu": "cu126"
   },
+  "nequix.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
+  },
   "orb": {
     "python": "3.11.13",
     "cu": "cu126"
+  },
+  "orb.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
   },
   "pet": {
     "python": "3.11.14",
@@ -69,6 +108,10 @@
   "sevennet": {
     "python": "3.11.13",
     "cu": "cu126"
+  },
+  "sevennet.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
   },
   "tace": {
     "python": "3.11.15",
