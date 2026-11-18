@@ -7,7 +7,9 @@ machine needs depends on which models you install.
 
 - **Linux with an NVIDIA GPU.** Installation counts as done only after the model
   computes energy and forces on the GPU.
-- **conda or mamba** on `PATH`.
+- **conda or mamba** on `PATH`. On every host, `install.sh` runs its recipe and lock builds with
+  `CONDA_DEFAULT_CHANNELS=conda-forge` (unless you set it), so conda's default Anaconda channels and
+  their Terms-of-Service prompt are not used; the recipes list `nodefaults` anyway.
 - **An NVIDIA driver new enough for the env's CUDA build** — see the table. Check
   yours with `nvidia-smi` (the CUDA version at the top right).
 - **Disk:** each env takes several GB, plus the model weights.

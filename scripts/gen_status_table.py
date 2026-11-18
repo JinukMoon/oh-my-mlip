@@ -28,7 +28,8 @@ Newer GPU architectures get their own column (`ARCH_COLUMNS`, today sm120):
 a base recipe validated on older GPUs says nothing about them, so each variant
 shows what was measured there -- `arch_validation.<arch>` in models.json
 (set only after setup_verify passed on such a GPU) and the recipe table
-envs/_arch_recipes.json (unsupported there) -- and "not checked" otherwise.
+envs/_arch_recipes.json (unsupported there; `candidate` when the recipe that
+arch builds is marked `# build_status: candidate`) -- and "not checked" otherwise.
 
 Modes:
   (default)   print both generated blocks to stdout (clearly delimited).
@@ -68,14 +69,33 @@ def _arch_table() -> dict:
     return json.loads(ARCH_RECIPES.read_text(encoding="utf-8")) if ARCH_RECIPES.is_file() else {}
 
 
-def arch_state(models: dict, framework: str, version: str, arch: str, table: dict | None = None) -> str:
-    """One variant's state on `arch`: validated / failed / unsupported / not checked."""
+def recipe_is_candidate(stem: str, envs_dir: Path | None = None) -> bool:
+    """True when envs/<stem>.yml says `# build_status: candidate` (a recipe that
+    works but rests on something not yet released, e.g. a nightly wheel)."""
+    path = (envs_dir or ARCH_RECIPES.parent) / f"{stem}.yml"
+    try:
+        head = path.read_text(encoding="utf-8").splitlines()[:5]
+    except OSError:
+        return False
+    return any(line.strip().lower().startswith("# build_status:") and line.split(":", 1)[1].strip().lower() == "candidate"
+               for line in head)
+
+
+def arch_state(models: dict, framework: str, version: str, arch: str, table: dict | None = None,
+               envs_dir: Path | None = None) -> str:
+    """One variant's state on `arch`: validated / candidate / failed / unsupported / not checked.
+
+    `candidate`: setup_verify passed there, but the recipe that arch builds is a
+    `# build_status: candidate` one (GRACE on sm120 rests on a TensorFlow
+    nightly, which PyPI may not keep), so it is not shown as plain validated."""
     table = _arch_table() if table is None else table
     info = models[framework]
     entry = (table.get(arch) or {}).get(info.get("env"))
     if isinstance(entry, dict) and not entry.get("recipe"):
         return "unsupported"
     state = (info["versions"][version].get("arch_validation") or {}).get(arch)
+    if state == "validated" and isinstance(entry, dict) and recipe_is_candidate(entry["recipe"], envs_dir):
+        return "candidate"
     return {"validated": "validated", "failed": "failed"}.get(state, "not checked")
 
 
@@ -83,7 +103,9 @@ def _framework_arch_state(models: dict, framework: str, arch: str, table: dict) 
     states = {arch_state(models, framework, v, arch, table) for v in models[framework].get("versions", {})}
     if states == {"validated"}:
         return "validated"
-    if "validated" in states:
+    if states == {"candidate"}:
+        return "candidate"
+    if states & {"validated", "candidate"}:
         return "partly validated"
     if states == {"unsupported"}:
         return "unsupported"

@@ -219,6 +219,41 @@ def test_status_states_per_arch():
     assert gen_status_table._framework_arch_state(models, "G", "sm120", table) == "partly validated"
 
 
+def test_candidate_recipe_is_never_shown_as_plain_validated(tmp_path):
+    envs = tmp_path / "envs"
+    envs.mkdir()
+    (envs / "grace.tfnightly.yml").write_text("# build_status: candidate\n# candidate-reason: nightly\nname: grace\n")
+    (envs / "mace.cu128.yml").write_text("# build_status: clean\nname: mace\n")
+    table = {"sm120": {"grace": {"recipe": "grace.tfnightly"}, "mace": {"recipe": "mace.cu128"}}}
+    models = {"G": {"env": "grace", "versions": {"a": {"arch_validation": {"sm120": "validated"}}, "b": {}}},
+              "M": {"env": "mace", "versions": {"a": {"arch_validation": {"sm120": "validated"}}}}}
+    assert gen_status_table.arch_state(models, "G", "a", "sm120", table, envs) == "candidate"
+    assert gen_status_table.arch_state(models, "G", "b", "sm120", table, envs) == "not checked"
+    assert gen_status_table.arch_state(models, "M", "a", "sm120", table, envs) == "validated"
+
+
+def test_grace_on_sm120_renders_as_candidate_in_the_committed_docs():
+    if not gen_status_table.recipe_is_candidate(TABLE["sm120"]["grace"]["recipe"] or ""):
+        pytest.skip("the GRACE sm120 recipe is no longer a candidate")
+    doc = (REPO / "docs" / "model_status.md").read_text()
+    row = next(ln for ln in doc.splitlines() if ln.startswith("| GRACE-2L-OAM |"))
+    assert "| candidate |" in row and "| validated |" not in row
+    readme = (REPO / "README.md").read_text()
+    assert next(ln for ln in readme.splitlines() if ln.startswith("| GRACE |")).rstrip().endswith("| candidate |")
+
+
+def test_mcp_status_agrees_with_the_generated_table():
+    sys.path.insert(0, str(REPO))
+    from oh_my_mlip import mcp_server
+    models = json.loads((REPO / "models.json").read_text())
+    for fam, info in models.items():
+        if fam.startswith("_"):
+            continue
+        for ver in info["versions"]:
+            for arch in gen_status_table.ARCH_COLUMNS:
+                assert mcp_server._arch_state(models, fam, ver, arch) == gen_status_table.arch_state(models, fam, ver, arch), (fam, ver)
+
+
 def test_every_arch_validation_value_is_known():
     models = json.loads((REPO / "models.json").read_text())
     for fam, info in models.items():
