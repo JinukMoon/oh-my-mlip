@@ -321,23 +321,28 @@ import_check_reason() {
 # ── Recipe per GPU architecture ──
 # Sets RECIPE_STEM (envs/<stem>.yml, sidecar envs/<stem>.build.sh, locks
 # envs/locks/<stem>.*.txt) and RECIPE_REASON for an env. Returns 3 when this GPU
-# has no recipe known to work: the caller stops before installing anything.
-# scripts/select_recipe.py holds the rule (envs/_arch_recipes.json); without a
-# host python the base recipe is used, as before this table existed.
+# has no recipe known to work, and also when the choice cannot be made (no host
+# python, or scripts/select_recipe.py failed): the caller stops before
+# installing anything. Falling back to the base recipe there would install, on
+# a newer GPU, wheels with no kernels for it -- the failure this table exists
+# to prevent. scripts/select_recipe.py holds the rule (envs/_arch_recipes.json).
 HOST_ARCH=""
 pick_recipe() {
-  local env_name="$1" py_bin out rc=0
-  RECIPE_STEM="$env_name"; RECIPE_REASON="base recipe"
+  local env_name="$1" py_bin out err rc=0
+  RECIPE_STEM=""; RECIPE_REASON=""
   py_bin="$(command -v python3 || command -v python || true)"
   if [ -z "$py_bin" ]; then
-    RECIPE_REASON="base recipe (no host python to read envs/_arch_recipes.json)"
-    return 0
+    RECIPE_REASON="cannot choose a recipe: no python3 (or python) on PATH to run scripts/select_recipe.py, which reads envs/_arch_recipes.json and the GPU arch. Put a python 3 on PATH (any version; it uses the standard library only) and re-run"
+    return 3
   fi
-  out="$("$py_bin" "$OH_MY_MLIP_HOME/scripts/select_recipe.py" "$env_name" --json 2>/dev/null)" || rc=$?
-  if [ -z "$out" ]; then
-    RECIPE_REASON="base recipe (scripts/select_recipe.py did not run)"
-    return 0
+  err="$(mktemp)"
+  out="$("$py_bin" "$OH_MY_MLIP_HOME/scripts/select_recipe.py" "$env_name" --json 2>"$err")" || rc=$?
+  if [ -z "$out" ] || ! printf '%s' "$out" | "$py_bin" -c 'import json,sys; json.load(sys.stdin)' >/dev/null 2>&1; then
+    RECIPE_REASON="cannot choose a recipe: scripts/select_recipe.py failed (exit $rc with $py_bin): $(tail -n 3 "$err" | tr '\n' ' ')"
+    rm -f "$err"
+    return 3
   fi
+  rm -f "$err"
   RECIPE_STEM="$(printf '%s' "$out" | "$py_bin" -c 'import json,sys; print(json.load(sys.stdin)["recipe"] or "")')"
   RECIPE_REASON="$(printf '%s' "$out" | "$py_bin" -c 'import json,sys; print(json.load(sys.stdin)["reason"])')"
   HOST_ARCH="$(printf '%s' "$out" | "$py_bin" -c 'import json,sys; print(json.load(sys.stdin)["arch"] or "none")')"
@@ -528,7 +533,7 @@ if [ "$STATUS" -eq 1 ]; then
         printf '  %-14s recipe here: envs/%s.yml (%s)\n' "" "$RECIPE_STEM" "$RECIPE_REASON"
       fi
     else
-      printf '  %-14s not installable on %s: %s\n' "" "$HOST_ARCH" "$RECIPE_REASON"
+      printf '  %-14s not installable on %s: %s\n' "" "${HOST_ARCH:-this host}" "$RECIPE_REASON"
     fi
   done
   exit 0

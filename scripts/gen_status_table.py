@@ -28,7 +28,8 @@ Newer GPU architectures get their own column (`ARCH_COLUMNS`, today sm120):
 a base recipe validated on older GPUs says nothing about them, so each variant
 shows what was measured there -- `arch_validation.<arch>` in models.json
 (set only after setup_verify passed on such a GPU) and the recipe table
-envs/_arch_recipes.json (unsupported there) -- and "not checked" otherwise.
+envs/_arch_recipes.json (unsupported there; `candidate` when the table marks
+the entry "status": "candidate") -- and "not checked" otherwise.
 
 Modes:
   (default)   print both generated blocks to stdout (clearly delimited).
@@ -69,13 +70,20 @@ def _arch_table() -> dict:
 
 
 def arch_state(models: dict, framework: str, version: str, arch: str, table: dict | None = None) -> str:
-    """One variant's state on `arch`: validated / failed / unsupported / not checked."""
+    """One variant's state on `arch`: validated / candidate / failed / unsupported / not checked.
+
+    `candidate`: setup_verify passed there, but the arch table marks that entry
+    `"status": "candidate"` (GRACE on sm120 rests on a TensorFlow nightly, which
+    PyPI may not keep), so it is not shown as plain validated. Only this marker
+    counts: a recipe's own `# build_status:` header is about other things."""
     table = _arch_table() if table is None else table
     info = models[framework]
     entry = (table.get(arch) or {}).get(info.get("env"))
     if isinstance(entry, dict) and not entry.get("recipe"):
         return "unsupported"
     state = (info["versions"][version].get("arch_validation") or {}).get(arch)
+    if state == "validated" and isinstance(entry, dict) and entry.get("status") == "candidate":
+        return "candidate"
     return {"validated": "validated", "failed": "failed"}.get(state, "not checked")
 
 
@@ -83,7 +91,9 @@ def _framework_arch_state(models: dict, framework: str, arch: str, table: dict) 
     states = {arch_state(models, framework, v, arch, table) for v in models[framework].get("versions", {})}
     if states == {"validated"}:
         return "validated"
-    if "validated" in states:
+    if states == {"candidate"}:
+        return "candidate"
+    if states & {"validated", "candidate"}:
         return "partly validated"
     if states == {"unsupported"}:
         return "unsupported"

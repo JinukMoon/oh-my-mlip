@@ -192,7 +192,7 @@ _ARCH_COLUMNS = ("sm120",)
 
 
 def _arch_state(models: dict, framework: str, version: str, arch: str) -> str:
-    """validated / failed / unsupported / not checked -- as gen_status_table renders it."""
+    """validated / candidate / failed / unsupported / not checked -- as gen_status_table renders it."""
     table_path = Path(registry.home()) / "envs" / "_arch_recipes.json"
     try:
         table = json.loads(table_path.read_text(encoding="utf-8"))
@@ -202,6 +202,8 @@ def _arch_state(models: dict, framework: str, version: str, arch: str) -> str:
     if isinstance(entry, dict) and not entry.get("recipe"):
         return "unsupported"
     state = (models[framework]["versions"][version].get("arch_validation") or {}).get(arch)
+    if state == "validated" and isinstance(entry, dict) and entry.get("status") == "candidate":
+        return "candidate"  # the arch table's marker (e.g. a nightly wheel), as gen_status_table
     return state if state in ("validated", "failed") else "not checked"
 
 

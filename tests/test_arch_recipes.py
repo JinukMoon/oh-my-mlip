@@ -219,6 +219,41 @@ def test_status_states_per_arch():
     assert gen_status_table._framework_arch_state(models, "G", "sm120", table) == "partly validated"
 
 
+def test_candidate_comes_from_the_arch_table_marker_only():
+    table = {"sm120": {"grace": {"recipe": "grace.tfnightly", "status": "candidate", "reason": "nightly"},
+                       "nequip": {"recipe": "nequip"}}}
+    models = {"G": {"env": "grace", "versions": {"a": {"arch_validation": {"sm120": "validated"}}, "b": {}}},
+              "N": {"env": "nequip", "versions": {"a": {"arch_validation": {"sm120": "validated"}}}}}
+    assert gen_status_table.arch_state(models, "G", "a", "sm120", table) == "candidate"
+    assert gen_status_table.arch_state(models, "G", "b", "sm120", table) == "not checked"
+    # envs/nequip.yml says `# build_status: candidate` for a host reason (per-arch
+    # .pt2 compile); that must not make a validated variant a candidate
+    assert gen_status_table.arch_state(models, "N", "a", "sm120", table) == "validated"
+
+
+def test_committed_docs_mark_only_grace_as_candidate():
+    flagged = {env for env, e in TABLE["sm120"].items() if (e or {}).get("status") == "candidate"}
+    assert flagged == {"grace"}
+    doc = (REPO / "docs" / "model_status.md").read_text()
+    rows = [ln for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
+    assert [r.split(" | ")[0] for r in rows] == ["| GRACE-2L-OAM"]
+    readme = (REPO / "README.md").read_text()
+    rows = [ln for ln in readme.splitlines() if ln.startswith("| ") and ln.rstrip().endswith("| candidate |")]
+    assert [r.split(" | ")[0] for r in rows] == ["| GRACE"]
+
+
+def test_mcp_status_agrees_with_the_generated_table():
+    sys.path.insert(0, str(REPO))
+    from oh_my_mlip import mcp_server
+    models = json.loads((REPO / "models.json").read_text())
+    for fam, info in models.items():
+        if fam.startswith("_"):
+            continue
+        for ver in info["versions"]:
+            for arch in gen_status_table.ARCH_COLUMNS:
+                assert mcp_server._arch_state(models, fam, ver, arch) == gen_status_table.arch_state(models, fam, ver, arch), (fam, ver)
+
+
 def test_every_arch_validation_value_is_known():
     models = json.loads((REPO / "models.json").read_text())
     for fam, info in models.items():
@@ -228,3 +263,62 @@ def test_every_arch_validation_value_is_known():
             for arch, state in (vinfo.get("arch_validation") or {}).items():
                 assert arch in TABLE, f"{fam}/{ver}: {arch} not in envs/_arch_recipes.json"
                 assert state in ("validated", "failed"), f"{fam}/{ver}: {arch}={state}"
+
+
+# ── no silent fallback when the recipe cannot be chosen ─────────────────────
+
+def _path_without_python(tmp_path: Path) -> str:
+    """A PATH with every tool of the host's but no python interpreter."""
+    bindir = tmp_path / "nopy_bin"
+    bindir.mkdir()
+    for d in os.environ["PATH"].split(os.pathsep):
+        if not d or not os.path.isdir(d):
+            continue
+        for entry in os.scandir(d):
+            name = entry.name
+            if name.startswith("python") or (bindir / name).exists():
+                continue
+            try:
+                (bindir / name).symlink_to(entry.path)
+            except OSError:
+                pass
+    return str(bindir)
+
+
+def _fake_conda_env(tmp_path: Path, path: str) -> tuple[dict, Path]:
+    fakebin = tmp_path / "fakeconda"
+    fakebin.mkdir()
+    log = tmp_path / "conda_calls"
+    (fakebin / "conda").write_text(f"#!/bin/sh\necho \"$@\" >> {log}\nexit 1\n")
+    (fakebin / "conda").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fakebin}:{path}", "OMM_INSTALL_ARCH": "sm89"}
+    env.pop("MAMBA_EXE", None)
+    env.pop("CONDA_EXE", None)
+    return env, log
+
+
+def test_no_python_stops_instead_of_using_the_base_recipe(mini_home, tmp_path):
+    env, log = _fake_conda_env(tmp_path, _path_without_python(tmp_path))
+    env["OH_MY_MLIP_HOME"] = str(mini_home)
+    dry = subprocess.run(["bash", str(mini_home / "install.sh"), "--dry-run", "mace"],
+                         capture_output=True, text=True, cwd=str(mini_home), env=env)
+    assert "STOP 'mace'" in dry.stdout and "no python3" in dry.stdout and "would create" not in dry.stdout
+    real = subprocess.run(["bash", str(mini_home / "install.sh"), "mace"],
+                          capture_output=True, text=True, cwd=str(mini_home), env=env)
+    assert real.returncode == 1 and "no python3" in real.stderr and "Nothing was downloaded" in real.stderr
+    assert not log.exists() and not (mini_home / "envs" / "mace").exists()
+
+
+def test_failing_select_recipe_stops_instead_of_using_the_base_recipe(mini_home, tmp_path):
+    (mini_home / "scripts" / "select_recipe.py").write_text("raise SystemExit('select_recipe exploded')\n")
+    env, log = _fake_conda_env(tmp_path, os.environ["PATH"])
+    env["OH_MY_MLIP_HOME"] = str(mini_home)
+    for args in (["--dry-run", "mace"], ["--status", "mace"]):
+        out = subprocess.run(["bash", str(mini_home / "install.sh"), *args],
+                             capture_output=True, text=True, cwd=str(mini_home), env=env).stdout
+        assert "select_recipe.py failed" in out and "select_recipe exploded" in out, out
+        assert "would create" not in out
+    real = subprocess.run(["bash", str(mini_home / "install.sh"), "mace"],
+                          capture_output=True, text=True, cwd=str(mini_home), env=env)
+    assert real.returncode == 1 and "select_recipe.py failed" in real.stderr
+    assert not log.exists() and not (mini_home / "envs" / "mace").exists()

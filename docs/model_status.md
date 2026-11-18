@@ -14,8 +14,11 @@ How to read the columns:
   every framework are in [Model licenses](model_licenses.md).
 - **sm120** — the state on a Blackwell GPU (compute capability 12.0), measured
   there on its own: `validated` (`scripts/setup_verify.py` passed on such a GPU,
-  with the recipe `install.sh` builds there), `failed`, `unsupported` (no build
-  is known to work; `install.sh` stops before installing), or `not checked`.
+  with the recipe `install.sh` builds there), `candidate` (it passed, but
+  `envs/_arch_recipes.json` marks that recipe a candidate, e.g. GRACE on a
+  TensorFlow nightly that PyPI may not keep; read its reason before relying on it),
+  `failed`, `unsupported` (no build is known to work; `install.sh` stops before
+  installing), or `not checked`.
   Older GPUs use the base recipes `envs/<env>.yml`; on sm120 some envs are built
   from a sibling recipe such as `envs/mace.cu128.yml`, because the base CUDA
   wheels carry no sm120 kernels. `envs/_arch_recipes.json` lists which recipe
@@ -36,7 +39,7 @@ How to read the columns:
 | Nequix-MP-1 | Nequix | on-demand-hf | no | validated | [GitHub](https://github.com/atomicarchitects/nequix){ .md-button .omm-repo } |
 | DPA-3.1-3M-FT | DeePMD | on-demand-hf | no | validated | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
 | ORB-v3 | ORB | auto-download | no | validated | [GitHub](https://github.com/orbital-materials/orb-models){ .md-button .omm-repo } |
-| GRACE-2L-OAM | GRACE | on-demand-hf | no | validated | [GitHub](https://github.com/ICAMS/grace-tensorpotential){ .md-button .omm-repo } |
+| GRACE-2L-OAM | GRACE | on-demand-hf | no | candidate | [GitHub](https://github.com/ICAMS/grace-tensorpotential){ .md-button .omm-repo } |
 | MatterSim-v1-5M | MatterSim | auto-download | no | validated | [GitHub](https://github.com/microsoft/mattersim){ .md-button .omm-repo } |
 | CHGNet-v0.3.0 | CHGNet | bundled | no | validated | [GitHub](https://github.com/CederGroupHub/chgnet){ .md-button .omm-repo } |
 | AlphaNet-v1-OMA | AlphaNet | on-demand-hf | no | validated | [GitHub](https://github.com/zmyybc/AlphaNet){ .md-button .omm-repo } |

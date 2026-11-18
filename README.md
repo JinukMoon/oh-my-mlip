@@ -71,7 +71,7 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | Nequix | Nequix-MP-1 | validated |
 | DeePMD | DPA-3.1-3M-FT | validated |
 | ORB | ORB-v3 | validated |
-| GRACE | GRACE-2L-OAM | validated |
+| GRACE | GRACE-2L-OAM | candidate |
 | MatterSim | MatterSim-v1-5M | validated |
 | CHGNet | CHGNet-v0.3.0 | validated |
 | AlphaNet | AlphaNet-v1-OMA | validated |
