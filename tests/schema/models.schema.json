@@ -200,6 +200,12 @@
           ],
           "description": "host-GPU validation state (guards against an 'all-validated' overclaim)"
         },
+        "arch_validation": {
+          "type": "object",
+          "propertyNames": {"pattern": "^sm[0-9]+$"},
+          "additionalProperties": {"type": "string", "enum": ["validated", "failed"]},
+          "description": "per-arch result of setup_verify on a GPU with its own recipe table (envs/_arch_recipes.json); absent = not checked"
+        },
         "inference": {
           "type": "array",
           "items": {

@@ -347,6 +347,17 @@ built on the user's machine:
   `--modifiers enable_CuEquivarianceContracter`. For another GPU architecture,
   run the prepare script on a machine with that GPU.
 - **D3 kernel**: compiled once with `nvcc`; `env.sh` finds `CUDA_HOME`.
+- **Whole envs on a newer GPU (sm120, Blackwell)**: a torch wheel built for CUDA
+  below 12.8 has no sm120 kernels. `install.sh` reads the host GPU
+  (`detect_host_arch()`) and builds the recipe `envs/_arch_recipes.json` names
+  for it: the base `envs/<env>.yml`, or a sibling such as `envs/mace.cu128.yml`,
+  always into `envs/<env>/` (the recipe used is in `envs/<env>/.omm_recipe`).
+  When none is known to work (a GPU newer than any listed, or an env whose arch
+  entry is null) it
+  stops before downloading and says why: report that, do not install the base
+  recipe by hand. An env built from another arch's recipe is not reused;
+  `install.sh --rebuild <env>` rebuilds it. A `validated_sm89` label says nothing
+  about sm120: that state is `arch_validation.sm120` (status table column sm120).
 
 **Without `nvcc`**, only D3 is unavailable; the models themselves still run.
 `install.sh` says so. Details: `docs/arch_first_run_compile.md`,
@@ -392,6 +403,8 @@ host were blocked.
 
 | Error | What to do |
 |---|---|
+| **`install.sh` stops: no recipe for this GPU** (`STOP '<env>' (GPU sm120)`, or an arch newer than any in `envs/_arch_recipes.json`) | No wheel known to run on this GPU exists in the registry; installing the base recipe would end in `CUDA error: no kernel image is available`. Report the printed reason; do not work around it (§6). |
+| **`CUDA error: no kernel image is available for execution on the device`** | The env's CUDA wheels were built for older GPUs. Check `install.sh --status <env>`: an env built from another arch's recipe is rebuilt with `install.sh --rebuild <env>`. |
 | **`nvcc` missing** | D3 is unavailable; the models still run (§6). Tell the user; installing a CUDA toolkit is their decision. |
 | **Gated weights without token or accepted license** | Give the `license_url` and point to `docs/hf_token.md` (§5). Do not retry the download. |
 | **conda / mamba missing** | An agent's shell often lacks the PATH lines `conda init` writes, so `which conda` failing is not proof. `install.sh` looks in `$CONDA_EXE` and the usual install directories and uses a conda it finds there; only when it reports none, point the user to Miniconda (`https://docs.conda.io/projects/miniconda`). Install it only with the user's explicit consent. |
