@@ -1,0 +1,54 @@
+# build_status: clean
+# sibling_of: nequix
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/nequix.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu126) ships no sm_120 kernels ("CUDA error: no
+# kernel image is available"), so install.sh selects THIS file instead when the
+# host GPU is sm120 (table: envs/_arch_recipes.json). The env is still built at
+# envs/nequix/ and the recipe used is recorded in envs/nequix/.omm_recipe.
+#
+# Changes against envs/nequix.yml: torch 2.10.0+cu126 -> 2.10.0+cu128 (same
+#   torch release, CUDA 12.8 build), cuda-nvcc 12.6 -> 12.8. JAX pins unchanged.
+# Added: gxx=14.4.0 + ninja (host compiler nvcc accepts, JIT build tool; see the
+#   dependency comment).
+# Everything else (framework pins, ase, extras) is identical to the base recipe.
+#
+name: nequix
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for D3 and for openequivariance's build)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel, OpenEquivariance/extension JIT builds):
+  # CUDA 12.x accepts gcc <= 14, and a current distribution may ship a newer
+  # system gcc (Ubuntu 26.04: gcc 15 -> "unsupported GNU version"). The worker
+  # puts this env's bin/ first on PATH, so nvcc picks this gcc 14. torch's
+  # extension JIT (the D3 kernel) also runs `ninja` from PATH.
+  - gxx=14.4.0
+  - ninja=1.13.2
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
+  - ase=3.29.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.10.0+cu128
+      - nequix==0.4.3
+      - jax==0.6.2
+      - jax-cuda12-plugin==0.6.2
+      - jax-cuda12-pjrt==0.6.2
+      - jaxlib==0.6.2
+      - e3nn-jax==0.20.8
+      - equinox==0.13.6
+      # openequivariance / openequivariance_extjax INTENTIONALLY OMITTED: oeq is
+      # OPTIONAL (upstream `pip install nequix[oeq]`), its 0.6.4 sdist fails a
+      # nanobind/CMake build on this host (no cp310 wheel), and it is NOT needed.
+      # The default JAX backend runs WITHOUT kernels via use_kernel=False
+      # (e3nn-jax tensor products), which is the verified path here. torch torch
+      # is kept only for nequix's optional torch backend import; the verified
+      # single-point uses backend='jax'.

@@ -1,0 +1,44 @@
+# build_status: clean
+# sibling_of: orb
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/orb.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu126) ships no sm_120 kernels ("CUDA error: no
+# kernel image is available"), so install.sh selects THIS file instead when the
+# host GPU is sm120 (table: envs/_arch_recipes.json). The env is still built at
+# envs/orb/ and the recipe used is recorded in envs/orb/.omm_recipe.
+#
+# Changes against envs/orb.yml: torch 2.7.1+cu126 -> 2.7.1+cu128 (same
+#   torch release, CUDA 12.8 build), cuda-nvcc 12.6 -> 12.8.
+# Added: gxx=14.4.0 + ninja (host compiler nvcc accepts, JIT build tool; see the
+#   dependency comment).
+# Everything else (framework pins, ase, extras) is identical to the base recipe.
+#
+name: orb
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel, OpenEquivariance/extension JIT builds):
+  # CUDA 12.x accepts gcc <= 14, and a current distribution may ship a newer
+  # system gcc (Ubuntu 26.04: gcc 15 -> "unsupported GNU version"). The worker
+  # puts this env's bin/ first on PATH, so nvcc picks this gcc 14. torch's
+  # extension JIT (the D3 kernel) also runs `ninja` from PATH.
+  - gxx=14.4.0
+  - ninja=1.13.2
+  # ase pinned 2026-08-17 to the version present in the env whose GPU
+  # single-point verified; a bare `- ase` rode each new release into the
+  # build (the mattersim/eqnorm breakage class) and verify_determinism
+  # was pip-only, so nothing caught it.
+  - ase=3.27.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.7.1+cu128
+      - orb-models==0.5.4
+      - torch-dftd==0.5.1

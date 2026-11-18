@@ -188,6 +188,23 @@ _VALIDATION_LABEL = {
 }
 
 
+_ARCH_COLUMNS = ("sm120",)
+
+
+def _arch_state(models: dict, framework: str, version: str, arch: str) -> str:
+    """validated / failed / unsupported / not checked -- as gen_status_table renders it."""
+    table_path = Path(registry.home()) / "envs" / "_arch_recipes.json"
+    try:
+        table = json.loads(table_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        table = {}
+    entry = (table.get(arch) or {}).get(models[framework].get("env"))
+    if isinstance(entry, dict) and not entry.get("recipe"):
+        return "unsupported"
+    state = (models[framework]["versions"][version].get("arch_validation") or {}).get(arch)
+    return state if state in ("validated", "failed") else "not checked"
+
+
 def _status_rows() -> list[dict[str, Any]]:
     """Build the per-(model, version) status rows from models.json.
 
@@ -210,6 +227,9 @@ def _status_rows() -> list[dict[str, Any]]:
                     "weights": vinfo.get("weights", "bundled"),
                     "validation": _VALIDATION_LABEL.get(code, code),
                     "validation_code": code,
+                    # newer GPU archs are reported on their own: a sm89 label says
+                    # nothing about them (envs/_arch_recipes.json, arch_validation)
+                    **{arch: _arch_state(models, framework, version, arch) for arch in _ARCH_COLUMNS},
                     "gated": bool(vinfo.get("gated", False)),
                 }
             )

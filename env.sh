@@ -81,6 +81,21 @@ if [ -n "${CUDA_HOME:-}" ]; then
   # nvrtc.h on the include path). Append so any env-bundled headers keep priority.
   export CPATH="${CPATH:+$CPATH:}${CUDA_HOME}/include"
 fi
+# ── 3b) GPU archs for the D3 kernel build ──
+#   catbench compiles pair_d3.so for TORCH_CUDA_ARCH_LIST and, when it is unset,
+#   for 6.1-9.0 only: on a newer GPU (sm120) that build has no kernel for it and
+#   D3 fails at the first call. Add this GPU's compute capability to that list
+#   when it is missing (older GPUs: nothing changes). A value you set wins.
+if [ -z "${TORCH_CUDA_ARCH_LIST:-}" ]; then
+  _omm_smi="$(command -v nvidia-smi || { [ -x /usr/lib/wsl/lib/nvidia-smi ] && echo /usr/lib/wsl/lib/nvidia-smi; } || true)"
+  _omm_cc="$([ -n "$_omm_smi" ] && "$_omm_smi" --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d ' ' || true)"
+  case "$_omm_cc" in
+    ""|6.1|7.0|7.5|8.0|8.6|8.9|9.0) ;;
+    [0-9]*.[0-9]*) export TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5;8.0;8.6;8.9;9.0;$_omm_cc" ;;
+  esac
+  unset _omm_smi _omm_cc
+fi
+
 # Per-env LD_LIBRARY_PATH note: a few envs declare an `env_run` prefix in models.json
 # (e.g. DPA4 needs LD_LIBRARY_PATH="" to dodge an Intel oneAPI libfabric clash). That prefix
 # is applied per-invocation by the provider, NOT exported globally here.

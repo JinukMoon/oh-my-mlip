@@ -17,6 +17,12 @@ Structural checks (any failure -> non-zero exit):
   7. install.sh installs catbench as a post-create step (a real
      `pip install catbench==...` line is present), since it was
      removed from the recipe pip blocks.
+  8. Sibling recipes (`<env>.<tag>.yml`, built instead of `<env>.yml` on a newer
+     GPU) are consistent with envs/_arch_recipes.json: each sibling names its
+     base (`# sibling_of: <env>`) and arch (`# arch: smNNN`), the base recipe
+     exists, the table selects it for that arch and env, and every recipe the
+     table names exists. An unsupported entry (recipe null) carries a reason,
+     and the table covers every registered env for each arch it lists.
 
 Informational (never a failure):
   5. Reports the `# build_status: clean|candidate` split, with candidate reasons.
@@ -36,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ENVS_DIR = REPO_ROOT / "envs"
 MODELS_JSON = REPO_ROOT / "models.json"
 EXPECTED_JSON = ENVS_DIR / "_expected.json"
+ARCH_RECIPES_JSON = ENVS_DIR / "_arch_recipes.json"
 INSTALL_SH = REPO_ROOT / "install.sh"
 
 try:  # PyYAML is a dev dependency; prefer it, but degrade gracefully.
@@ -59,6 +66,46 @@ _BARE_NODEPS_RE = re.compile(r"^-\s+--no-deps\s*$")
 # requests/xlsxwriter and breaks `from catbench.adsorption import ...`, while
 # catbench 1.1.2 with deps does not downgrade the pinned torch+cuXXX wheel.
 _INSTALL_CATBENCH_RE = re.compile(r"pip\S*\s+install\s+catbench==")
+_SIBLING_RE = re.compile(r"^#\s*sibling_of:\s*(\S+)\s*$")
+_ARCH_RE = re.compile(r"^#\s*arch:\s*(sm\d+)\s*$")
+
+
+def _check_siblings(envs_dir: Path, model_envs: dict, errors: list[str]) -> None:
+    """Check 8: sibling recipes <-> base recipes <-> envs/_arch_recipes.json."""
+    path = envs_dir / ARCH_RECIPES_JSON.name
+    table = _load_json(path) if path.is_file() else {}
+    arch_blocks = {k: v for k, v in table.items() if re.fullmatch(r"sm\d+", k)}
+    if table and "base_max_arch" not in table:
+        errors.append(f"{path.name}: missing 'base_max_arch'")
+    named: set[str] = set()
+    for arch, block in arch_blocks.items():
+        for env in sorted(set(model_envs.values()) - set(block)):
+            errors.append(f"{path.name}: {arch} has no entry for env {env!r} (give its recipe or null + reason)")
+        for env, entry in block.items():
+            stem = (entry or {}).get("recipe")
+            if stem is None:
+                if not (entry or {}).get("reason"):
+                    errors.append(f"{path.name}: {arch}/{env}: recipe null without a 'reason'")
+                continue
+            named.add(stem)
+            if stem != env and not stem.startswith(env + "."):
+                errors.append(f"{path.name}: {arch}/{env}: recipe {stem!r} is not {env!r} or a sibling of it")
+            if not (envs_dir / f"{stem}.yml").is_file():
+                errors.append(f"{path.name}: {arch}/{env}: envs/{stem}.yml does not exist")
+    for recipe in sorted(envs_dir.glob("*.*.yml")):
+        stem = recipe.stem
+        head = recipe.read_text(encoding="utf-8").splitlines()[:12]
+        base = next((m.group(1) for m in map(_SIBLING_RE.match, head) if m), None)
+        arch = next((m.group(1) for m in map(_ARCH_RE.match, head) if m), None)
+        if base is None or arch is None:
+            errors.append(f"{recipe.name}: sibling recipe without '# sibling_of: <env>' and '# arch: smNNN' headers")
+            continue
+        if stem.split(".", 1)[0] != base:
+            errors.append(f"{recipe.name}: '# sibling_of: {base}' does not match its file name")
+        if not (envs_dir / f"{base}.yml").is_file():
+            errors.append(f"{recipe.name}: base recipe envs/{base}.yml does not exist")
+        if ((arch_blocks.get(arch) or {}).get(base) or {}).get("recipe") != stem:
+            errors.append(f"{recipe.name}: {path.name} does not select it for {arch}/{base} (dead recipe)")
 
 
 def _load_json(path: Path) -> dict:
@@ -214,6 +261,8 @@ def lint(
                 f"(got {status!r})"
             )
 
+    _check_siblings(envs_dir, model_envs, errors)
+
     # Check 7: install.sh installs catbench post-create (a real
     # `pip install catbench==...` line, WITH deps), since catbench was removed
     # from the recipe pip blocks.
@@ -251,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
 
-    print("LINT OK: all structural checks (1-4, 6-7) passed.")
+    print("LINT OK: all structural checks (1-4, 6-8) passed.")
     return 0
 
 

@@ -6,7 +6,9 @@ Per framework the recipe book carries three blocks:
   A. install   upstream's OWN documented command (scripts/upstream_recipes.py,
                each entry carrying the doc URL it was read from) PLUS the
                pinned combination from `envs/<env>.yml` (or the multi-pass
-               sidecar), rendered as commands you can paste.
+               sidecar), rendered as commands you can paste; on a GPU arch
+               with its own recipe (envs/_arch_recipes.json: sm120) also that
+               sibling recipe, or why the framework is unsupported there.
   B. weights   upstream's OWN acquisition idiom — the framework CLI / python
                call / URL that actually fetches the checkpoint, including any
                post-download step (freeze / export / flatten / AOT compile).
@@ -122,6 +124,12 @@ def pin_block(env: str) -> list[str]:
     L.append(f"<prefix>/bin/pip install catbench=={CATBENCH_PIN}    "
              f"# every env: D3 dispersion + adsorption benchmarking")
     return L
+
+
+def arch_recipes() -> dict:
+    path = REPO / "envs" / "_arch_recipes.json"
+    table = json.loads(path.read_text()) if path.is_file() else {}
+    return {k: v for k, v in table.items() if re.fullmatch(r"sm\d+", k)}
 
 
 def weights_block(fam: str, models: dict) -> list[str]:
@@ -258,6 +266,34 @@ def render(models: dict) -> str:
             w(ln)
         w("```")
         w("")
+        for arch, block in arch_recipes().items():
+            entry = block.get(env) or {}
+            stem = entry.get("recipe")
+            if env not in block:
+                w(f"On {arch}: no recipe has been checked; `install.sh` stops before installing.")
+                w("")
+            elif stem is None:
+                w(f"On {arch}: **not supported** — {entry.get('reason', 'no working build is known')}. "
+                  f"`install.sh` stops before installing.")
+                w("")
+            elif stem == env:
+                w(f"On {arch}: the same pinned combination (its CUDA build covers {arch}).")
+                w("")
+            else:
+                sib = yaml.safe_load((REPO / "envs" / f"{stem}.yml").read_text())
+                sib_pip = next((x["pip"] for x in sib["dependencies"] if isinstance(x, dict)), [])
+                sib_core = next((p for p in sib_pip if p.startswith(("torch==", "tensorflow", "tf-nightly"))), "—")
+                status = next((ln.split(":", 1)[1].strip() for ln in (REPO / "envs" / f"{stem}.yml").read_text().splitlines()
+                               if ln.startswith("# build_status:")), "clean")
+                w(f"On {arch} `install.sh` builds the sibling recipe `envs/{stem}.yml` instead "
+                  f"({sib_core}; the base wheels carry no {arch} kernels)"
+                  + (" — **candidate**: see the recipe header for its caveat" if status == "candidate" else "") + ":")
+                w("")
+                w("```bash")
+                for ln in pin_block(stem):
+                    w(ln)
+                w("```")
+                w("")
         w("### B. weights")
         w("")
         w(f"Upstream acquisition ([source]({u['fetch_src'].split()[0]})):")

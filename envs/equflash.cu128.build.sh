@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# equflash.cu128.build.sh — sm120 sibling of equflash.build.sh (envs/equflash.cu128.yml).
+# Identical to the base sidecar except torch 2.9.1+cu126 -> 2.9.1+cu128 and the PyG
+# wheels +pt29cu126 -> +pt29cu128, cuda-nvcc 12.6 -> 12.8.
+#
+# WHY THIS EXISTS: a single `conda env create --file equflash.yml` is a pip
+# ResolutionImpossible (fairchem-core 1.10.0 vs torch 2.9.1+cu128, as in the base). The
+# documented working install (see envs/equflash.yml) is a 2-pass pip:
+# pass 1 = torch + PyG + cueq + GGNN; pass 2 = fairchem --no-deps + GGNN runtime deps.
+# install.sh auto-runs this sidecar when present (PREFIX passed as $1) and handles
+# catbench, D3, and sentinel steps afterwards.
+# gxx=14.4.0: the host compiler nvcc 12.8 accepts (a newer system gcc, e.g. gcc 15
+# on Ubuntu 26.04, is refused); ninja: torch's extension JIT (D3) runs it from PATH.
+# The worker puts this env's bin/ first on PATH.
+set -euo pipefail
+
+PREFIX="${1:?usage: equflash.cu128.build.sh <env-prefix>}"
+CONDA_BIN="$(command -v conda || true)"
+[ -n "$CONDA_BIN" ] || { echo "conda not found on PATH"; exit 1; }
+PIP="$PREFIX/bin/pip"
+
+echo "== equflash sidecar [0] base env (python 3.12.13 + cuda-nvcc 12.8 + ase) =="
+"$CONDA_BIN" create --yes --prefix "$PREFIX" --override-channels -c conda-forge -c nvidia \
+  python=3.12.13 "cuda-nvcc=12.8.*" gxx=14.4.0 ninja=1.13.2 ase pip
+
+echo "== equflash sidecar [1] pass 1: torch + PyG + cueq + GGNN =="
+"$PIP" install --extra-index-url https://download.pytorch.org/whl/cu128 \
+  -f https://data.pyg.org/whl/torch-2.9.1+cu128.html \
+  torch==2.9.1+cu128 torch-geometric==2.6.1 torch_scatter==2.1.2+pt29cu128 \
+  torch_sparse==0.6.18+pt29cu128 e3nn==0.5.6 cuequivariance==0.6.0 \
+  cuequivariance-torch==0.6.0 cuequivariance-ops-torch-cu12==0.6.0 \
+  "git+https://github.com/SamsungDS/GGNN@16b5cae474370977b59120e8bc57e4bcc19cd093#egg=GGNN"
+
+echo "== equflash sidecar [2a] pass 2: fairchem WITHOUT deps =="
+"$PIP" install --no-deps fairchem-core==1.10.0
+
+echo "== equflash sidecar [2b] pass 2: GGNN runtime deps (incl. nvalchemi ops) =="
+"$PIP" install pyyaml==6.0.3 lmdb==2.3.0 numba==0.67.0 scipy==1.16.0 pymatgen==2026.5.4 orjson==3.12.0 submitit==1.5.4 wandb==0.30.0 \
+  torchtnt==0.2.4 pydantic==2.13.5 huggingface_hub==1.31.0 hydra-core==1.3.6 tqdm==4.70.1 pynvml==13.0.1 \
+  nvalchemi-toolkit-ops==0.3.0
+
+echo "== equflash sidecar done: $PREFIX/bin/python =="

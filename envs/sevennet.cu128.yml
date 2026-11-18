@@ -1,0 +1,65 @@
+# build_status: clean
+# sibling_of: sevennet
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/sevennet.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu126) ships no sm_120 kernels ("CUDA error: no
+# kernel image is available"), so install.sh selects THIS file instead when the
+# host GPU is sm120 (table: envs/_arch_recipes.json). The env is still built at
+# envs/sevennet/ and the recipe used is recorded in envs/sevennet/.omm_recipe.
+#
+# Changes against envs/sevennet.yml: torch 2.7.1+cu126 -> 2.7.1+cu128 (same
+#   torch release, CUDA 12.8 build); cuda-nvcc / cuda-nvrtc-dev / cuda-driver-dev
+#   12.6 -> 12.8 (OpenEquivariance JIT-compiles for the host GPU against these);
+#   libcublas-dev added (OpenEquivariance's build needs cublas_v2.h; see below).
+# Added: gxx=14.4.0 (host compiler nvcc accepts; see the dependency comment).
+# Everything else (framework pins, ase, extras) is identical to the base recipe.
+#
+name: sevennet
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel, OpenEquivariance/extension JIT builds):
+  # CUDA 12.x accepts gcc <= 14, and a current distribution may ship a newer
+  # system gcc (Ubuntu 26.04: gcc 15 -> "unsupported GNU version"). The worker
+  # puts this env's bin/ first on PATH, so nvcc picks this gcc 14.
+  - gxx=14.4.0
+  # openequivariance is sdist-only; 0.6.6 builds a CMake extension at install
+  # that links CUDA::nvrtc. cuda-nvcc alone does not ship nvrtc, so without this
+  # the wheel build fails ("Target oeq_stable_cuda links to: CUDA::nvrtc but the
+  # target was not found").
+  - cuda-nvrtc-dev=12.8.93
+  # oeq's first-use JIT (libtorch_tp_jit) links -lcuda: cuda-driver-dev ships the
+  # libcuda.so link stub (targets/<arch>/lib/stubs, put on LIBRARY_PATH by the
+  # provider). The real driver libcuda is what loads at runtime.
+  - cuda-driver-dev=12.8.90
+  # openequivariance's CMake build includes cublas_v2.h, which neither cuda-nvcc
+  # nor the pip CUDA wheels put on its include path. The base recipe got it from
+  # a system CUDA toolkit on the host it was validated on; a host without one
+  # (the sm120 host had none) fails with "cublas_v2.h: No such file or
+  # directory". The header package, at the cuBLAS version torch 2.7.1+cu128 ships:
+  - libcublas-dev=12.8.3.14
+  # ase is pinned to avoid upstream breakage; unpinned ase can introduce
+  # incompatibilities with other packages. verify_determinism verifies the pin.
+  - ase=3.28.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.7.1+cu128
+      - sevenn @ git+https://github.com/MDIL-SNU/SevenNet.git@e72eb2c9ebf6895a9d6fa3318f0ae4409d0f9f73
+      - cuequivariance==0.8.0
+      - cuequivariance-torch==0.8.0
+      - e3nn==0.5.6
+      # OpenEquivariance is the default SevenNet backend here (registry inference
+      # passes enable_oeq=True; `pip install sevenn[oeq]` == openequivariance).
+      # Without it sevenn's patch_oeq only warns and falls back to e3nn.
+      # 0.6.6 = the pinned OpenEquivariance version for reproducibility.
+      - openequivariance==0.6.6
+      # oeq JIT-compiles its CUDA extension at first use -> needs ninja on PATH.
+      - ninja==1.13.0

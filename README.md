@@ -62,29 +62,34 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 ## Supported MLIPs
 
 <!-- STATUS_TABLE_START -->
-| Framework | Models |
-|---|---|
-| SevenNet | SevenNet-MF-OMPA, SevenNet-Omni |
-| MACE | MACE-MPA-0, MACE-MH-1-OMAT, MACE-MH-1-OC20 |
-| NequIP | NequIP-OAM-XL, NequIP-OAM-L |
-| Allegro | Allegro-OAM-L |
-| Nequix | Nequix-MP-1 |
-| DeePMD | DPA-3.1-3M-FT |
-| ORB | ORB-v3 |
-| GRACE | GRACE-2L-OAM |
-| MatterSim | MatterSim-v1-5M |
-| CHGNet | CHGNet-v0.3.0 |
-| AlphaNet | AlphaNet-v1-OMA |
-| Eqnorm | Eqnorm-MPtrj |
-| fairchemv1 | eSEN-30M-OAM |
-| EquiformerV3 | EqV3-OMatMPtrjSalex |
-| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT |
-| PET | PET-OAM-XL |
-| EquFlash | EquFlashV2, EquFlash-v1 |
-| MatRIS | MatRIS-10M-OAM |
-| DPA4 | DPA-4.0.1-pro-MPtrj |
-| TACE | TACE-OAM-L |
+| Framework | Models | sm120 |
+|---|---|---|
+| SevenNet | SevenNet-MF-OMPA, SevenNet-Omni | validated |
+| MACE | MACE-MPA-0, MACE-MH-1-OMAT, MACE-MH-1-OC20 | validated |
+| NequIP | NequIP-OAM-XL, NequIP-OAM-L | validated |
+| Allegro | Allegro-OAM-L | validated |
+| Nequix | Nequix-MP-1 | validated |
+| DeePMD | DPA-3.1-3M-FT | validated |
+| ORB | ORB-v3 | validated |
+| GRACE | GRACE-2L-OAM | validated |
+| MatterSim | MatterSim-v1-5M | validated |
+| CHGNet | CHGNet-v0.3.0 | validated |
+| AlphaNet | AlphaNet-v1-OMA | validated |
+| Eqnorm | Eqnorm-MPtrj | validated |
+| fairchemv1 | eSEN-30M-OAM | validated |
+| EquiformerV3 | EqV3-OMatMPtrjSalex | validated |
+| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT | validated |
+| PET | PET-OAM-XL | validated |
+| EquFlash | EquFlashV2, EquFlash-v1 | validated |
+| MatRIS | MatRIS-10M-OAM | validated |
+| DPA4 | DPA-4.0.1-pro-MPtrj | validated |
+| TACE | TACE-OAM-L | validated |
 <!-- STATUS_TABLE_END -->
+
+The **sm120** column is the newest GPU generation (Blackwell): its state is measured
+there separately, because a recipe checked on older GPUs says nothing about it.
+`install.sh` picks the recipe for the GPU it runs on, and stops before installing
+when no recipe is known to work there.
 
 Weights, gating, licenses and upstream repositories: [Supported models](https://oh-my-mlip.org/model_status/).
 

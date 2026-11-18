@@ -42,6 +42,49 @@ machine needs depends on which models you install.
 Versions come from the lock files in `envs/locks/`; driver floors are the
 approximate Linux minimums for each CUDA build.
 
+## Blackwell GPUs (sm120)
+
+A GPU of compute capability 12.0 needs CUDA 12.8 or newer builds: the CUDA 11.8 to
+12.6 torch wheels in the table above carry no kernels for it, and fail at the
+first calculation with `CUDA error: no kernel image is available`. On such a GPU
+`install.sh` builds a different recipe where one exists:
+
+- envs whose build is already CUDA 12.8 or 13.0 use their usual recipe;
+- mace, sevennet, chgnet, orb, equflash and nequix use a sibling recipe
+  (`envs/<env>.cu128.yml`) with the same torch release built for CUDA 12.8;
+- alphanet, fairchemv1, eqnorm and mattersim use a sibling recipe that raises
+  torch to 2.7.1+cu128, because their pinned torch has no CUDA 12.8 build. This
+  changes the numerical stack slightly; measured against the base stack (table
+  below);
+- grace uses a sibling on a TensorFlow nightly (`envs/grace.tfnightly.yml`):
+  the released TensorFlow wheels up to 2.21 do not run on sm120. It is marked
+  `candidate` (a nightly, and outside tensorpotential's declared TensorFlow
+  range); see the recipe header;
+- for an env with no working recipe there, `install.sh` stops before
+  downloading anything and prints the reason.
+
+Raised-torch siblings against the base stack (its lock replayed, run on CPU, as
+the base wheels have no sm120 kernels), on a 38-atom Cu(111) slab with CO,
+rattled; sibling on an sm120 GPU. ΔE in meV/atom, largest force-component
+difference in meV/Å (measured 2026-11):
+
+| Env | base torch | sibling torch | ΔE | max ΔF |
+|---|---|---|---|---|
+| alphanet | 2.1.2+cu121 | 2.7.1+cu128 | 0.0000 | 0.001 |
+| eqnorm | 2.6.0+cu118 | 2.7.1+cu128 | 0.0000 | 0.002 |
+| fairchemv1 | 2.4.1+cu121 | 2.7.1+cu128 | -0.0004 | 0.014 |
+| mattersim | 2.6.0+cu124 | 2.7.1+cu128 | +0.0004 | 0.005 |
+
+The sibling recipes also carry conda's `gxx` 14 and `ninja`: CUDA 12.x refuses
+a newer host gcc (Ubuntu 26.04 ships gcc 15), and the D3 kernel and
+OpenEquivariance compile with them at first use. `env.sh` adds the GPU's arch to
+`TORCH_CUDA_ARCH_LIST` so the D3 kernel is built for it.
+
+`envs/_arch_recipes.json` is the list, [Recipes](recipes.md) shows each sibling's
+pins, and the **sm120** column of [Supported models](model_status.md) shows what
+was verified on such a GPU. The driver must support CUDA 12.8 (570+). Older
+GPUs keep the recipes in the table above; nothing changes for them.
+
 ## Common problems
 
 - **GRACE weights:** `GRACE-2L-OAM` (about 100 MB) comes from upstream's Hugging Face
@@ -55,6 +98,10 @@ approximate Linux minimums for each CUDA build.
   driver matches the build. A CPU run is not a general fallback here: these
   models' inference lines pin the GPU, and the hub refuses a CPU request rather
   than running on the GPU and reporting CPU.
+- **`no kernel image is available` on a new GPU:** the env was built from a
+  recipe for older GPUs (for example copied from another machine, or built
+  before the sibling recipes existed). `./install.sh --status <env>` says which
+  recipe this GPU needs; `./install.sh --rebuild <env>` rebuilds it.
 - **A different GPU than the one you installed on:** NequIP and Allegro load a
   model compiled for a specific GPU architecture. See
   [GPU-architecture compilation](arch_first_run_compile.md).

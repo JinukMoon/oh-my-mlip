@@ -1,0 +1,51 @@
+# build_status: clean
+# sibling_of: mace
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/mace.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu126) ships no sm_120 kernels ("CUDA error: no
+# kernel image is available"), so install.sh selects THIS file instead when the
+# host GPU is sm120 (table: envs/_arch_recipes.json). The env is still built at
+# envs/mace/ and the recipe used is recorded in envs/mace/.omm_recipe.
+#
+# Changes against envs/mace.yml: torch 2.7.1+cu126 -> 2.7.1+cu128 (same
+#   torch release, CUDA 12.8 build), cuda-nvcc 12.6 -> 12.8.
+# Added: gxx=14.4.0 + ninja (host compiler nvcc accepts, JIT build tool; see the
+#   dependency comment).
+# Everything else (framework pins, ase, extras) is identical to the base recipe.
+#
+name: mace
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel, OpenEquivariance/extension JIT builds):
+  # CUDA 12.x accepts gcc <= 14, and a current distribution may ship a newer
+  # system gcc (Ubuntu 26.04: gcc 15 -> "unsupported GNU version"). The worker
+  # puts this env's bin/ first on PATH, so nvcc picks this gcc 14. torch's
+  # extension JIT (the D3 kernel) also runs `ninja` from PATH.
+  - gxx=14.4.0
+  - ninja=1.13.2
+  # ase pinned 2026-08-17 to the version present in the env whose GPU
+  # single-point verified; a bare `- ase` rode each new release into the
+  # build (the mattersim/eqnorm breakage class) and verify_determinism
+  # was pip-only, so nothing caught it.
+  # This conda pin does not decide the env's ase, though: mace-torch requires
+  # an unbounded `ase`, so the pip step below installs its own and replaces
+  # this one. The fresh-root build that passed verification (2026-09-14,
+  # envs/locks/mace.pip.txt) ended with 3.29.0, so the pip block pins that.
+  - ase=3.25.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.7.1+cu128
+      - ase==3.29.0
+      - mace-torch @ git+https://github.com/ACEsuit/mace.git@100a29149d90a5945eddec1f0940bd88a6e3b363
+      - cuequivariance==0.5.1
+      - cuequivariance-torch==0.5.1
+      - e3nn==0.4.4

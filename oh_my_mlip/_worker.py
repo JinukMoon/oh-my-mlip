@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import sys
 
 
@@ -228,11 +229,40 @@ def serve(calc, infile=sys.stdin, outfile=sys.stdout) -> None:
         try:
             atoms = decode_atoms(req["atoms"])
             props = tuple(req.get("properties", ("energy", "forces")))
-            with contextlib.redirect_stdout(sys.stderr):
+            with _stdout_to_stderr():
                 results = compute(calc, atoms, props)
             _emit(outfile, {"id": rid, "ok": True, "results": results})
         except Exception as exc:  # noqa: BLE001 - surface as ok:false, stay alive
             _emit(outfile, {"id": rid, "ok": False, "error": error_text(exc)})
+
+
+@contextlib.contextmanager
+def _stdout_to_stderr():
+    """Keep everything but the wire protocol off stdout while model code runs.
+
+    ``contextlib.redirect_stdout`` moves Python's ``sys.stdout`` only. A child
+    process writes to file descriptor 1 directly: torch's extension JIT runs
+    ``ninja -v`` that way, so the first D3 kernel build (catbench) or
+    OpenEquivariance JIT inside the worker printed its compile lines where the
+    supervisor reads the handshake ("bad handshake from worker: '[1/2] nvcc
+    ..."), and only the second start, with the build cached, worked. Point fd 1
+    at stderr too while the calculator is built or called."""
+    sys.stdout.flush()
+    try:
+        saved = os.dup(1)
+    except OSError:  # no fd 1 (embedded / test doubles): Python-level only
+        with contextlib.redirect_stdout(sys.stderr):
+            yield
+        return
+    try:
+        os.dup2(2, 1)
+        with contextlib.redirect_stdout(sys.stderr):
+            yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(saved, 1)
+        os.close(saved)
 
 
 def _emit(outfile, obj: dict) -> None:
@@ -253,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     from oh_my_mlip.provider import get_calculator
 
     try:
-        with contextlib.redirect_stdout(sys.stderr):
+        with _stdout_to_stderr():
             calc = get_calculator(
                 args.model,
                 version=args.version,
