@@ -23,7 +23,15 @@
     "python": "3.11.13",
     "cu": "cu128"
   },
+  "deepmd.cu128": {
+    "python": "3.11.13",
+    "cu": "cu128"
+  },
   "dpa4": {
+    "python": "3.11.15",
+    "cu": "cu130"
+  },
+  "dpa4.cu130": {
     "python": "3.11.15",
     "cu": "cu130"
   },
@@ -44,6 +52,10 @@
     "cu": "cu128"
   },
   "equiformer_v3": {
+    "python": "3.11.15",
+    "cu": "cu128"
+  },
+  "equiformer_v3.cu128": {
     "python": "3.11.15",
     "cu": "cu128"
   },
@@ -70,6 +82,10 @@
     "cu": "cu128"
   },
   "matris": {
+    "python": "3.11.15",
+    "cu": "cu130"
+  },
+  "matris.cu130": {
     "python": "3.11.15",
     "cu": "cu130"
   },
@@ -105,6 +121,10 @@
     "python": "3.11.14",
     "cu": "cu128"
   },
+  "pet.cu128": {
+    "python": "3.11.14",
+    "cu": "cu128"
+  },
   "sevennet": {
     "python": "3.11.13",
     "cu": "cu126"
@@ -117,7 +137,15 @@
     "python": "3.11.15",
     "cu": "cu130"
   },
+  "tace.cu130": {
+    "python": "3.11.15",
+    "cu": "cu130"
+  },
   "uma": {
+    "python": "3.11.13",
+    "cu": "cu128"
+  },
+  "uma.cu128": {
     "python": "3.11.13",
     "cu": "cu128"
   }

@@ -78,19 +78,22 @@ def test_override_parsing(monkeypatch):
 # ── install.sh uses it ───────────────────────────────────────────────────────
 
 def test_dry_run_sm120_builds_siblings_and_stops_unsupported():
-    proc = _install("--dry-run", "mace", "alphanet", "uma", "grace", arch="sm120")
+    proc = _install("--dry-run", "mace", "alphanet", "uma", "allegro", "grace", arch="sm120")
     assert proc.returncode == 0, proc.stderr
     out = proc.stdout
     assert "envs/mace.cu128.yml" in out and "would create env 'mace'" in out
     assert "alphanet.cu128.build.sh" in out
-    assert "recipe for 'uma' (GPU sm120): envs/uma.yml" in out
+    assert "recipe for 'uma' (GPU sm120): envs/uma.cu128.yml" in out
+    assert "recipe for 'allegro' (GPU sm120): envs/allegro.yml" in out
     if TABLE["sm120"]["grace"]["recipe"] is None:
         assert "STOP 'grace' on sm120" in out
 
 
 def test_dry_run_sm89_never_mentions_a_sibling():
     out = _install("--dry-run", "--all", arch="sm89").stdout
-    assert ".cu128" not in out and "STOP" not in out
+    assert "STOP" not in out
+    for stem in SIBLINGS:
+        assert f"envs/{stem}.yml" not in out and f"{stem}.build.sh" not in out, stem
 
 
 def test_dry_run_unchecked_arch_stops_every_env():
@@ -158,12 +161,16 @@ def test_lint_passes_on_the_repo():
     assert errors == []
 
 
-def test_every_sibling_is_selected_and_pins_cu128():
+def test_every_sibling_is_selected_and_pins_its_cuda_tag():
+    """A torch sibling is named after its torch CUDA build: <env>.cu128 pins
+    +cu128 (most sm120 siblings), <env>.cu130 keeps the base's +cu130."""
     for stem in SIBLINGS:
         text = (ENVS / f"{stem}.yml").read_text()
         assert "# arch: sm120" in text and f"# sibling_of: {stem.split('.')[0]}" in text
         if "torch==" in text:
-            assert "+cu128" in text and "whl/cu128" in text
+            tag = stem.split(".", 1)[1]
+            assert tag in ("cu128", "cu130"), stem
+            assert f"+{tag}" in text and f"whl/{tag}" in text, stem
         sidecar = ENVS / f"{stem}.build.sh"
         if sidecar.exists():
             code = "\n".join(ln for ln in sidecar.read_text().splitlines() if not ln.lstrip().startswith("#"))
@@ -231,15 +238,24 @@ def test_candidate_comes_from_the_arch_table_marker_only():
     assert gen_status_table.arch_state(models, "N", "a", "sm120", table) == "validated"
 
 
-def test_committed_docs_mark_only_grace_as_candidate():
+# envs whose sm120 sibling exists but has not been built and verified there yet:
+# their base build passed setup_verify on sm120, so the table must not say "validated"
+D3_SIBLING_ENVS = {"uma", "deepmd", "dpa4", "equiformer_v3", "matris", "pet", "tace"}
+
+
+def test_committed_docs_mark_only_the_candidate_entries_as_candidate():
     flagged = {env for env, e in TABLE["sm120"].items() if (e or {}).get("status") == "candidate"}
-    assert flagged == {"grace"}
+    assert flagged == {"grace"} | D3_SIBLING_ENVS
+    for env in D3_SIBLING_ENVS:
+        assert "not yet built and verified on sm120" in TABLE["sm120"][env]["reason"]
+    models = json.loads((REPO / "models.json").read_text())
+    env_of = {fam: info["env"] for fam, info in models.items() if not fam.startswith("_")}
     doc = (REPO / "docs" / "model_status.md").read_text()
-    rows = [ln for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
-    assert [r.split(" | ")[0] for r in rows] == ["| GRACE-2L-OAM"]
+    rows = [ln.split(" | ") for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
+    assert {env_of[r[1]] for r in rows} == flagged
     readme = (REPO / "README.md").read_text()
     rows = [ln for ln in readme.splitlines() if ln.startswith("| ") and ln.rstrip().endswith("| candidate |")]
-    assert [r.split(" | ")[0] for r in rows] == ["| GRACE"]
+    assert {env_of[r.split(" | ")[0][2:]] for r in rows} == flagged
 
 
 def test_mcp_status_agrees_with_the_generated_table():

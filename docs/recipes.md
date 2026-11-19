@@ -422,7 +422,15 @@ conda env create -f $OMM/envs/deepmd.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/deepmd.cu128.yml` instead (torch==2.8.0+cu128; the base wheels carry no sm120 kernels):
+
+```bash
+conda env create -f $OMM/envs/deepmd.cu128.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* gxx=14.4.0 ninja=1.13.2 ase=3.27.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.8.0+cu128 deepmd-kit==3.1.2 setuptools==70.2.0 mpich==5.0.1 dpdata==1.1.0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 
@@ -949,7 +957,15 @@ conda env create -f $OMM/envs/equiformer_v3.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/equiformer_v3.cu128.yml` instead (torch==2.7.1+cu128; the base wheels carry no sm120 kernels):
+
+```bash
+conda env create -f $OMM/envs/equiformer_v3.cu128.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=12.8.* gxx=14.4.0 ninja=1.13.2 ase=3.29.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 --find-links https://data.pyg.org/whl/torch-2.7.1+cu128.html torch==2.7.1+cu128 torch-geometric==2.7.0 torch_scatter==2.1.2+pt27cu128 torch_sparse==0.6.18+pt27cu128 torch_cluster==1.6.3+pt27cu128 torch_spline_conv==1.2.2+pt27cu128 e3nn==0.5.6 scipy==1.16.0 fairchem-core @ git+https://github.com/atomicarchitects/equiformer_v3.git@a7300c58df683dc99cb48027d5bfd4c887486c48#subdirectory=packages/fairchem-core
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 
@@ -1003,7 +1019,15 @@ conda env create -f $OMM/envs/uma.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/uma.cu128.yml` instead (torch==2.8.0+cu128; the base wheels carry no sm120 kernels):
+
+```bash
+conda env create -f $OMM/envs/uma.cu128.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.8.* gxx=14.4.0 ninja=1.13.2 ase=3.27.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.8.0+cu128 fairchem-core==2.16.0 e3nn==0.5.6 scipy==1.16.0 setuptools==78.1.1
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 
@@ -1129,7 +1153,15 @@ conda env create -f $OMM/envs/pet.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/pet.cu128.yml` instead (torch==2.9.1+cu128; the base wheels carry no sm120 kernels):
+
+```bash
+conda env create -f $OMM/envs/pet.cu128.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.14 pip cuda-nvcc=12.8.* gxx=14.4.0 ninja=1.13.2 ase=3.27.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch==2.9.1+cu128 metatrain==2026.1 upet==0.1.0 metatomic-torch==0.1.7 metatensor-torch==0.8.3 setuptools==80.9.0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 
@@ -1278,7 +1310,15 @@ conda env create -f $OMM/envs/matris.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/matris.cu130.yml` instead (torch==2.12.1+cu130; the base wheels carry no sm120 kernels) — **candidate**: see the recipe header for its caveat:
+
+```bash
+conda env create -f $OMM/envs/matris.cu130.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* gxx=15.3.0 ninja=1.13.2 ase=3.29.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.12.1+cu130 matris @ git+https://github.com/HPC-AI-Team/MatRIS@c16f569ca08e6905e91b64e2ee68614303e46f7f
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 
@@ -1333,7 +1373,15 @@ conda env create -f $OMM/envs/dpa4.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/dpa4.cu130.yml` instead (torch==2.11.0+cu130; the base wheels carry no sm120 kernels) — **candidate**: see the recipe header for its caveat:
+
+```bash
+conda env create -f $OMM/envs/dpa4.cu130.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* gxx=15.3.0 ninja=1.13.2 ase=3.28.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 deepmd-kit==3.2.0b0 e3nn==0.6.0 vesin==0.5.8 vesin-torch==0.5.8 mpich==5.0.1 dpdata==1.1.0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 
@@ -1389,7 +1437,15 @@ conda env create -f $OMM/envs/tace.yml -p <prefix>
 <prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120: the same pinned combination (its CUDA build covers sm120).
+On sm120 `install.sh` builds the sibling recipe `envs/tace.cu130.yml` instead (torch==2.11.0+cu130; the base wheels carry no sm120 kernels) — **candidate**: see the recipe header for its caveat:
+
+```bash
+conda env create -f $OMM/envs/tace.cu130.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* gxx=15.3.0 ninja=1.13.2 ase=3.29.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 torch-geometric==2.8.0 e3nn==0.6.0 TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
+<prefix>/bin/pip install catbench==1.1.4    # every env: D3 dispersion + adsorption benchmarking
+```
 
 ### B. weights
 

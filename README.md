@@ -69,7 +69,7 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | NequIP | NequIP-OAM-XL, NequIP-OAM-L | validated |
 | Allegro | Allegro-OAM-L | validated |
 | Nequix | Nequix-MP-1 | validated |
-| DeePMD | DPA-3.1-3M-FT | validated |
+| DeePMD | DPA-3.1-3M-FT | candidate |
 | ORB | ORB-v3 | validated |
 | GRACE | GRACE-2L-OAM | candidate |
 | MatterSim | MatterSim-v1-5M | validated |
@@ -77,13 +77,13 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | AlphaNet | AlphaNet-v1-OMA | validated |
 | Eqnorm | Eqnorm-MPtrj | validated |
 | fairchemv1 | eSEN-30M-OAM | validated |
-| EquiformerV3 | EqV3-OMatMPtrjSalex | validated |
-| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT | validated |
-| PET | PET-OAM-XL | validated |
+| EquiformerV3 | EqV3-OMatMPtrjSalex | candidate |
+| UMA | UMA-m-1p1-OC20, UMA-m-1p1-OMAT, UMA-s-1p1-OC20, UMA-s-1p1-OMAT, UMA-s-1p2-OC20, UMA-s-1p2-OC22, UMA-s-1p2-OC25, UMA-s-1p2-OMAT | candidate |
+| PET | PET-OAM-XL | candidate |
 | EquFlash | EquFlashV2, EquFlash-v1 | validated |
-| MatRIS | MatRIS-10M-OAM | validated |
-| DPA4 | DPA-4.0.1-pro-MPtrj | validated |
-| TACE | TACE-OAM-L | validated |
+| MatRIS | MatRIS-10M-OAM | candidate |
+| DPA4 | DPA-4.0.1-pro-MPtrj | candidate |
+| TACE | TACE-OAM-L | candidate |
 <!-- STATUS_TABLE_END -->
 
 The **sm120** column is the newest GPU generation (Blackwell): its state is measured
