@@ -50,8 +50,12 @@ def _probe_line(d3_dir, torch=True) -> str:
 class FakeRun:
     """Stands in for subprocess.run: answers the probe, nvcc and the build."""
 
-    def __init__(self, d3_dir=None, torch=True, build_rc=0, build_out="", archs="compute_75 compute_120"):
+    def __init__(self, d3_dir=None, torch=True, build_rc=0, build_out="", archs="compute_75 compute_120",
+                 cache=None, cache_error="", build_into=None):
         self.d3_dir, self.torch, self.build_rc, self.build_out, self.archs = d3_dir, torch, build_rc, build_out, archs
+        self.cache, self.cache_error = cache, cache_error
+        # where a successful fake build drops pair_d3.so (default: the package folder)
+        self.build_into = build_into if build_into is not None else d3_dir
         self.calls = []
 
     def __call__(self, argv, **kw):
@@ -61,7 +65,12 @@ class FakeRun:
         if argv[1:2] == ["-c"] and build_d3.PROBE_MARK in argv[2]:
             d = str(self.d3_dir) if self.d3_dir else None
             return SimpleNamespace(returncode=0, stdout=_probe_line(d, self.torch), stderr="")
+        if argv[1:2] == ["-c"] and argv[2] == build_d3.CACHE_CODE:
+            got = {"cache_dir": str(self.cache) if self.cache else None, "error": self.cache_error}
+            return SimpleNamespace(returncode=0, stdout=build_d3.CACHE_MARK + json.dumps(got) + "\n", stderr="")
         if argv[1:2] == ["-c"] and argv[2] == build_d3.BUILD_CODE:
+            if self.build_rc == 0 and self.build_into:
+                (Path(self.build_into) / "pair_d3.so").write_bytes(b"\x7fELF")
             return SimpleNamespace(returncode=self.build_rc, stdout="building\n", stderr=self.build_out)
         raise AssertionError(f"unexpected call {argv}")
 
@@ -140,7 +149,7 @@ def test_prebuild_builds_with_the_env_tools_and_logs(env_prefix, tmp_path):
     run = FakeRun(d3_dir=d3)
     log = tmp_path / "logs" / "d3.log"
     state, detail = build_d3.prebuild(env_prefix, log, run=run, base={"PATH": "/usr/bin"})
-    assert state == "built" and str(log) in detail
+    assert state == "built" and str(log) in detail and "in the catbench package folder" in detail
     env = run.build_call()["env"]
     assert env["CUDA_HOME"] == str(env_prefix) and env["PATH"].startswith(str(env_prefix / "bin"))
     assert "TORCH_CUDA_ARCH_LIST=7.5;12.0" in log.read_text()
@@ -153,8 +162,9 @@ def test_prebuild_is_a_no_op_when_the_kernel_exists(env_prefix, tmp_path):
     run = FakeRun(d3_dir=d3)
     state, detail = build_d3.prebuild(env_prefix, tmp_path / "d3.log", run=run, base={})
     assert state == "present" and detail.endswith("pair_d3.so")
-    assert len(run.calls) == 1            # the probe only: no nvcc query, no build
+    assert len(run.calls) == 1            # the probe only: no cache lookup, no nvcc query, no build
     assert not (tmp_path / "d3.log").exists()
+    assert build_d3.read_marker(env_prefix)["state"] == "present"
 
 
 @pytest.mark.parametrize("d3_dir,torch", [(None, True), ("x", False)])
@@ -170,6 +180,9 @@ def test_prebuild_failure_names_the_log(env_prefix, tmp_path):
     state, detail = build_d3.prebuild(env_prefix, log, run=run, base={})
     assert state == "failed" and "Ninja is required" in detail and str(log) in detail
     assert "Ninja is required" in log.read_text()
+    marker = build_d3.read_marker(env_prefix)
+    assert marker["state"] == "failed" and marker["log"] == str(log)
+    assert marker["path"] == str(env_prefix / ".omm_d3")
 
 
 def test_prebuild_without_nvcc_keeps_d3_off_without_failing(tmp_path, monkeypatch):
@@ -185,9 +198,76 @@ def test_cli_exit_codes(env_prefix, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(build_d3, "prebuild", lambda prefix, log: ("failed", "boom (log: x)"))
     assert build_d3.main([str(env_prefix)]) == 1
     assert "d3 kernel: failed: boom" in capsys.readouterr().err
+    # an env already in use: a WARNING, the rerun command and the marker, exit 3
+    assert build_d3.main([str(env_prefix), "--on-fail", "warn"]) == build_d3.WARN_EXIT == 3
+    err = capsys.readouterr().err
+    assert err.startswith(f"WARNING: D3 kernel build failed for {env_prefix}: boom (log: x)")
+    assert f"Rerun: python3 {REPO / 'scripts' / 'build_d3.py'} {env_prefix}" in err
+    assert f"Recorded in {env_prefix / '.omm_d3'}" in err
     for state in ("present", "built", "not_applicable", "no_nvcc"):
         monkeypatch.setattr(build_d3, "prebuild", lambda prefix, log, s=state: (s, "d"))
         assert build_d3.main([str(env_prefix)]) == 0
+        assert build_d3.main([str(env_prefix), "--on-fail", "warn"]) == 0
+
+
+# ── a shared hub: the catbench package folder is not writable ───────────────
+
+def _readonly(monkeypatch, *paths):
+    """os.access reports these paths (and only these) as not writable."""
+    real = os.access
+    ro = {str(p) for p in paths}
+    monkeypatch.setattr(build_d3.os, "access",
+                        lambda p, mode, real=real: False if (mode & os.W_OK and str(p) in ro) else real(p, mode))
+
+
+def test_a_kernel_in_the_torch_extensions_cache_is_present(env_prefix, tmp_path, monkeypatch):
+    pkg, cache = tmp_path / "pkg", tmp_path / "torch_extensions" / "py311_cu128" / "pair_d3"
+    pkg.mkdir()
+    cache.mkdir(parents=True)
+    (cache / "pair_d3.so").write_bytes(b"")
+    _readonly(monkeypatch, pkg)
+    run = FakeRun(d3_dir=pkg, cache=cache)
+    state, detail = build_d3.prebuild(env_prefix, tmp_path / "d3.log", run=run, base={})
+    assert (state, detail) == ("present", str(cache / "pair_d3.so"))
+    assert not any(argv[2] == build_d3.BUILD_CODE for argv, _ in run.calls if argv[1:2] == ["-c"])
+
+
+def test_read_only_package_folder_builds_into_the_cache_and_says_so(env_prefix, tmp_path, monkeypatch):
+    pkg, cache = tmp_path / "pkg", tmp_path / "torch_extensions" / "py311_cu128" / "pair_d3"
+    pkg.mkdir()
+    cache.mkdir(parents=True)
+    _readonly(monkeypatch, pkg)
+    run = FakeRun(d3_dir=pkg, cache=cache, build_into=cache)
+    state, detail = build_d3.prebuild(env_prefix, tmp_path / "d3.log", run=run, base={})
+    assert state == "built"
+    assert detail.startswith(f"{cache / 'pair_d3.so'}, in the torch extensions cache, because the catbench "
+                             f"package folder {pkg} is not writable, for 7.5;12.0")
+
+
+def test_nothing_writable_is_a_clear_message_not_a_traceback(env_prefix, tmp_path, monkeypatch):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    _readonly(monkeypatch, pkg)
+    err = "PermissionError: [Errno 13] Permission denied: '/home/u/.cache/torch_extensions'"
+    run = FakeRun(d3_dir=pkg, cache=None, cache_error=err)
+    state, detail = build_d3.prebuild(env_prefix, tmp_path / "d3.log", run=run, base={})
+    assert state == "failed"
+    assert detail == (f"cannot build the D3 kernel: the catbench package folder {pkg} is not writable, and "
+                      f"neither is the torch extensions cache ({err}). Ask whoever owns {env_prefix} to run "
+                      f"`python3 {REPO / 'scripts' / 'build_d3.py'} {env_prefix}`, or set TORCH_EXTENSIONS_DIR "
+                      f"to a directory you can write and run it yourself")
+    assert not any(argv[1:2] == ["-c"] and argv[2] == build_d3.BUILD_CODE for argv, _ in run.calls)
+    assert "Traceback" not in detail
+
+
+def test_marker_moves_to_the_user_cache_when_the_prefix_is_read_only(env_prefix, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    _readonly(monkeypatch, env_prefix)
+    want = tmp_path / "xdg" / "oh-my-mlip" / "d3" / str(env_prefix.resolve()).strip("/").replace("/", "_") / ".omm_d3"
+    assert build_d3.marker_path(env_prefix) == want
+    build_d3.prebuild(env_prefix, None, run=FakeRun(d3_dir=None), base={})
+    assert build_d3.read_marker(env_prefix)["state"] == "not_applicable"
+    assert not (env_prefix / ".omm_d3").exists()
 
 
 def test_probe_code_runs_and_finds_catbench_without_importing_it(tmp_path):
@@ -211,13 +291,47 @@ def test_probe_code_runs_and_finds_catbench_without_importing_it(tmp_path):
 def test_install_sh_prebuilds_d3_and_fails_the_env_on_a_failed_build():
     text = (REPO / "install.sh").read_text()
     func = text[text.index("build_d3_kernel() {"):text.index("install_one() {")]
-    assert 'python3 "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log"' in func
-    assert "return 1" in func and "Build log: $log" in func
+    assert '"$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode"' in func
     body = text[text.index("install_one() {"):]
-    # after a build (before the sentinel) and for an env that was already installed
-    assert body.count('build_d3_kernel "$env_name" "$prefix" || return 1') == 2
-    assert body.index('build_d3_kernel "$env_name" "$prefix" || return 1\n\n') < body.index(': > "$sentinel"')
+    # a fresh build fails the env (before the sentinel); an installed env only warns
+    assert body.count('build_d3_kernel "$env_name" "$prefix" || return 1\n') == 1
+    assert body.index('build_d3_kernel "$env_name" "$prefix" || return 1\n') < body.index(': > "$sentinel"')
+    assert body.count('build_d3_kernel "$env_name" "$prefix" warn || return 1') == 1
     assert "D3 warm-up" not in text
+
+
+def _run_build_d3_kernel(tmp_path: Path, mode: str, rc: int) -> subprocess.CompletedProcess:
+    """install.sh's build_d3_kernel + end-of-run summary, with build_d3.py stubbed."""
+    text = (REPO / "install.sh").read_text()
+    func = text[text.index("OMM_D3_WARNINGS=()"):text.index("install_one() {")]
+    summary = text[text.index('if [ "${#OMM_D3_WARNINGS[@]}" -gt 0 ]; then'):text.index('if [ "$rc" -eq 0 ]; then\n  echo "install.sh: done.')]
+    home = tmp_path / "hub"
+    _exe(home / "scripts" / "build_d3.py", "")
+    (home / "scripts" / "build_d3.py").write_text(f"import sys\nsys.exit({rc})\n")
+    script = (f"OH_MY_MLIP_HOME={home}; THREAD_CAPS=(env)\n{func}\n"
+              f"build_d3_kernel uma {tmp_path}/envs/uma {mode}; echo \"returned=$?\"\n{summary}")
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def test_install_sh_fresh_build_fails_on_a_failed_d3_build(tmp_path):
+    proc = _run_build_d3_kernel(tmp_path, "error", 1)
+    assert "returned=1" in proc.stdout
+    assert "D3 kernel build FAILED for 'uma' — no sentinel written" in proc.stderr
+
+
+def test_install_sh_installed_env_warns_and_keeps_going(tmp_path):
+    proc = _run_build_d3_kernel(tmp_path, "warn", 3)
+    assert "returned=0" in proc.stdout and "FAILED" not in proc.stderr
+    assert "install.sh: WARNING: the D3 kernel could not be built for these already-installed envs" in proc.stderr
+    assert f"uma (log: {tmp_path}/envs/uma/.omm_d3_build.log)" in proc.stderr
+    # an unexpected error in warn mode (not the WARN exit) still fails
+    assert "returned=1" in _run_build_d3_kernel(tmp_path, "warn", 1).stdout
+
+
+def test_install_status_shows_a_failed_d3_marker(tmp_path):
+    text = (REPO / "install.sh").read_text()
+    assert "grep -qx 'state=failed' \"$prefix/.omm_d3\"" in text
+    assert "D3 kernel build FAILED earlier" in text
 
 
 def test_install_dry_run_shows_the_d3_build():
@@ -247,7 +361,7 @@ def _adopt(home: Path, prefix: Path) -> subprocess.CompletedProcess:
                                "TORCH_CUDA_ARCH_LIST": "12.0"})
 
 
-def test_adoption_builds_d3_and_a_failed_build_is_loud(tmp_path: Path):
+def test_adoption_builds_d3_and_a_failed_build_warns_with_a_marker(tmp_path: Path):
     home = _adopt_home(tmp_path)
     prefix = tmp_path / "alpha_env"
     d3 = tmp_path / "site" / "catbench" / "dispersion" / "cuda"
@@ -257,15 +371,19 @@ def test_adoption_builds_d3_and_a_failed_build_is_loud(tmp_path: Path):
     _exe(prefix / "bin" / "python",
          'case "$2" in\n'
          f"  *OMM_D3_PROBE*) echo '{probe}' ;;\n"
+         f"  *OMM_D3_CACHE*) echo 'OMM_D3_CACHE {{\"cache_dir\": null, \"error\": \"x\"}}' ;;\n"
          "  *_load*) echo 'RuntimeError: Ninja is required to load C++ extensions' >&2; exit 1 ;;\n"
          "esac\nexit 0\n")
     _exe(prefix / "bin" / "nvcc", 'echo "compute_75 compute_120"\n')
     proc = _adopt(home, prefix)
-    assert proc.returncode == 1
-    assert "D3 kernel build FAILED for alpha" in proc.stderr and "Ninja is required" in proc.stderr
+    assert proc.returncode == 0, proc.stderr                 # the env is in use: warn, do not fail
+    assert "WARNING: D3 kernel build failed for alpha" in proc.stderr and "Ninja is required" in proc.stderr
     log = home / "logs" / "d3_alpha.log"
-    assert str(log) in proc.stderr and "TORCH_CUDA_ARCH_LIST=12.0" in log.read_text()
+    assert f"python3 {REPO / 'scripts' / 'build_d3.py'} {prefix} --log {log}" in proc.stderr
+    assert "TORCH_CUDA_ARCH_LIST=12.0" in log.read_text()
     assert json.loads((home / "env_map.local.json").read_text()) == {"alpha": str(prefix)}  # adoption stands
+    marker = (prefix / ".omm_d3").read_text()
+    assert "state=failed" in marker and f"log={log}" in marker
 
 
 def test_adoption_of_an_env_without_catbench_d3_is_not_a_failure(tmp_path: Path):
@@ -333,6 +451,25 @@ def test_check_d3_missing_kernel_is_a_fail_not_a_compile(verify_env, tmp_path):
     assert all(argv[2] != setup_verify.D3_CHECK_CODE for argv, _ in run.calls)
 
 
+def test_check_d3_surfaces_a_failed_build_marker(verify_env, tmp_path):
+    prefix = verify_env.parent.parent
+    build_d3.write_marker(prefix, "failed", "RuntimeError: Ninja is required", tmp_path / "d3.log")
+    got = setup_verify.check_d3("X", None, {"skew": False}, run=VerifyRun(tmp_path))
+    assert got["state"] == "fail" and "build failed at install/adopt time" in got["reason"]
+    assert "Ninja is required" in got["reason"]
+    assert got["build"] == {"state": "failed", "log": str(tmp_path / "d3.log"), "path": str(prefix / ".omm_d3")}
+    setup_verify._print_verdict({"pass": True, "d3": got}, as_json=False)
+
+
+def test_check_d3_finds_a_kernel_in_the_torch_extensions_cache(verify_env, tmp_path):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "pair_d3.so").write_bytes(b"")
+    run = VerifyRun(tmp_path / "pkg", stdout=_d3_out())
+    run.cache = cache
+    assert setup_verify.check_d3("X", None, {"skew": False}, run=run)["state"] == "pass"
+
+
 def test_check_d3_not_applicable_and_skipped(verify_env, tmp_path, monkeypatch):
     got = setup_verify.check_d3("G", None, {"skew": False}, run=VerifyRun(None))
     assert got["state"] == "not_applicable"
@@ -394,4 +531,6 @@ def test_d3_sibling_is_its_base_plus_ninja_and_a_pinned_compiler(stem, gxx):
     nvcc = re.search(r"cuda-nvcc=(\d+\.\d+)", sib).group(1)
     assert {"12.8": "14.4.0", "13.0": "15.3.0"}[nvcc] == gxx
     table = json.loads((ENVS / "_arch_recipes.json").read_text())
-    assert table["sm120"][env] == {"recipe": stem}
+    # selected on sm120, and marked candidate until the sibling itself is built and verified there
+    assert table["sm120"][env]["recipe"] == stem and table["sm120"][env]["status"] == "candidate"
+    assert sib.splitlines()[0].startswith(f"# base + ninja + pinned gxx {gxx} for sm120 (D3 kernel build)")

@@ -22,16 +22,29 @@ own tools:
                          (CUDA 13 dropped everything below 7.5)
 pair_d3.so then sits in the package folder and nothing compiles at run time.
 
+Where the kernel goes: catbench builds into its package folder, and only when
+that folder is not writable (a shared, read-only hub) into torch's extensions
+cache (TORCH_EXTENSIONS_DIR, default ~/.cache/torch_extensions/<py>_<cu>/pair_d3),
+where it also looks first at load time. A kernel in either place is `present`;
+`built` says which place; when neither is writable the build is not attempted
+and the message says what to do (no traceback).
+
 States (printed as ``d3 kernel: <state>: <detail>``):
   present          pair_d3.so already exists: nothing is done (exit 0)
   built            built now (exit 0)
   not_applicable   the env has no torch or no catbench D3 module (GRACE): exit 0
   no_nvcc          no nvcc anywhere: D3 stays off for this env, the MLIP still
                    runs (exit 0; the same degrade install.sh always had)
-  failed           the build failed: exit 1, with the log path
+  failed           no kernel: exit 1 (``--on-fail warn``: a WARNING with the log
+                   path and the rerun command, exit 3)
+
+Every run leaves its state in a marker file, ``<prefix>/.omm_d3`` (or, when the
+prefix is not writable, ``~/.cache/oh-my-mlip/d3/<prefix path>/.omm_d3``):
+``state=``, ``detail=``, ``log=`` lines. setup_verify and ``install.sh --status``
+show a ``failed`` marker, so a D3 failure that did not stop an install is not silent.
 
 Usage:
-  python3 scripts/build_d3.py <env prefix> [--log <file>]
+  python3 scripts/build_d3.py <env prefix> [--log <file>] [--on-fail error|warn]
 """
 from __future__ import annotations
 
@@ -68,6 +81,21 @@ print({PROBE_MARK!r} + json.dumps({{"torch": t, "d3_dir": d}}))
 """
 BUILD_CODE = "from catbench.dispersion.cuda.d3_calculator import _load; _load('pair_d3')"
 
+CACHE_MARK = "OMM_D3_CACHE "
+# Runs inside the env (imports torch): the torch-extensions cache directory catbench
+# falls back to, by torch's own function. It creates the directory when it can, as
+# catbench's _load does before every build; a PermissionError means "not writable".
+CACHE_CODE = f"""
+import json
+try:
+    from torch.utils.cpp_extension import _get_build_directory
+    d, err = _get_build_directory("pair_d3", verbose=False), ""
+except Exception as exc:
+    d, err = None, f"{{type(exc).__name__}}: {{exc}}"
+print({CACHE_MARK!r} + json.dumps({{"cache_dir": d, "error": err}}))
+"""
+WARN_EXIT = 3
+
 
 def probe(python: Path, run=subprocess.run, env: dict | None = None) -> dict:
     """{"applicable": bool, "d3_dir": str|None, "so": str|None, "present": bool, "error": str}."""
@@ -93,6 +121,73 @@ def probe(python: Path, run=subprocess.run, env: dict | None = None) -> dict:
         return out
     so = os.path.join(found["d3_dir"], LIB_NAME)
     out.update(applicable=True, d3_dir=found["d3_dir"], so=so, present=os.path.isfile(so))
+    return out
+
+
+def cache_dir(python: Path, run=subprocess.run, env: dict | None = None) -> tuple[str | None, str]:
+    """(torch extensions cache dir for pair_d3, error) as torch computes it in this env."""
+    try:
+        proc = run([str(python), "-c", CACHE_CODE], capture_output=True, text=True, timeout=300, env=env)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, str(exc)
+    for line in (proc.stdout or "").splitlines():
+        if line.startswith(CACHE_MARK):
+            try:
+                got = json.loads(line[len(CACHE_MARK):])
+            except ValueError:
+                break
+            return got.get("cache_dir"), got.get("error") or ""
+    tail = ((proc.stderr or "").strip().splitlines() or [f"exit {proc.returncode}"])[-1]
+    return None, tail
+
+
+def locate(python: Path, run=subprocess.run, env: dict | None = None) -> dict:
+    """probe() plus the torch extensions cache: `present` / `so` cover both places
+    catbench loads from; `cache_dir` / `cache_error` describe the fallback place."""
+    found = probe(python, run=run, env=env)
+    found.update(cache_dir=None, cache_error="")
+    if found["error"] or not found["applicable"] or found["present"]:
+        return found
+    found["cache_dir"], found["cache_error"] = cache_dir(python, run=run, env=env)
+    if found["cache_dir"]:
+        cached = os.path.join(found["cache_dir"], LIB_NAME)
+        if os.path.isfile(cached):
+            found.update(so=cached, present=True)
+    return found
+
+
+def state_dir(prefix: Path) -> Path:
+    """Where this env's marker (and default build log) live: the prefix, or a
+    per-user cache directory when the prefix is not writable (a shared hub)."""
+    if os.access(prefix, os.W_OK):
+        return prefix
+    root = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return root / "oh-my-mlip" / "d3" / str(prefix.resolve()).strip("/").replace("/", "_")
+
+
+def marker_path(prefix: Path) -> Path:
+    return state_dir(prefix) / ".omm_d3"
+
+
+def write_marker(prefix: Path, state: str, detail: str, log: Path | None) -> Path | None:
+    path = marker_path(prefix)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"state={state}\ndetail={detail}\nlog={log or ''}\n", encoding="utf-8")
+    except OSError:
+        return None
+    return path
+
+
+def read_marker(prefix: Path) -> dict:
+    """{"state", "detail", "log", "path"} from the marker, or {} when there is none."""
+    path = marker_path(prefix)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    out = dict(ln.split("=", 1) for ln in lines if "=" in ln)
+    out["path"] = str(path)
     return out
 
 
@@ -175,23 +270,40 @@ def build_env(prefix: Path, base: dict, run=subprocess.run) -> tuple[dict | None
     return env, ""
 
 
-def prebuild(prefix: Path, log: Path, run=subprocess.run, base: dict | None = None) -> tuple[str, str]:
-    """(state, detail) for one env; see the module docstring for the states."""
-    base = dict(os.environ if base is None else base)
+def prebuild(prefix: Path, log: Path | None = None, run=subprocess.run,
+             base: dict | None = None) -> tuple[str, str]:
+    """(state, detail) for one env; see the module docstring. Leaves the marker."""
+    log = log or state_dir(prefix) / ".omm_d3_build.log"
+    state, detail, logged = _prebuild(prefix, log, run, dict(os.environ if base is None else base))
+    write_marker(prefix, state, detail, log if logged else None)
+    return state, detail
+
+
+def _prebuild(prefix: Path, log: Path, run, base: dict) -> tuple[str, str, bool]:
     python = prefix / "bin" / "python"
     if not os.access(python, os.X_OK):
-        return "failed", f"no interpreter at {python}"
-    found = probe(python, run=run, env=base)
+        return "failed", f"no interpreter at {python}", False
+    found = locate(python, run=run, env=base)
     if found["error"]:
-        return "failed", found["error"]
+        return "failed", found["error"], False
     if not found["applicable"]:
-        return "not_applicable", "no torch or no catbench D3 module in this env"
+        return "not_applicable", "no torch or no catbench D3 module in this env", False
     if found["present"]:
-        return "present", found["so"]
+        return "present", found["so"], False
+    if os.access(found["d3_dir"], os.W_OK):
+        target, where = found["d3_dir"], "the catbench package folder"
+    elif found["cache_dir"] and os.access(found["cache_dir"], os.W_OK):
+        target, where = found["cache_dir"], ("the torch extensions cache, because the catbench package "
+                                             f"folder {found['d3_dir']} is not writable")
+    else:
+        cache = found["cache_dir"] or f"the torch extensions cache ({found['cache_error'] or 'unknown'})"
+        return "failed", (f"cannot build the D3 kernel: the catbench package folder {found['d3_dir']} is not "
+                          f"writable, and neither is {cache}. Ask whoever owns {prefix} to run "
+                          f"`python3 {Path(__file__).resolve()} {prefix}`, or set TORCH_EXTENSIONS_DIR to a "
+                          f"directory you can write and run it yourself"), False
     env, why = build_env(prefix, base, run=run)
     if env is None:
-        return "no_nvcc", f"{why}; D3 stays off for this env (the MLIP still runs)"
-    log.parent.mkdir(parents=True, exist_ok=True)
+        return "no_nvcc", f"{why}; D3 stays off for this env (the MLIP still runs)", False
     try:
         proc = run([str(python), "-c", BUILD_CODE], capture_output=True, text=True,
                    timeout=BUILD_TIMEOUT_S, env=env)
@@ -199,25 +311,43 @@ def prebuild(prefix: Path, log: Path, run=subprocess.run, base: dict | None = No
     except (OSError, subprocess.TimeoutExpired) as exc:
         rc, text = 1, f"{exc}\n"
     settings = (f"CUDA_HOME={env['CUDA_HOME']}\nCC={env.get('CC', '')}\nCXX={env.get('CXX', '')}\n"
-                f"TORCH_CUDA_ARCH_LIST={env['TORCH_CUDA_ARCH_LIST']}\nPATH={env['PATH']}\n\n")
-    log.write_text(settings + text, encoding="utf-8")
-    if rc != 0:
-        tail = [ln for ln in text.splitlines() if ln.strip()][-1:] or [f"exit {rc}"]
-        return "failed", f"{tail[0]} (log: {log})"
-    return "built", f"{found['so']} for {env['TORCH_CUDA_ARCH_LIST']} (log: {log})"
+                f"TORCH_CUDA_ARCH_LIST={env['TORCH_CUDA_ARCH_LIST']}\nPATH={env['PATH']}\n"
+                f"target={target}\n\n")
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(settings + text, encoding="utf-8")
+        logged, where_log = True, f"log: {log}"
+    except OSError as exc:
+        logged, where_log = False, f"no log: {log} not writable ({exc})"
+    so = os.path.join(target, LIB_NAME)
+    if rc != 0 or not os.path.isfile(so):
+        tail = [ln for ln in text.splitlines() if ln.strip()][-1:] or [f"exit {rc}, no {so}"]
+        return "failed", f"{tail[0]} ({where_log})", logged
+    return "built", f"{so}, in {where}, for {env['TORCH_CUDA_ARCH_LIST']} ({where_log})", logged
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("prefix", type=Path, help="env prefix (contains bin/python)")
     ap.add_argument("--log", type=Path, default=None,
-                    help="build log (default: <prefix>/.omm_d3_build.log)")
+                    help="build log (default: <prefix>/.omm_d3_build.log, or the marker's directory)")
+    ap.add_argument("--on-fail", choices=("error", "warn"), default="error",
+                    help="error: exit 1 (a fresh install); warn: WARNING + exit 3, for an env "
+                         "that is already in use (install.sh re-run, adopt_env.py)")
     args = ap.parse_args(argv)
     prefix = args.prefix.expanduser().absolute()
-    log = args.log or prefix / ".omm_d3_build.log"
-    state, detail = prebuild(prefix, log)
-    print(f"d3 kernel: {state}: {detail}", file=sys.stderr if state == "failed" else sys.stdout)
-    return 1 if state == "failed" else 0
+    state, detail = prebuild(prefix, args.log)
+    if state != "failed":
+        print(f"d3 kernel: {state}: {detail}")
+        return 0
+    if args.on_fail == "error":
+        print(f"d3 kernel: failed: {detail}", file=sys.stderr)
+        return 1
+    print(f"WARNING: D3 kernel build failed for {prefix}: {detail}\n"
+          f"  The env stays usable; only the D3 correction does not work until this succeeds.\n"
+          f"  Rerun: python3 {Path(__file__).resolve()} {prefix}\n"
+          f"  Recorded in {marker_path(prefix)} (setup_verify reports it).", file=sys.stderr)
+    return WARN_EXIT
 
 
 if __name__ == "__main__":

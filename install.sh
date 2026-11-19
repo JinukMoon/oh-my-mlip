@@ -514,6 +514,9 @@ if [ "$STATUS" -eq 1 ]; then
       state="not installed (install.sh will build from the recipe)"
     fi
     printf '  %-14s %s\n' "$env_name" "$state"
+    if grep -qx 'state=failed' "$prefix/.omm_d3" 2>/dev/null; then
+      printf '  %-14s D3 kernel build FAILED earlier: %s\n' "" "$(grep -m1 '^log=' "$prefix/.omm_d3" | cut -d= -f2-)"
+    fi
     if pick_recipe "$env_name"; then
       if [ -x "$prefix/bin/python" ] && [ "$(built_recipe "$prefix" "$env_name")" != "$RECIPE_STEM" ]; then
         printf '  %-14s built from envs/%s.yml, but this GPU (%s) needs envs/%s.yml: rebuild with --rebuild\n' \
@@ -542,17 +545,28 @@ THREAD_CAPS=(env OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4
   NUMEXPR_NUM_THREADS=4 TORCHINDUCTOR_COMPILE_THREADS=1)
 
 # D3 kernel prebuild for one env (scripts/build_d3.py): a no-op when
-# pair_d3.so exists or the env has no torch/catbench (GRACE). Returns 1 only
-# when the build itself failed, after printing the log path.
+# pair_d3.so exists or the env has no torch/catbench (GRACE). Mode "error" (a
+# fresh install): a failed build fails the env (return 1, no sentinel). Mode
+# "warn" (an env that was already installed): a failed build prints a WARNING
+# with the log and the rerun command, leaves the failed marker <prefix>/.omm_d3
+# (setup_verify and --status report it) and is listed again at the end of the
+# run; the env stays ready.
+OMM_D3_WARNINGS=()
 build_d3_kernel() {
-  local env_name="$1" prefix="$2"
+  local env_name="$1" prefix="$2" mode="${3:-error}" rc=0
   local log="$prefix/.omm_d3_build.log"
   echo "  D3 kernel (pair_d3.so) for '$env_name' ..."
-  if ! "${THREAD_CAPS[@]}" python3 "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log"; then
-    echo "  D3 kernel build FAILED for '$env_name' — no sentinel written. Build log: $log" >&2
-    echo "  Retry after fixing it: python3 $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
-    return 1
+  "${THREAD_CAPS[@]}" python3 "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    return 0
   fi
+  if [ "$mode" = "warn" ] && [ "$rc" -eq 3 ]; then
+    OMM_D3_WARNINGS+=("$env_name (log: $log)")
+    return 0
+  fi
+  echo "  D3 kernel build FAILED for '$env_name' — no sentinel written. Build log: $log" >&2
+  echo "  Retry after fixing it: python3 $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
+  return 1
 }
 
 install_one() {
@@ -633,8 +647,9 @@ install_one() {
     if [ "$vrc" -eq 0 ]; then
       echo "  '$env_name' already installed (sentinel present + imports verified) — skipping."
       # an env installed before the D3 prebuild existed gets its kernel now
-      # (a no-op when pair_d3.so is already there)
-      build_d3_kernel "$env_name" "$prefix" || return 1
+      # (a no-op when pair_d3.so is already there); the env is in use, so a
+      # failed build warns and leaves a marker instead of failing it
+      build_d3_kernel "$env_name" "$prefix" warn || return 1
       return 0
     fi
     if [ "$vrc" -eq 99 ]; then
@@ -846,6 +861,11 @@ for env_name in "${TARGETS[@]}"; do
 done
 
 echo
+if [ "${#OMM_D3_WARNINGS[@]}" -gt 0 ]; then
+  echo "install.sh: WARNING: the D3 kernel could not be built for these already-installed envs" >&2
+  echo "  (they stay usable without D3; each has a 'state=failed' marker in <prefix>/.omm_d3):" >&2
+  for w in "${OMM_D3_WARNINGS[@]}"; do echo "    $w" >&2; done
+fi
 if [ "$rc" -eq 0 ]; then
   echo "install.sh: done. Try: $OH_MY_MLIP_HOME/run_examples/single_point.py"
 else

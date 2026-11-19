@@ -233,7 +233,19 @@ def check_d3(model: str, version: str | None, skew: dict, run=subprocess.run) ->
         return {"state": "skipped", "reason": f"no interpreter at {python}"}
     env = dict(os.environ)
     env.update(spec.get("env_run") or {})
-    found = build_d3.probe(python, run=run, env=env)
+    prefix = python.parent.parent
+    # the marker build_d3.py left at install/adopt time: a failed build that did
+    # not stop the install (an env already in use) is surfaced here
+    marker = build_d3.read_marker(prefix)
+    build = {k: marker[k] for k in ("state", "log", "path") if marker.get(k)} if marker else None
+    result = _check_d3(python, prefix, env, skew, run, marker)
+    if build:
+        result["build"] = build
+    return result
+
+
+def _check_d3(python: Path, prefix: Path, env: dict, skew: dict, run, marker: dict) -> dict:
+    found = build_d3.locate(python, run=run, env=env)
     if found["error"]:
         return {"state": "fail", "reason": found["error"]}
     if not found["applicable"]:
@@ -242,8 +254,12 @@ def check_d3(model: str, version: str | None, skew: dict, run=subprocess.run) ->
         return {"state": "skipped", "reason": "the D3 kernel is CUDA-only and this env runs on CPU here: "
                                               + str(skew.get("reason") or "driver skew")}
     if not found["present"]:
-        prefix = python.parent.parent
-        return {"state": "fail", "reason": f"{found['so']} is not built; build it with: "
+        if marker.get("state") == "failed":
+            return {"state": "fail", "reason": f"the D3 kernel build failed at install/adopt time: "
+                                               f"{marker.get('detail', '')} (marker {marker['path']}); rerun: "
+                                               f"python3 {build_d3.__file__} {prefix}"}
+        return {"state": "fail", "reason": f"pair_d3.so is not built (neither in {found['d3_dir']} nor in "
+                                           f"the torch extensions cache); build it with: "
                                            f"python3 {build_d3.__file__} {prefix}"}
     try:
         proc = run([str(python), "-c", D3_CHECK_CODE], capture_output=True, text=True,
@@ -385,6 +401,8 @@ def _print_verdict(verdict: dict, as_json: bool) -> None:
     d3 = verdict.get("d3")
     if d3:
         print(f"  D3: {d3['state'].upper()}" + (f" ({d3['reason']})" if d3.get("reason") else ""))
+        if (d3.get("build") or {}).get("state") == "failed":
+            print(f"  D3 build marker: failed (log: {d3['build'].get('log') or '-'}, marker: {d3['build']['path']})")
 
 
 def main() -> int:

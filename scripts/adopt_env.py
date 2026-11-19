@@ -20,7 +20,8 @@ Usage:
 
 After the imports pass it runs the same post-install steps as install.sh: weight
 preparation, then the D3 kernel build (scripts/build_d3.py); a failed D3 build
-keeps the adoption and exits 1 with the log path.
+keeps the adoption and prints a WARNING with the log path and the rerun command
+(recorded in the env's .omm_d3 marker, which setup_verify reports).
 """
 from __future__ import annotations
 
@@ -168,28 +169,30 @@ def main() -> int:
     save_map(home, data)
     print(f"adopted: {env_name} -> {prefix}  (imports verified)")
     prepare_weights(home, env_name, python)
-    return 0 if prebuild_d3(home, env_name, prefix) else 1
+    prebuild_d3(home, env_name, prefix)
+    return 0
 
 
-def prebuild_d3(home: Path, env_name: str, prefix: Path) -> bool:
+def prebuild_d3(home: Path, env_name: str, prefix: Path) -> str:
     """Build the D3 kernel the way install.sh does (scripts/build_d3.py).
 
     An adopted env is then used through its bare interpreter, which has no env
     bin on PATH, so a first D3 call there could not compile (no ninja, wrong or
-    no nvcc). False only when the build itself failed: the adoption stands
-    (its imports passed), but D3 is not usable until the logged error is fixed."""
+    no nvcc). The env is already in use, so a failed build does not undo the
+    adoption: it prints a WARNING with the log and the rerun command, and the
+    marker build_d3 leaves (<prefix>/.omm_d3) makes setup_verify report it."""
     import build_d3
     log = home / "logs" / f"d3_{env_name}.log"
     state, detail = build_d3.prebuild(prefix, log)
     if state == "failed":
-        print(f"D3 kernel build FAILED for {env_name}: {detail}\n"
-              f"  the adoption stands, but D3 does not work in this env until this succeeds:\n"
-              f"    python3 {build_d3.__file__} {prefix} --log {log}",
+        print(f"WARNING: D3 kernel build failed for {env_name}: {detail}\n"
+              f"  The adoption stands; only the D3 correction does not work in this env until this succeeds:\n"
+              f"    python3 {build_d3.__file__} {prefix} --log {log}\n"
+              f"  Recorded in {build_d3.marker_path(prefix)} (setup_verify reports it).",
               file=sys.stderr)
-        return False
-    print(f"d3 kernel: {state}: {detail}")
-    return True
-
+    else:
+        print(f"d3 kernel: {state}: {detail}")
+    return state
 
 if __name__ == "__main__":
     raise SystemExit(main())

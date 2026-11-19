@@ -1,3 +1,4 @@
+# base + ninja + pinned gxx 14.4.0 for sm120 (D3 kernel build); otherwise identical to envs/uma.yml
 # build_status: clean
 # sibling_of: uma
 # arch: sm120

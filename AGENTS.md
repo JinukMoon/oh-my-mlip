@@ -349,7 +349,10 @@ built on the user's machine:
 - **D3 kernel**: `install.sh` and `scripts/adopt_env.py` build catbench's
   `pair_d3.so` once per env with `scripts/build_d3.py`, using the env's own
   `nvcc`, `ninja` and conda compiler, so the bare interpreter never compiles it.
-  A failed build fails that env and names the log. `setup_verify.py` reports one
+  A failed build fails a fresh install of that env; for an env already in use
+  (an install.sh re-run, `adopt_env.py`) it prints a WARNING with the log and the
+  rerun command and leaves `state=failed` in `<prefix>/.omm_d3`. On a read-only
+  hub the kernel goes to torch's extensions cache. `setup_verify.py` reports one
   D3 calculation as its own `d3` item, apart from the energy/forces `pass`.
 - **Whole envs on a newer GPU (sm120, Blackwell)**: a torch wheel built for CUDA
   below 12.8 has no sm120 kernels. `install.sh` reads the host GPU

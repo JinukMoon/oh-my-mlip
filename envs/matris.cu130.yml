@@ -1,3 +1,4 @@
+# base + ninja + pinned gxx 15.3.0 for sm120 (D3 kernel build); otherwise identical to envs/matris.yml
 # build_status: candidate
 # candidate-reason: MatRIS GPU inference requires an NVIDIA driver at the CUDA 13.0+ level (torch 2.12.1+cu130). Weights (MatRIS_10M_OAM.pth.tar) are pre-staged by scripts/prestage_matris_weights.py for convenience.
 # sibling_of: matris

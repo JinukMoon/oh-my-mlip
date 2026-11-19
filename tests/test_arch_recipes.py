@@ -238,15 +238,24 @@ def test_candidate_comes_from_the_arch_table_marker_only():
     assert gen_status_table.arch_state(models, "N", "a", "sm120", table) == "validated"
 
 
-def test_committed_docs_mark_only_grace_as_candidate():
+# envs whose sm120 sibling exists but has not been built and verified there yet:
+# their base build passed setup_verify on sm120, so the table must not say "validated"
+D3_SIBLING_ENVS = {"uma", "deepmd", "dpa4", "equiformer_v3", "matris", "pet", "tace"}
+
+
+def test_committed_docs_mark_only_the_candidate_entries_as_candidate():
     flagged = {env for env, e in TABLE["sm120"].items() if (e or {}).get("status") == "candidate"}
-    assert flagged == {"grace"}
+    assert flagged == {"grace"} | D3_SIBLING_ENVS
+    for env in D3_SIBLING_ENVS:
+        assert "not yet built and verified on sm120" in TABLE["sm120"][env]["reason"]
+    models = json.loads((REPO / "models.json").read_text())
+    env_of = {fam: info["env"] for fam, info in models.items() if not fam.startswith("_")}
     doc = (REPO / "docs" / "model_status.md").read_text()
-    rows = [ln for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
-    assert [r.split(" | ")[0] for r in rows] == ["| GRACE-2L-OAM"]
+    rows = [ln.split(" | ") for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
+    assert {env_of[r[1]] for r in rows} == flagged
     readme = (REPO / "README.md").read_text()
     rows = [ln for ln in readme.splitlines() if ln.startswith("| ") and ln.rstrip().endswith("| candidate |")]
-    assert [r.split(" | ")[0] for r in rows] == ["| GRACE"]
+    assert {env_of[r.split(" | ")[0][2:]] for r in rows} == flagged
 
 
 def test_mcp_status_agrees_with_the_generated_table():
