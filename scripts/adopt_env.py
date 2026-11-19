@@ -17,6 +17,10 @@ Usage:
   python3 scripts/adopt_env.py MACE /home/user/miniconda3/envs/MACE
   python3 scripts/adopt_env.py --list
   python3 scripts/adopt_env.py --remove mace
+
+After the imports pass it runs the same post-install steps as install.sh: weight
+preparation, then the D3 kernel build (scripts/build_d3.py); a failed D3 build
+keeps the adoption and exits 1 with the log path.
 """
 from __future__ import annotations
 
@@ -164,7 +168,27 @@ def main() -> int:
     save_map(home, data)
     print(f"adopted: {env_name} -> {prefix}  (imports verified)")
     prepare_weights(home, env_name, python)
-    return 0
+    return 0 if prebuild_d3(home, env_name, prefix) else 1
+
+
+def prebuild_d3(home: Path, env_name: str, prefix: Path) -> bool:
+    """Build the D3 kernel the way install.sh does (scripts/build_d3.py).
+
+    An adopted env is then used through its bare interpreter, which has no env
+    bin on PATH, so a first D3 call there could not compile (no ninja, wrong or
+    no nvcc). False only when the build itself failed: the adoption stands
+    (its imports passed), but D3 is not usable until the logged error is fixed."""
+    import build_d3
+    log = home / "logs" / f"d3_{env_name}.log"
+    state, detail = build_d3.prebuild(prefix, log)
+    if state == "failed":
+        print(f"D3 kernel build FAILED for {env_name}: {detail}\n"
+              f"  the adoption stands, but D3 does not work in this env until this succeeds:\n"
+              f"    python3 {build_d3.__file__} {prefix} --log {log}",
+              file=sys.stderr)
+        return False
+    print(f"d3 kernel: {state}: {detail}")
+    return True
 
 
 if __name__ == "__main__":

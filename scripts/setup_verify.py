@@ -22,6 +22,14 @@ Flow (deterministic, decided BEFORE any run):
      ``arch`` is the GPU architecture it ran on and ``recipe`` the recipe the
      env was built from (envs/<env>/.omm_recipe; e.g. mace.cu128 on sm120).
      models.json ``arch_validation.<arch>`` is set from such verdicts only.
+  3. D3 check, reported on its own as ``d3`` (never part of ``pass``): one
+     catbench D3 calculation through the env's bare interpreter, the way a
+     user script runs it, compared with a reference value. ``d3.state`` is
+     pass / fail / not_applicable (no torch or no catbench D3 module, e.g.
+     GRACE) / skipped (no interpreter, or a CPU run on a skewed driver: the
+     kernel is CUDA-only). A model can pass E/F and fail D3; the D3 kernel is
+     built at install/adopt time (scripts/build_d3.py), so a missing
+     pair_d3.so is a fail here, not a compile.
 
 Exit code: 0 iff ``pass`` -- a DELIBERATE divergence from the
 survey/guardrail always-exit-0 convention: verify is test-like (its exit IS
@@ -61,6 +69,7 @@ import argparse
 import json
 import math
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -72,8 +81,29 @@ from _setup_common import (  # noqa: E402
     stream_process,
 )
 from setup_guardrail import _normalize_line  # noqa: E402
+import build_d3  # noqa: E402
 
 STDERR_TAIL_LINES = 20
+
+# D3 reference: Pt fcc111 (3,3,4) vacuum 8 + CO ontop at 1.9 A, rattle(0.02, seed=1),
+# catbench DispersionCorrection() defaults (damp_bj, pbe). The same numbers on an
+# sm89 and an sm120 build (2026-11-19); the kernel is compiled with -fmad=false.
+D3_REFERENCE = {"energy_ev": -21.30975002679841, "abs_force_sum": 5.444243171259453}
+D3_TOLERANCE = {"energy_ev": 1e-5, "abs_force_sum": 1e-4}
+D3_MARK = "OMM_D3_CHECK "
+D3_CHECK_CODE = f"""
+import json
+import numpy as np
+from ase.build import add_adsorbate, fcc111, molecule
+from catbench.dispersion import DispersionCorrection
+slab = fcc111("Pt", size=(3, 3, 4), vacuum=8.0)
+add_adsorbate(slab, molecule("CO"), 1.9, "ontop")
+slab.rattle(0.02, seed=1)
+slab.calc = DispersionCorrection()._get_d3_calculator()
+e = float(slab.get_potential_energy())
+f = float(np.abs(slab.get_forces()).sum())
+print({D3_MARK!r} + json.dumps({{"energy_ev": e, "abs_force_sum": f}}))
+"""
 
 
 def find_env(model: str, home: Path) -> str | None:
@@ -169,6 +199,60 @@ def decide_verdict(
     return verdict
 
 
+def judge_d3(returncode: int, stdout: str, stderr: str) -> dict:
+    """Pure D3 verdict from one D3 check run (unit-testable)."""
+    result = None
+    for line in stdout.splitlines():
+        if line.startswith(D3_MARK):
+            try:
+                result = json.loads(line[len(D3_MARK):])
+            except ValueError:
+                result = None
+    if returncode != 0 or result is None:
+        return {"state": "fail", "reason": normalized_tail(stderr) or f"exit {returncode}, no D3 result"}
+    out = {"state": "pass", "reason": "", **result}
+    for key, ref in D3_REFERENCE.items():
+        got = result.get(key)
+        if not isinstance(got, (int, float)) or not math.isfinite(got) or abs(got - ref) > D3_TOLERANCE[key]:
+            out["state"] = "fail"
+            out["reason"] = f"{key} {got} differs from the reference {ref}"
+            break
+    return out
+
+
+def check_d3(model: str, version: str | None, skew: dict, run=subprocess.run) -> dict:
+    """The D3 check item: one D3 calculation in the model's env, through its bare
+    interpreter (resolve()["python"] plus the env_run prefix, no env bin on PATH)."""
+    try:
+        from oh_my_mlip.registry import resolve as registry_resolve
+        spec = registry_resolve(model, version=version)
+    except Exception as exc:  # noqa: BLE001 - reported, never raised
+        return {"state": "skipped", "reason": f"cannot resolve the interpreter: {exc}"}
+    python = Path(os.path.expandvars(spec["python"]))
+    if not os.access(python, os.X_OK):
+        return {"state": "skipped", "reason": f"no interpreter at {python}"}
+    env = dict(os.environ)
+    env.update(spec.get("env_run") or {})
+    found = build_d3.probe(python, run=run, env=env)
+    if found["error"]:
+        return {"state": "fail", "reason": found["error"]}
+    if not found["applicable"]:
+        return {"state": "not_applicable", "reason": "no torch or no catbench D3 module in this env"}
+    if skew.get("skew"):
+        return {"state": "skipped", "reason": "the D3 kernel is CUDA-only and this env runs on CPU here: "
+                                              + str(skew.get("reason") or "driver skew")}
+    if not found["present"]:
+        prefix = python.parent.parent
+        return {"state": "fail", "reason": f"{found['so']} is not built; build it with: "
+                                           f"python3 {build_d3.__file__} {prefix}"}
+    try:
+        proc = run([str(python), "-c", D3_CHECK_CODE], capture_output=True, text=True,
+                   timeout=900, env=env)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"state": "fail", "reason": f"D3 check did not finish: {exc}"}
+    return judge_d3(proc.returncode, proc.stdout or "", proc.stderr or "")
+
+
 def verified_arch_and_recipe(env_name: str, home: Path) -> tuple[str | None, str]:
     """(GPU arch of this host, recipe stem the env was built from)."""
     recipe = env_name
@@ -262,6 +346,8 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
     # was built from (install.sh writes envs/<env>/.omm_recipe; an env without
     # it was built from the base recipe). A pass is an arch claim for that pair.
     verdict["arch"], verdict["recipe"] = verified_arch_and_recipe(env_name, home)
+    # D3 on its own line of the verdict: it never changes "pass" (E/F on the GPU)
+    verdict["d3"] = check_d3(model, version, skew)
 
     if verdict["pass"] and no_local_record:
         # Read-only witness: the verdict stands, the hub's local state is
@@ -296,6 +382,9 @@ def _print_verdict(verdict: dict, as_json: bool) -> None:
     label = f" [{verdict['version']}]" if verdict.get("version") else ""
     print(f"{state}{extra}{label} device={verdict.get('device')} energy={verdict.get('energy_ev')} "
           f"gpu_pid_confirmed={verdict.get('gpu_pid_confirmed')} reason={verdict.get('reason') or '-'}")
+    d3 = verdict.get("d3")
+    if d3:
+        print(f"  D3: {d3['state'].upper()}" + (f" ({d3['reason']})" if d3.get("reason") else ""))
 
 
 def main() -> int:
@@ -333,7 +422,8 @@ def main() -> int:
         all_pass = all(v["pass"] for v in verdicts)
         summary = {"all_variants": True, "model": args.model, "pass": all_pass,
                    "variants": [{"version": v.get("version"), "pass": v["pass"],
-                                 "degraded": v.get("degraded"), "reason": v.get("reason")}
+                                 "degraded": v.get("degraded"), "reason": v.get("reason"),
+                                 "d3": (v.get("d3") or {}).get("state")}
                                 for v in verdicts]}
         if args.json:
             print(json.dumps(summary))

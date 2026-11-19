@@ -78,19 +78,22 @@ def test_override_parsing(monkeypatch):
 # ── install.sh uses it ───────────────────────────────────────────────────────
 
 def test_dry_run_sm120_builds_siblings_and_stops_unsupported():
-    proc = _install("--dry-run", "mace", "alphanet", "uma", "grace", arch="sm120")
+    proc = _install("--dry-run", "mace", "alphanet", "uma", "allegro", "grace", arch="sm120")
     assert proc.returncode == 0, proc.stderr
     out = proc.stdout
     assert "envs/mace.cu128.yml" in out and "would create env 'mace'" in out
     assert "alphanet.cu128.build.sh" in out
-    assert "recipe for 'uma' (GPU sm120): envs/uma.yml" in out
+    assert "recipe for 'uma' (GPU sm120): envs/uma.cu128.yml" in out
+    assert "recipe for 'allegro' (GPU sm120): envs/allegro.yml" in out
     if TABLE["sm120"]["grace"]["recipe"] is None:
         assert "STOP 'grace' on sm120" in out
 
 
 def test_dry_run_sm89_never_mentions_a_sibling():
     out = _install("--dry-run", "--all", arch="sm89").stdout
-    assert ".cu128" not in out and "STOP" not in out
+    assert "STOP" not in out
+    for stem in SIBLINGS:
+        assert f"envs/{stem}.yml" not in out and f"{stem}.build.sh" not in out, stem
 
 
 def test_dry_run_unchecked_arch_stops_every_env():
@@ -158,12 +161,16 @@ def test_lint_passes_on_the_repo():
     assert errors == []
 
 
-def test_every_sibling_is_selected_and_pins_cu128():
+def test_every_sibling_is_selected_and_pins_its_cuda_tag():
+    """A torch sibling is named after its torch CUDA build: <env>.cu128 pins
+    +cu128 (most sm120 siblings), <env>.cu130 keeps the base's +cu130."""
     for stem in SIBLINGS:
         text = (ENVS / f"{stem}.yml").read_text()
         assert "# arch: sm120" in text and f"# sibling_of: {stem.split('.')[0]}" in text
         if "torch==" in text:
-            assert "+cu128" in text and "whl/cu128" in text
+            tag = stem.split(".", 1)[1]
+            assert tag in ("cu128", "cu130"), stem
+            assert f"+{tag}" in text and f"whl/{tag}" in text, stem
         sidecar = ENVS / f"{stem}.build.sh"
         if sidecar.exists():
             code = "\n".join(ln for ln in sidecar.read_text().splitlines() if not ln.lstrip().startswith("#"))

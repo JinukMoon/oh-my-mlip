@@ -14,7 +14,9 @@ multiple, or all), plus `AGENTS.md §5` (gated models) and `AGENTS.md §8`
 them verbatim; this skill carries no procedure of its own.
 
 Success oracle: `scripts/setup_verify.py <variant> --json` passes with
-`degraded: false`; it computes energy and forces and confirms GPU use.
+`degraded: false`; it computes energy and forces and confirms GPU use. Its
+`d3` item (one D3 calculation) is reported separately: a D3 fail is a D3
+problem to report, not an energy/forces fail.
 `install.sh` exit 0, or energies printed by `run_examples/single_point.py`,
 are never sufficient on their own.
 

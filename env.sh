@@ -59,11 +59,16 @@ export PYTHONUTF8=1                                      # prevents ascii decode
 
 # ── 3) nvcc / CUDA_HOME (needed for first-run D3 compile) ──
 #   Autodetect CUDA_HOME instead of hardcoding a host path. Order: existing CUDA_HOME ->
-#   `nvcc` on PATH -> common /usr/local/cuda symlink. If none is found, D3 first-run compile
-#   will fail with a clear message; install/point CUDA_HOME at a CUDA toolkit with nvcc.
+#   `nvcc` on PATH -> the active conda env's own nvcc ($CONDA_PREFIX/bin/nvcc; every
+#   recipe ships cuda-nvcc, and a host may have no system toolkit) -> common
+#   /usr/local/cuda symlink. If none is found, D3 first-run compile will fail with a
+#   clear message; install/point CUDA_HOME at a CUDA toolkit with nvcc. install.sh and
+#   adopt_env.py build the D3 kernel up front with the env's own nvcc (scripts/build_d3.py).
 if [ -z "${CUDA_HOME:-}" ]; then
   if command -v nvcc >/dev/null 2>&1; then
     CUDA_HOME="$(dirname "$(dirname "$(command -v nvcc)")")"
+  elif [ -n "${CONDA_PREFIX:-}" ] && [ -x "$CONDA_PREFIX/bin/nvcc" ]; then
+    CUDA_HOME="$CONDA_PREFIX"
   elif [ -d /usr/local/cuda ]; then
     CUDA_HOME=/usr/local/cuda
   fi

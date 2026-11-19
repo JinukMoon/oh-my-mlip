@@ -51,7 +51,11 @@ A GPU of compute capability 12.0 needs CUDA 12.8 or newer builds: the CUDA 11.8 
 first calculation with `CUDA error: no kernel image is available`. On such a GPU
 `install.sh` builds a different recipe where one exists:
 
-- envs whose build is already CUDA 12.8 or 13.0 use their usual recipe;
+- allegro and nequip (already CUDA 12.8, with `ninja`) use their usual recipe;
+- uma, deepmd, equiformer_v3 and pet (CUDA 12.8) and dpa4, matris and tace
+  (CUDA 13.0) use a sibling (`envs/<env>.cu128.yml` / `envs/<env>.cu130.yml`)
+  with the same pins plus conda's `ninja` and a pinned host compiler (`gxx` 14.4
+  for CUDA 12.8, 15.3 for CUDA 13.0), so the D3 kernel builds there;
 - mace, sevennet, chgnet, orb, equflash and nequix use a sibling recipe
   (`envs/<env>.cu128.yml`) with the same torch release built for CUDA 12.8;
 - alphanet, fairchemv1, eqnorm and mattersim use a sibling recipe that raises
@@ -77,10 +81,15 @@ difference in meV/Å (measured 2026-11):
 | fairchemv1 | 2.4.1+cu121 | 2.7.1+cu128 | -0.0004 | 0.014 |
 | mattersim | 2.6.0+cu124 | 2.7.1+cu128 | +0.0004 | 0.005 |
 
-The sibling recipes also carry conda's `gxx` 14 and `ninja`: CUDA 12.x refuses
-a newer host gcc (Ubuntu 26.04 ships gcc 15), and the D3 kernel and
-OpenEquivariance compile with them at first use. `env.sh` adds the GPU's arch to
-`TORCH_CUDA_ARCH_LIST` so the D3 kernel is built for it.
+The sibling recipes also carry conda's `gxx` (14 for CUDA 12.x, 15 for CUDA 13.0)
+and `ninja`: CUDA 12.x refuses a newer host gcc (Ubuntu 26.04 ships gcc 15), and
+the D3 kernel and OpenEquivariance compile with them. `install.sh` (and
+`adopt_env.py`) build the D3 kernel at install time with `scripts/build_d3.py`:
+the env's `bin/` first on `PATH`, its own `nvcc` as `CUDA_HOME`, its conda
+compiler as `CC`/`CXX`, and `TORCH_CUDA_ARCH_LIST` with the GPU's arch added (as
+`env.sh` does) and cut to what that `nvcc` compiles. Nothing then compiles at the
+first D3 call, which runs through the bare interpreter with no env `bin/` on
+`PATH`.
 
 `envs/_arch_recipes.json` is the list, [Recipes](recipes.md) shows each sibling's
 pins, and the **sm120** column of [Supported models](model_status.md) shows what

@@ -22,10 +22,10 @@
       "recipe": "chgnet.cu128"
     },
     "deepmd": {
-      "recipe": "deepmd"
+      "recipe": "deepmd.cu128"
     },
     "dpa4": {
-      "recipe": "dpa4"
+      "recipe": "dpa4.cu130"
     },
     "eqnorm": {
       "recipe": "eqnorm.cu128"
@@ -34,7 +34,7 @@
       "recipe": "equflash.cu128"
     },
     "equiformer_v3": {
-      "recipe": "equiformer_v3"
+      "recipe": "equiformer_v3.cu128"
     },
     "fairchemv1": {
       "recipe": "fairchemv1.cu128"
@@ -48,7 +48,7 @@
       "recipe": "mace.cu128"
     },
     "matris": {
-      "recipe": "matris"
+      "recipe": "matris.cu130"
     },
     "mattersim": {
       "recipe": "mattersim.cu128"
@@ -63,16 +63,16 @@
       "recipe": "orb.cu128"
     },
     "pet": {
-      "recipe": "pet"
+      "recipe": "pet.cu128"
     },
     "sevennet": {
       "recipe": "sevennet.cu128"
     },
     "tace": {
-      "recipe": "tace"
+      "recipe": "tace.cu130"
     },
     "uma": {
-      "recipe": "uma"
+      "recipe": "uma.cu128"
     }
   }
 }

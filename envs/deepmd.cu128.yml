@@ -1,0 +1,51 @@
+# build_status: clean
+# sibling_of: deepmd
+# arch: sm120
+# oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
+#
+# envs/deepmd.yml stays the recipe for every older GPU (validated on sm89) and is
+# unchanged. Its torch build (+cu128) already runs on sm120, but it names no
+# ninja and no host compiler, so on an sm120 host with Ubuntu 26.04 (system gcc 15,
+# no system CUDA) the D3 kernel build (catbench pair_d3.so, scripts/build_d3.py)
+# failed: "Ninja is required to load C++ extensions". install.sh selects THIS file
+# instead when the host GPU is sm120 (table: envs/_arch_recipes.json). The env is
+# still built at envs/deepmd/ and the recipe used is recorded in envs/deepmd/.omm_recipe.
+#
+# Changes against envs/deepmd.yml: none to its pins.
+# Added: gxx=14.4.0 + ninja=1.13.2 (host compiler nvcc 12.8 accepts, JIT build
+#   tool; see the dependency comment). The compiler is the one this env already
+#   pulled in unpinned on that host, which built D3 there.
+# Everything else (python, torch, framework pins, ase, extras) is identical to the base recipe.
+#
+name: deepmd
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.8 toolchain (provides nvcc for the first-run D3 compile)
+  - cuda-nvcc=12.8.*
+  # Host compiler for nvcc (D3 kernel and other extension JIT builds): CUDA
+  # 12.8 accepts gcc <= 14, and a current distribution may ship another system gcc
+  # (Ubuntu 26.04: gcc 15). scripts/build_d3.py and the worker put this env's bin/
+  # first on PATH and build_d3.py sets CC/CXX to this compiler. torch's extension
+  # JIT (the D3 kernel) also runs `ninja` from PATH.
+  - gxx=14.4.0
+  - ninja=1.13.2
+  - ase=3.27.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch==2.8.0+cu128
+      - deepmd-kit==3.1.2
+      - setuptools==70.2.0
+      # deepmd-kit's load_mpi_library() needs the mpich pip package (MPI lib metadata).
+      - mpich==5.0.1
+      # Fine-tuning dataset converter (extxyz -> deepmd/npy system layout).
+      # scripts/ft_dataset.py prefers dpdata and only falls back to its own
+      # numpy writer when it is absent; pinning it here makes the fine-tune
+      # path deterministic from the recipe alone (no post-install pip repair).
+      # Pure-python; its deps (h5py, wcmatch, lmdb, msgpack, PyYAML) resolve
+      # against the numpy/scipy the deepmd-kit wheel already pulls.
+      - dpdata==1.1.0

@@ -346,7 +346,11 @@ built on the user's machine:
   NequIP uses `--modifiers enable_OpenEquivariance`; Allegro uses
   `--modifiers enable_CuEquivarianceContracter`. For another GPU architecture,
   run the prepare script on a machine with that GPU.
-- **D3 kernel**: compiled once with `nvcc`; `env.sh` finds `CUDA_HOME`.
+- **D3 kernel**: `install.sh` and `scripts/adopt_env.py` build catbench's
+  `pair_d3.so` once per env with `scripts/build_d3.py`, using the env's own
+  `nvcc`, `ninja` and conda compiler, so the bare interpreter never compiles it.
+  A failed build fails that env and names the log. `setup_verify.py` reports one
+  D3 calculation as its own `d3` item, apart from the energy/forces `pass`.
 - **Whole envs on a newer GPU (sm120, Blackwell)**: a torch wheel built for CUDA
   below 12.8 has no sm120 kernels. `install.sh` reads the host GPU
   (`detect_host_arch()`) and builds the recipe `envs/_arch_recipes.json` names
