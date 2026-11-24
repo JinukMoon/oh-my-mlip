@@ -567,6 +567,26 @@ These also need the compiled model for the GPU (§6). `install.sh` runs the
 prepare scripts; if verification fails with a missing or mismatched `.pt2`, run
 the prepare script again on this machine.
 
+### 9.6 HPC clusters (login node without a GPU, GPU nodes without internet)
+
+Follow `docs/host_requirements.md` "HPC clusters". In short:
+
+- Install on the login node with `OMM_INSTALL_ARCH=<arch of the job GPUs>` and
+  every path on project storage, not `$HOME`. Verify each model with
+  `setup_verify.py` inside a GPU job (SLURM `--gres=gpu:1` or `--gpus=1`, with
+  `HF_HUB_OFFLINE=1`); it refuses on a node without a GPU, and that refusal is not
+  an install error.
+- A login node may cap tasks per user. `install.sh` lowers its own parallelism
+  when it finds the cap; you and your tool calls count against the same cap, so
+  run one install at a time and nothing else heavy beside it.
+- Some login nodes end all your processes when your last session closes, so a
+  `nohup` launch (§9.4) does not outlive the session: keep this session running
+  until the install ends. If it was cut, run the same command again (finished
+  envs are skipped; an interrupted env asks for `--rebuild <env>`).
+- After each env, read `envs/<env>/.omm_prefetch.json`: a variant marked
+  `failed` may not load on an offline GPU node. For NequIP and Allegro, run the
+  compile command the install printed as the first step of the GPU job.
+
 ## 10. Recipes — from request to plan, approval, run and evidence
 
 `recipes/` has one workflow per kind of request. Each follows the same six stages

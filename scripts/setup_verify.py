@@ -311,6 +311,31 @@ def family_versions(model: str, home: Path) -> list[str]:
     return []
 
 
+def gpu_visible(run=subprocess.run, env: dict | None = None) -> bool:
+    """True when this process can see an NVIDIA GPU (nvidia-smi -L lists one and
+    CUDA_VISIBLE_DEVICES does not hide them all)."""
+    env = os.environ if env is None else env
+    if env.get("CUDA_VISIBLE_DEVICES", None) is not None and \
+            env["CUDA_VISIBLE_DEVICES"].split(",")[0].strip() in ("", "-1"):
+        return False
+    import shutil
+    wsl = "/usr/lib/wsl/lib/nvidia-smi"          # as oh_my_mlip.registry.nvidia_smi
+    smi = shutil.which("nvidia-smi") or (wsl if os.access(wsl, os.X_OK) else None)
+    if smi is None:
+        return False
+    try:
+        out = run([smi, "-L"], capture_output=True, text=True, timeout=30).stdout or ""
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return any(line.startswith("GPU ") for line in out.splitlines())
+
+
+NO_GPU_REASON = ("no NVIDIA GPU is visible to this process (nvidia-smi is missing or lists none, or "
+                 "CUDA_VISIBLE_DEVICES hides them), so nothing was run. Verify on a GPU: on a cluster, inside "
+                 "a GPU job (SLURM: sbatch/srun with --gres=gpu:1 or --gpus=1); a login node without a GPU "
+                 "can install, not verify")
+
+
 def verify_one(model: str, version: str | None, structure: str | None, home: Path,
                *, quiet: bool, no_local_record: bool) -> dict:
     """Run the oracle for ONE (model, version) and return its verdict dict.
@@ -321,6 +346,10 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
         return {"pass": False, "reason": f"unknown model: {model}; {_known_hint(home)}", "version": version}
 
     skew = predict_driver_skew(env_name, home)
+    if not skew["skew"] and not gpu_visible():
+        # fail at once: a cuda run here can only fail, after minutes of loading
+        return {"pass": False, "device": "cuda", "degraded": False, "reason": NO_GPU_REASON,
+                "model": model, "version": version, "env": env_name, "gpu_pid_confirmed": False}
     command = [sys.executable, str(home / "run_examples" / "single_point.py"), model, "--json"]
     if version:
         command += ["--version", version]

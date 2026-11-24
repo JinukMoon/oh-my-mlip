@@ -541,8 +541,26 @@ source "$OH_MY_MLIP_HOME/env.sh"
 # weight preparation and D3 compilation, leaving weights unmaterialized. Cap them
 # uniformly: 4 BLAS/OMP threads + 1 inductor compile worker is plenty for a one-shot
 # prep step and harmless on unconstrained hosts.
-THREAD_CAPS=(env OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4
-  NUMEXPR_NUM_THREADS=4 TORCHINDUCTOR_COMPILE_THREADS=1)
+# ── Low-parallel mode under a per-user task limit (HPC login nodes) ──
+# A login node can cap tasks (processes + threads) per user with the cgroup pids
+# controller (pids.max = 150 on a EuroHPC login node) while `ulimit -u` looks huge.
+# mamba's .pyc compile pool (os.cpu_count() workers), OpenBLAS threads and
+# ninja/pip build jobs then hit the cap: the pool deadlocks, and the user's
+# shell, agent and new logins can no longer fork. scripts/task_limit.py reads
+# the limit and, below 4096 tasks or when OMM_MAX_PARALLEL is set, exports caps
+# for every pool the install starts (a value already set wins).
+if command -v python3 >/dev/null 2>&1; then
+  eval "$(python3 "$OH_MY_MLIP_HOME/scripts/task_limit.py" --exports 2>/dev/null || true)"
+fi
+if [ -n "${OMM_LOW_PARALLEL:-}" ]; then
+  echo "install.sh: this host limits tasks per user (${OMM_TASK_LIMIT:-unknown}); building with at most"
+  echo "  ${OMM_LOW_PARALLEL} parallel jobs/threads (no .pyc precompile; Python writes it on first import)."
+  echo "  Keep other heavy work off this login node until the install ends; set OMM_MAX_PARALLEL to change it."
+fi
+
+THREAD_CAPS=(env OMP_NUM_THREADS="${OMM_LOW_PARALLEL:-4}" MKL_NUM_THREADS="${OMM_LOW_PARALLEL:-4}"
+  OPENBLAS_NUM_THREADS="${OMM_LOW_PARALLEL:-4}" NUMEXPR_NUM_THREADS="${OMM_LOW_PARALLEL:-4}"
+  TORCHINDUCTOR_COMPILE_THREADS=1)
 
 # D3 kernel prebuild for one env (scripts/build_d3.py): a no-op when
 # pair_d3.so exists or the env has no torch/catbench (GRACE). Mode "error" (a
@@ -552,10 +570,36 @@ THREAD_CAPS=(env OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4
 # (setup_verify and --status report it) and is listed again at the end of the
 # run; the env stays ready.
 OMM_D3_WARNINGS=()
+OMM_PREFETCH_WARNINGS=()
+
+# Download every weight of an env's variants, so the env runs on a node without
+# internet (HPC compute nodes): explicit weight paths through oh_my_mlip.fetch,
+# by-name weights (mace_mp('medium-mpa-0'), SevenNet, ORB, ...) by building each
+# calculator once on the CPU (no calculation). Gated variants without a Hugging
+# Face token are skipped and listed. A variant that cannot be prefetched is a
+# warning, not a failed env: the framework still downloads it on first use
+# where there is internet. OMM_PREFETCH=0 skips this step.
+prefetch_weights() {
+  local env_name="$1" prefix="$2"
+  [ "${OMM_PREFETCH:-1}" != "0" ] || return 0
+  echo "  downloading the weights of '$env_name' for offline use (scripts/prefetch_weights.py) ..."
+  "${THREAD_CAPS[@]}" CUDA_VISIBLE_DEVICES="" "$prefix/bin/python" "$OH_MY_MLIP_HOME/scripts/prefetch_weights.py" "$env_name" \
+    || OMM_PREFETCH_WARNINGS+=("$env_name (see $prefix/.omm_prefetch.json)")
+}
+
 build_d3_kernel() {
   local env_name="$1" prefix="$2" mode="${3:-error}" rc=0
   local log="$prefix/.omm_d3_build.log"
   echo "  D3 kernel (pair_d3.so) for '$env_name' ..."
+  # torch's cpp_extension needs ninja. The sm120 siblings ship it; the base
+  # recipes do not, and a host without a system ninja (Rocky 8 on an HPC
+  # login node) then fails with "Ninja is required". Add the same pinned wheel
+  # the sevennet/nequip recipes use, only to an env that has nvcc and no ninja.
+  if [ -x "$prefix/bin/nvcc" ] && [ ! -x "$prefix/bin/ninja" ] && [ -x "$prefix/bin/pip" ]; then
+    echo "  adding ninja==1.13.0 to '$env_name' (needed to build the D3 kernel) ..."
+    "${THREAD_CAPS[@]}" "$prefix/bin/pip" install --quiet "ninja==1.13.0" \
+      || echo "  could not install ninja into '$env_name'; the D3 build below will say why it fails." >&2
+  fi
   "${THREAD_CAPS[@]}" python3 "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode" || rc=$?
   if [ "$rc" -eq 0 ]; then
     return 0
@@ -650,6 +694,8 @@ install_one() {
       # (a no-op when pair_d3.so is already there); the env is in use, so a
       # failed build warns and leaves a marker instead of failing it
       build_d3_kernel "$env_name" "$prefix" warn || return 1
+      # an env installed before weights were downloaded at install time
+      [ -e "$prefix/.omm_prefetch.json" ] || prefetch_weights "$env_name" "$prefix"
       return 0
     fi
     if [ "$vrc" -eq 99 ]; then
@@ -826,11 +872,19 @@ install_one() {
   prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
   if [ -e "$prepare" ]; then
     echo "  preparing weights for '$env_name' via $(basename "$prepare") (env interpreter) ..."
-    if ! "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name"; then
+    local prc=0
+    "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name" || prc=$?
+    if [ "$prc" -eq 4 ]; then
+      # NequIP / Allegro on a host without a GPU (an HPC login node): the model
+      # package is downloaded, the per-GPU compile has to run on a GPU node.
+      echo "  '$env_name': model package downloaded; the GPU compile runs later on a GPU node (see above)."
+    elif [ "$prc" -ne 0 ]; then
       echo "  weight prepare FAILED for '$env_name' ($(basename "$prepare")); inference cannot work until it succeeds." >&2
       weights_prepared=0
     fi
   fi
+
+  prefetch_weights "$env_name" "$prefix"
 
   # Build the D3 kernel now (scripts/build_d3.py), with this env's own ninja,
   # nvcc and conda compiler, so the first D3 call through the bare interpreter
@@ -865,6 +919,11 @@ if [ "${#OMM_D3_WARNINGS[@]}" -gt 0 ]; then
   echo "install.sh: WARNING: the D3 kernel could not be built for these already-installed envs" >&2
   echo "  (they stay usable without D3; each has a 'state=failed' marker in <prefix>/.omm_d3):" >&2
   for w in "${OMM_D3_WARNINGS[@]}"; do echo "    $w" >&2; done
+fi
+if [ "${#OMM_PREFETCH_WARNINGS[@]}" -gt 0 ]; then
+  echo "install.sh: WARNING: some weights could not be downloaded ahead of use. These envs work where there" >&2
+  echo "  is internet, but a node without internet (an HPC compute node) cannot load those variants:" >&2
+  for w in "${OMM_PREFETCH_WARNINGS[@]}"; do echo "    $w" >&2; done
 fi
 if [ "$rc" -eq 0 ]; then
   echo "install.sh: done. Try: $OH_MY_MLIP_HOME/run_examples/single_point.py"

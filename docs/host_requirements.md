@@ -96,6 +96,61 @@ pins, and the **sm120** column of [Supported models](model_status.md) shows what
 was verified on such a GPU. The driver must support CUDA 12.8 (570+). Older
 GPUs keep the recipes in the table above; nothing changes for them.
 
+## HPC clusters: install on the login node, verify in a GPU job
+
+On many clusters the login node has internet but no GPU, and the GPU nodes have
+a GPU but no internet. So: build every env on the login node, then verify (and
+compute) in batch jobs.
+
+- **Pick the GPU architecture by hand.** The login node has no GPU to detect, so
+  tell `install.sh` which GPU the jobs will use: `OMM_INSTALL_ARCH=sm80` (A100),
+  `sm90` (H100/H200), `sm86`, `sm89`, `sm120`. Recipes and the D3 kernel follow it.
+- **Keep envs and caches out of `$HOME`.** Home directories on clusters often allow
+  only a few GB or a few tens of thousands of files; an env alone has more. Put the
+  clone (`OH_MY_MLIP_HOME`) and every cache on project storage:
+  ```bash
+  P=/path/to/project/storage/$USER
+  export OH_MY_MLIP_HOME=$P/oh-my-mlip OMM_SHARED_CACHE_ROOT=$P/cache/shared
+  export CONDA_PKGS_DIRS=$P/cache/conda_pkgs PIP_CACHE_DIR=$P/cache/pip XDG_CACHE_HOME=$P/cache/xdg \
+         TORCH_EXTENSIONS_DIR=$P/cache/torch_ext TRITON_CACHE_DIR=$P/cache/triton TMPDIR=$P/tmp
+  ```
+  Export the same lines in every job script, so the job finds the weights.
+- **Task limits.** A login node may cap the processes and threads one user can
+  run (cgroup `pids.max`, often 100 to 1000; `ulimit -u` does not show it). Over
+  the cap, the install hangs and your shell and new logins fail too.
+  `install.sh` reads the cap and, when it is below 4096, builds with at most 2
+  parallel jobs and threads and skips the `.pyc` precompile (Python writes it on
+  first import); it says so at the start. `OMM_MAX_PARALLEL=<n>` sets the number
+  yourself. Run nothing else heavy on the login node while it builds; an AI agent
+  driving the install counts against the same cap.
+- **Stay logged in.** Some login nodes end every process of a user when the
+  user's last session closes (systemd `KillUserProcesses=yes`), `nohup` and
+  `setsid` included. Keep the session open until the install ends. If it was cut,
+  run the same `install.sh` command again: finished envs are skipped, and an env
+  whose build was interrupted is reported with the `--rebuild <env>` command
+  that deletes and rebuilds it.
+- **Weights are downloaded during the install.** Each env's install builds every
+  variant's calculator once on the CPU, which downloads weights that frameworks
+  fetch by name (MACE, SevenNet, ORB, ...), and fetches the rest by URL. The
+  result is in `envs/<env>/.omm_prefetch.json`; a variant listed as failed there
+  may not load on a node without internet. Gated models need your Hugging Face
+  login before the install ([Hugging Face token](hf_token.md)).
+- **NequIP and Allegro** load a model compiled for one GPU architecture, and the
+  compile needs that GPU. On a login node without a GPU, the install downloads the
+  model packages and prints the compile command; run it first in a GPU job (no
+  internet needed there).
+- **Verify in a GPU job.** `setup_verify.py` refuses at once on a node without a
+  GPU. A SLURM job for one model (account, partition and GPU syntax are site-specific):
+  ```bash
+  #!/bin/bash
+  #SBATCH --account=<account> --partition=<gpu partition> --gres=gpu:1 --time=00:20:00
+  #SBATCH -o verify_%j.out
+  # the same exports as for the install, then:
+  source "$OH_MY_MLIP_HOME/env.sh"
+  export HF_HUB_OFFLINE=1          # the node has no internet: use the downloaded weights only
+  python3 "$OH_MY_MLIP_HOME/scripts/setup_verify.py" MACE-MPA-0 --json
+  ```
+
 ## Common problems
 
 - **GRACE weights:** `GRACE-2L-OAM` (about 100 MB) comes from upstream's Hugging Face

@@ -375,6 +375,7 @@ def test_adoption_builds_d3_and_a_failed_build_warns_with_a_marker(tmp_path: Pat
          "  *_load*) echo 'RuntimeError: Ninja is required to load C++ extensions' >&2; exit 1 ;;\n"
          "esac\nexit 0\n")
     _exe(prefix / "bin" / "nvcc", 'echo "compute_75 compute_120"\n')
+    _exe(prefix / "bin" / "ninja", "exit 0\n")             # present, yet torch's build still fails
     proc = _adopt(home, prefix)
     assert proc.returncode == 0, proc.stderr                 # the env is in use: warn, do not fail
     assert "WARNING: D3 kernel build failed for alpha" in proc.stderr and "Ninja is required" in proc.stderr

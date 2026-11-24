@@ -95,6 +95,30 @@ except Exception as exc:
 print({CACHE_MARK!r} + json.dumps({{"cache_dir": d, "error": err}}))
 """
 WARN_EXIT = 3
+# torch's cpp_extension guards a build with a FileBaton: a file "lock" in the
+# build folder, and every later build waits on it with no timeout. A build that
+# was killed (a login node's task cap, a dropped session) leaves it behind, and
+# the next build then waited until BUILD_TIMEOUT_S (seen on an HPC login node).
+# A real build takes about a minute; a lock older than this is treated as left over.
+STALE_LOCK_S = 600
+
+
+def clear_stale_lock(build_dir: str, now: float | None = None) -> str:
+    """Remove build_dir/lock when it is older than STALE_LOCK_S; say what was done."""
+    import time
+
+    lock = os.path.join(build_dir, "lock")
+    try:
+        age = (time.time() if now is None else now) - os.stat(lock).st_mtime
+    except OSError:
+        return ""
+    if age < STALE_LOCK_S:
+        return ""
+    try:
+        os.remove(lock)
+    except OSError as exc:
+        return f"a build lock {lock} from {age:.0f} s ago could not be removed ({exc}); remove it and rerun"
+    return f"removed a build lock left by an earlier build that did not finish ({lock}, {age:.0f} s old)"
 
 
 def probe(python: Path, run=subprocess.run, env: dict | None = None) -> dict:
@@ -266,6 +290,10 @@ def build_env(prefix: Path, base: dict, run=subprocess.run) -> tuple[dict | None
         return None, f"{nvcc} supports none of the GPU architectures asked for"
     env["TORCH_CUDA_ARCH_LIST"] = ";".join(archs)
     env.setdefault("MAX_JOBS", "4")
+    # importing torch/numpy starts one BLAS thread per core (128 on an HPC node),
+    # past a login node's task cap; the build needs none of them
+    for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        env.setdefault(key, "1")
     env.setdefault("PYTHONUTF8", "1")
     return env, ""
 
@@ -304,6 +332,14 @@ def _prebuild(prefix: Path, log: Path, run, base: dict) -> tuple[str, str, bool]
     env, why = build_env(prefix, base, run=run)
     if env is None:
         return "no_nvcc", f"{why}; D3 stays off for this env (the MLIP still runs)", False
+    if shutil.which("ninja", path=env["PATH"]) is None:
+        return "failed", (f"no ninja in {prefix}/bin or on PATH; torch builds the kernel with it. Install it into "
+                          f"the env ({prefix}/bin/pip install ninja==1.13.0) and rerun"), False
+    cleared = clear_stale_lock(target)
+    if cleared.startswith("a build lock"):
+        return "failed", cleared, False
+    if cleared:
+        print(f"d3 kernel: {cleared}", flush=True)
     try:
         proc = run([str(python), "-c", BUILD_CODE], capture_output=True, text=True,
                    timeout=BUILD_TIMEOUT_S, env=env)
