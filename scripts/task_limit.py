@@ -22,10 +22,10 @@ Usage:
   python3 scripts/task_limit.py            # one line: limit=<n|none> low=<0|1> parallel=<n>
   python3 scripts/task_limit.py --exports  # shell `export` lines (empty when not low)
 
-Tests point OMM_CGROUP_ROOT and OMM_PROC_CGROUP at a fake tree.
+Runs on any Python 3 (3.6 too: it is the one helper whose failure must not
+leave a host unprotected; install.sh still falls back to low-parallel mode if it
+cannot run). Tests point OMM_CGROUP_ROOT and OMM_PROC_CGROUP at a fake tree.
 """
-from __future__ import annotations
-
 import argparse
 import os
 import resource
@@ -37,7 +37,7 @@ LOW_LIMIT = 4096        # tasks per user below which the install runs in low-par
 DEFAULT_PARALLEL = 2
 
 
-def _read_max(path: Path) -> int | None:
+def _read_max(path):
     try:
         text = path.read_text().strip()
     except OSError:
@@ -45,7 +45,7 @@ def _read_max(path: Path) -> int | None:
     return int(text) if text.isdigit() else None   # "max" = no limit
 
 
-def cgroup_paths(proc_cgroup: Path) -> list[str]:
+def cgroup_paths(proc_cgroup):
     """The pids-controller cgroup paths of this process (v2 and/or v1)."""
     try:
         lines = proc_cgroup.read_text().splitlines()
@@ -62,9 +62,9 @@ def cgroup_paths(proc_cgroup: Path) -> list[str]:
     return [f"{'pids' if c else ''}|{p}" for c, p in out]
 
 
-def cgroup_limit(root: Path, proc_cgroup: Path, uid: int) -> int | None:
+def cgroup_limit(root, proc_cgroup, uid):
     """Smallest numeric pids.max on this process's cgroup path and the user slice."""
-    candidates: list[Path] = []
+    candidates = []
     for entry in cgroup_paths(proc_cgroup):
         sub, path = entry.split("|", 1)
         base = root / sub if sub else root
@@ -80,7 +80,7 @@ def cgroup_limit(root: Path, proc_cgroup: Path, uid: int) -> int | None:
     return min(values) if values else None
 
 
-def ulimit_tasks() -> int | None:
+def ulimit_tasks():
     try:
         soft, _ = resource.getrlimit(resource.RLIMIT_NPROC)
     except (OSError, ValueError):
@@ -88,7 +88,7 @@ def ulimit_tasks() -> int | None:
     return None if soft == resource.RLIM_INFINITY else int(soft)
 
 
-def task_limit(env: dict | None = None) -> int | None:
+def task_limit(env=None):
     env = os.environ if env is None else env
     root = Path(env.get("OMM_CGROUP_ROOT", "/sys/fs/cgroup"))
     proc = Path(env.get("OMM_PROC_CGROUP", "/proc/self/cgroup"))
@@ -99,7 +99,7 @@ def task_limit(env: dict | None = None) -> int | None:
     return min(values) if values else None
 
 
-def settings(parallel: int) -> dict[str, str]:
+def settings(parallel):
     """Everything an install starts that sizes a pool by core count."""
     n = str(parallel)
     return {
@@ -133,7 +133,7 @@ def settings(parallel: int) -> dict[str, str]:
     }
 
 
-def plan(env: dict | None = None) -> tuple[int | None, bool, int, dict[str, str]]:
+def plan(env=None):
     """(limit, low, parallel, exports) -- exports omit variables already set."""
     env = os.environ if env is None else env
     limit = task_limit(env)
@@ -144,7 +144,7 @@ def plan(env: dict | None = None) -> tuple[int | None, bool, int, dict[str, str]
     return limit, low, parallel, exports
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--exports", action="store_true", help="print shell export lines")
     args = ap.parse_args(argv)

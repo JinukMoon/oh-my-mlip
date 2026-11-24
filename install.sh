@@ -331,9 +331,9 @@ HOST_ARCH=""
 pick_recipe() {
   local env_name="$1" py_bin out err rc=0
   RECIPE_STEM=""; RECIPE_REASON=""
-  py_bin="$(command -v python3 || command -v python || true)"
+  py_bin="${HOST_PY:-}"
   if [ -z "$py_bin" ]; then
-    RECIPE_REASON="cannot choose a recipe: no python3 (or python) on PATH to run scripts/select_recipe.py, which reads envs/_arch_recipes.json and the GPU arch. Put a python 3 on PATH (any version; it uses the standard library only) and re-run"
+    RECIPE_REASON="cannot choose a recipe: no Python 3.8 or newer on PATH to run scripts/select_recipe.py, which reads envs/_arch_recipes.json and the GPU arch. Put one on PATH (or set OMM_PYTHON) and re-run"
     return 3
   fi
   err="$(mktemp)"
@@ -439,6 +439,35 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$STATUS" -eq 0 ]; then
   fi
 fi
 
+# ── The Python that runs install.sh's own helper scripts ──
+# scripts/select_recipe.py, task_limit.py, build_d3.py and the prestage helpers
+# need Python 3.8+. A bare `python3` can be older (3.6 on Rocky/RHEL 8 login
+# nodes), so take the first 3.8+ of: $OMM_PYTHON, python3, python3.13 ...
+# python3.8, the python next to the conda/mamba in use, python.
+host_python() {
+  local c conda_py=""
+  if [ -n "$CONDA_BIN" ] && command -v "$CONDA_BIN" >/dev/null 2>&1; then
+    conda_py="$(dirname "$(command -v "$CONDA_BIN")")/python"
+  fi
+  for c in "${OMM_PYTHON:-}" python3 python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 "$conda_py" python; do
+    [ -n "$c" ] || continue
+    c="$(command -v "$c" 2>/dev/null)" || continue
+    if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' 2>/dev/null; then
+      echo "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+HOST_PY="$(host_python || true)"
+if [ -z "$HOST_PY" ] && [ "$DRY_RUN" -eq 0 ] && [ "$STATUS" -eq 0 ]; then
+  echo "install.sh: no Python 3.8 or newer found (python3 here is $(python3 --version 2>&1 || echo 'missing'))." >&2
+  echo "  install.sh's helper scripts need one. Load a newer Python (e.g. the conda/mamba module, or" >&2
+  echo "  /usr/bin/python3.9 on RHEL/Rocky 8), or set OMM_PYTHON=<path to python3.8+>, and re-run." >&2
+  echo "  Nothing was downloaded or installed." >&2
+  exit 1
+fi
+
 echo "oh-my-mlip install (build from recipe)"
 echo "  OH_MY_MLIP_HOME = $OH_MY_MLIP_HOME"
 echo "  recipes dir     = $ENVS_DIR"
@@ -478,13 +507,13 @@ if [ "$DRY_RUN" -eq 1 ]; then
       echo "    then: $ENVS_DIR/$env_name/bin/pip install catbench==${CATBENCH_PIN}"
       prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
       if [ -e "$prestage" ]; then
-        echo "    then: python3 $prestage  (pre-stage upstream weights before first use)"
+        echo "    then: ${HOST_PY:-python3} $prestage  (pre-stage upstream weights before first use)"
       fi
       prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
       if [ -e "$prepare" ]; then
         echo "    then: $ENVS_DIR/$env_name/bin/python $prepare --target-root $OH_MY_MLIP_HOME/models/$env_name  (prepare weights with the env interpreter)"
       fi
-      echo "    then: python3 $OH_MY_MLIP_HOME/scripts/build_d3.py $ENVS_DIR/$env_name  (D3 kernel, pair_d3.so)"
+      echo "    then: ${HOST_PY:-python3} $OH_MY_MLIP_HOME/scripts/build_d3.py $ENVS_DIR/$env_name  (D3 kernel, pair_d3.so)"
       warn_driver_skew "$env_name" "$recipe"
     else
       echo "  SKIP '$env_name': no recipe at $recipe"
@@ -549,8 +578,23 @@ source "$OH_MY_MLIP_HOME/env.sh"
 # shell, agent and new logins can no longer fork. scripts/task_limit.py reads
 # the limit and, below 4096 tasks or when OMM_MAX_PARALLEL is set, exports caps
 # for every pool the install starts (a value already set wins).
-if command -v python3 >/dev/null 2>&1; then
-  eval "$(python3 "$OH_MY_MLIP_HOME/scripts/task_limit.py" --exports 2>/dev/null || true)"
+OMM_TL_OUT=""
+if [ -n "${HOST_PY:-}" ] && OMM_TL_OUT="$("$HOST_PY" "$OH_MY_MLIP_HOME/scripts/task_limit.py" --exports)"; then
+  eval "$OMM_TL_OUT"
+else
+  # the limit could not be read: assume a low one (an unknown cap is the dangerous case)
+  echo "install.sh: WARNING: could not read this host's task limit (scripts/task_limit.py did not run);" >&2
+  echo "  building in low-parallel mode to be safe." >&2
+  OMM_LOW_PARALLEL="${OMM_MAX_PARALLEL:-2}"
+  OMM_TASK_LIMIT="unknown"
+  for kv in MAMBA_COMPILE_PYC=false MAMBA_EXTRACT_THREADS=$OMM_LOW_PARALLEL MAMBA_DOWNLOAD_THREADS=$OMM_LOW_PARALLEL \
+            CONDA_FETCH_THREADS=$OMM_LOW_PARALLEL CONDA_EXTRACT_THREADS=$OMM_LOW_PARALLEL CONDA_VERIFY_THREADS=1 \
+            CONDA_EXECUTE_THREADS=1 MAX_JOBS=$OMM_LOW_PARALLEL CMAKE_BUILD_PARALLEL_LEVEL=$OMM_LOW_PARALLEL \
+            MAKEFLAGS=-j$OMM_LOW_PARALLEL OMP_NUM_THREADS=$OMM_LOW_PARALLEL MKL_NUM_THREADS=$OMM_LOW_PARALLEL \
+            OPENBLAS_NUM_THREADS=$OMM_LOW_PARALLEL NUMEXPR_NUM_THREADS=$OMM_LOW_PARALLEL; do
+    k="${kv%%=*}"
+    [ -n "${!k:-}" ] || export "${kv?}"
+  done
 fi
 if [ -n "${OMM_LOW_PARALLEL:-}" ]; then
   echo "install.sh: this host limits tasks per user (${OMM_TASK_LIMIT:-unknown}); building with at most"
@@ -600,7 +644,7 @@ build_d3_kernel() {
     "${THREAD_CAPS[@]}" "$prefix/bin/pip" install --quiet "ninja==1.13.0" \
       || echo "  could not install ninja into '$env_name'; the D3 build below will say why it fails." >&2
   fi
-  "${THREAD_CAPS[@]}" python3 "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode" || rc=$?
+  "${THREAD_CAPS[@]}" "$HOST_PY" "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode" || rc=$?
   if [ "$rc" -eq 0 ]; then
     return 0
   fi
@@ -609,7 +653,7 @@ build_d3_kernel() {
     return 0
   fi
   echo "  D3 kernel build FAILED for '$env_name' — no sentinel written. Build log: $log" >&2
-  echo "  Retry after fixing it: python3 $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
+  echo "  Retry after fixing it: $HOST_PY $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
   return 1
 }
 
@@ -858,7 +902,7 @@ install_one() {
   prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
   if [ -e "$prestage" ]; then
     echo "  pre-staging weights for '$env_name' via $(basename "$prestage") ..."
-    python3 "$prestage" || echo "  (weight pre-stage skipped/failed; framework will retry its own download on first use)"
+    "$HOST_PY" "$prestage" || echo "  (weight pre-stage skipped/failed; framework will retry its own download on first use)"
   fi
 
   # Prepare weights that require the ENV's own tooling (not pure stdlib): some

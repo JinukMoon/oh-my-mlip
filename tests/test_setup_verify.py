@@ -131,10 +131,19 @@ def _fake_home(tmp_path: Path, link_package: bool) -> Path:
 
 
 def _run_verify(home: Path, *args: str) -> subprocess.CompletedProcess:
+    # a visible GPU (setup_verify refuses at once without one): nvidia-smi -L lists one
+    smi = home / "fakebin" / "nvidia-smi"
+    if not smi.exists():
+        smi.parent.mkdir(exist_ok=True)
+        smi.write_text('#!/bin/sh\n[ "$1" = "-L" ] && echo "GPU 0: Fake GPU (UUID: GPU-0)"\nexit 0\n')
+        smi.chmod(0o755)
+    os_ = __import__("os")
+    env = {**os_.environ, "OH_MY_MLIP_HOME": str(home), "PATH": f"{smi.parent}:{os_.environ.get('PATH', '')}"}
+    env.pop("CUDA_VISIBLE_DEVICES", None)
     return subprocess.run(
         [sys.executable, str(REPO_ROOT / "scripts" / "setup_verify.py"), *args],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=str(home),
-        env={**__import__("os").environ, "OH_MY_MLIP_HOME": str(home)},
+        env=env,
     )
 
 

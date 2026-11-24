@@ -346,10 +346,6 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
         return {"pass": False, "reason": f"unknown model: {model}; {_known_hint(home)}", "version": version}
 
     skew = predict_driver_skew(env_name, home)
-    if not skew["skew"] and not gpu_visible():
-        # fail at once: a cuda run here can only fail, after minutes of loading
-        return {"pass": False, "device": "cuda", "degraded": False, "reason": NO_GPU_REASON,
-                "model": model, "version": version, "env": env_name, "gpu_pid_confirmed": False}
     command = [sys.executable, str(home / "run_examples" / "single_point.py"), model, "--json"]
     if version:
         command += ["--version", version]
@@ -366,6 +362,10 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
             return {"pass": False, "version": version,
                     "reason": f"structure not found: {structure_path}"}
         command += ["--structure", str(structure_path)]
+    if not skew["skew"] and not gpu_visible():
+        # fail at once: a cuda run here can only fail, after minutes of loading
+        return {"pass": False, "device": "cuda", "degraded": False, "reason": NO_GPU_REASON,
+                "model": model, "version": version, "env": env_name, "gpu_pid_confirmed": False}
 
     log_dir = home / ".sweep" / "verify"
     log_dir.mkdir(parents=True, exist_ok=True)

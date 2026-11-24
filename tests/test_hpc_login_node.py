@@ -94,7 +94,7 @@ def test_install_sh_exports_the_caps_before_any_build(tmp_path):
     env = dict(os.environ, **_cgroup(tmp_path, True, "150"))
     for key in ("OMP_NUM_THREADS", "MAMBA_COMPILE_PYC", "MAX_JOBS", "OPENBLAS_NUM_THREADS"):
         env.pop(key, None)
-    script = (f"OH_MY_MLIP_HOME={REPO}\n{_low_parallel_block()}\n"
+    script = (f"OH_MY_MLIP_HOME={REPO}; HOST_PY={sys.executable}\n{_low_parallel_block()}\n"
               'echo "pyc=$MAMBA_COMPILE_PYC jobs=$MAX_JOBS caps=${THREAD_CAPS[*]}"')
     proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
     assert proc.returncode == 0, proc.stderr
@@ -108,10 +108,53 @@ def test_install_sh_changes_nothing_without_a_limit(tmp_path):
     env = dict(os.environ, **_cgroup(tmp_path, False, "max"))
     env.pop("OMM_MAX_PARALLEL", None)
     env.pop("MAMBA_COMPILE_PYC", None)
-    script = f"OH_MY_MLIP_HOME={REPO}\n{_low_parallel_block()}\n" 'echo "pyc=${MAMBA_COMPILE_PYC:-unset} caps=${THREAD_CAPS[*]}"'
+    script = (f"OH_MY_MLIP_HOME={REPO}; HOST_PY={sys.executable}\n{_low_parallel_block()}\n"
+              'echo "pyc=${MAMBA_COMPILE_PYC:-unset} caps=${THREAD_CAPS[*]}"')
     proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
     assert "pyc=unset" in proc.stdout and "OMP_NUM_THREADS=4" in proc.stdout
     assert "limits tasks" not in proc.stdout
+
+
+def test_when_the_limit_cannot_be_read_the_install_is_low_parallel_and_says_so(tmp_path):
+    """A helper that cannot run (an old python3) must not leave the host unprotected."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("OMP_NUM_THREADS", "MAMBA_COMPILE_PYC", "MAX_JOBS", "OMM_MAX_PARALLEL")}
+    for py in ("/bin/false", ""):
+        script = (f"OH_MY_MLIP_HOME={REPO}; HOST_PY={py}\n{_low_parallel_block()}\n"
+                  'echo "pyc=$MAMBA_COMPILE_PYC jobs=$MAX_JOBS caps=${THREAD_CAPS[*]}"')
+        proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
+        assert proc.returncode == 0, proc.stderr
+        assert "could not read this host's task limit" in proc.stderr
+        assert "pyc=false jobs=2" in proc.stdout and "OMP_NUM_THREADS=2" in proc.stdout
+
+
+def test_task_limit_runs_on_python_3_6():
+    """Rocky/RHEL 8 login nodes ship python3 = 3.6: no postponed annotations, no X | Y types."""
+    import ast
+    src = (REPO / "scripts" / "task_limit.py").read_text()
+    tree = ast.parse(src, feature_version=(3, 6))
+    assert "from __future__ import annotations" not in src
+    annotated = [n for n in ast.walk(tree) if isinstance(n, (ast.arg, ast.AnnAssign)) and getattr(n, "annotation", None)]
+    returns = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.returns]
+    assert not annotated and not returns
+
+
+def _host_python_func() -> str:
+    text = (REPO / "install.sh").read_text()
+    return text[text.index("host_python() {"):text.index('HOST_PY="$(host_python || true)"')]
+
+
+def test_helpers_run_on_a_python_3_8_or_newer_not_a_bare_old_python3(tmp_path):
+    bin_dir = tmp_path / "bin"
+    _exe(bin_dir / "python3", "exit 1\n")              # 3.6: fails the version check
+    _exe(bin_dir / "python3.9", "exit 0\n")
+    script = f'CONDA_BIN=""; PATH={bin_dir}\n{_host_python_func()}\nhost_python'   # only the fake pythons
+    proc = subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+    assert proc.stdout.strip() == str(bin_dir / "python3.9")
+    text = (REPO / "install.sh").read_text()
+    # no helper script is started with the bare python3 any more
+    assert 'python3 "$OH_MY_MLIP_HOME/scripts/' not in text and 'python3 "$prestage"' not in text
+    assert text.index('HOST_PY="$(host_python || true)"') < text.index("# ── Low-parallel mode under a per-user task limit")
 
 
 # ── install on a login node without a GPU (OMM_INSTALL_ARCH) ─────────────────
@@ -258,7 +301,7 @@ def test_install_sh_adds_ninja_to_an_env_with_nvcc_and_no_ninja(tmp_path):
         _exe(prefix / "bin" / "pip", f'echo "$@" >> {tmp_path}/pip_{name}.log\n')
         if has_ninja:
             _exe(prefix / "bin" / "ninja", "exit 0\n")
-        script = f"OH_MY_MLIP_HOME={home}; THREAD_CAPS=(env)\n{func}\nbuild_d3_kernel {name} {prefix}\n"
+        script = f"OH_MY_MLIP_HOME={home}; HOST_PY={sys.executable}; THREAD_CAPS=(env)\n{func}\nbuild_d3_kernel {name} {prefix}\n"
         proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
         assert proc.returncode == 0, proc.stderr
     assert "install --quiet ninja==1.13.0" in (tmp_path / "pip_a.log").read_text()

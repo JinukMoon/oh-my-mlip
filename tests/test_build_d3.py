@@ -308,7 +308,7 @@ def _run_build_d3_kernel(tmp_path: Path, mode: str, rc: int) -> subprocess.Compl
     home = tmp_path / "hub"
     _exe(home / "scripts" / "build_d3.py", "")
     (home / "scripts" / "build_d3.py").write_text(f"import sys\nsys.exit({rc})\n")
-    script = (f"OH_MY_MLIP_HOME={home}; THREAD_CAPS=(env)\n{func}\n"
+    script = (f"OH_MY_MLIP_HOME={home}; HOST_PY={sys.executable}; THREAD_CAPS=(env)\n{func}\n"
               f"build_d3_kernel uma {tmp_path}/envs/uma {mode}; echo \"returned=$?\"\n{summary}")
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
@@ -338,7 +338,7 @@ def test_install_dry_run_shows_the_d3_build():
     env = {**os.environ, "OMM_INSTALL_ARCH": "sm120", "OH_MY_MLIP_HOME": str(REPO)}
     out = subprocess.run(["bash", str(REPO / "install.sh"), "--dry-run", "uma"], capture_output=True,
                          text=True, cwd=str(REPO), env=env).stdout
-    assert f"then: python3 {REPO}/scripts/build_d3.py {REPO}/envs/uma" in out
+    assert f"/scripts/build_d3.py {REPO}/envs/uma  (D3 kernel" in out   # run by a Python 3.8+ (host_python)
 
 
 def _adopt_home(tmp_path: Path) -> Path:
