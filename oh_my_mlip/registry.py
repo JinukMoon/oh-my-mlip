@@ -211,14 +211,26 @@ def record_local_verified(
     and the new file replaces the old one in one rename, so no record is lost
     and no reader sees a half-written file."""
     import fcntl
+    import sys
 
     path = local_models_path(home_path)
     with open(str(path) + ".lock", "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            locked = True
+        except OSError as exc:
+            # a parallel file system mounted without flock support (Lustre with
+            # noflock / localflock): write without the lock rather than fail the
+            # verify; os.replace still keeps the file whole
+            locked = False
+            print(f"[oh-my-mlip] file locking is not supported on this file system ({exc.strerror or exc}); "
+                  f"models.local.json is written without a lock, so run verify jobs one at a time",
+                  file=sys.stderr)
         try:
             _upsert_local(path, spec, verdict, weights, home_path)
         finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            if locked:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def _upsert_local(path: Path, spec: dict, verdict: dict, weights: list[str], home_path: str | None) -> None:

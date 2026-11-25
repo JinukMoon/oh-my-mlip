@@ -722,3 +722,20 @@ def test_a_refused_rewrite_of_a_complete_weight_counts_as_downloaded(tmp_path):
     assert prefetch_weights.complete_weight_refused(lines, {**spec, "weights_size": 99}) is None
     assert prefetch_weights.complete_weight_refused(lines, {**spec, "weights_sha256": "0" * 64}) is None
     assert prefetch_weights.complete_weight_refused(lines, {}) is None
+
+
+def test_without_file_locking_the_ledger_is_still_written(tmp_path, monkeypatch, capsys):
+    """Lustre mounted without flock: flock raises ENOSYS; the verify must not fail."""
+    import errno
+    import fcntl
+    from oh_my_mlip.registry import record_local_verified
+
+    def no_flock(fd, op):
+        raise OSError(errno.ENOSYS, "Function not implemented")
+
+    monkeypatch.setattr(fcntl, "flock", no_flock)
+    record_local_verified({"version": "V-1", "model": "M", "env": "e", "python": "p"}, {"device": "cuda"}, [],
+                          str(tmp_path))
+    assert "V-1" in json.loads((tmp_path / "models.local.json").read_text())
+    err = capsys.readouterr().err
+    assert "file locking is not supported" in err and "one at a time" in err
