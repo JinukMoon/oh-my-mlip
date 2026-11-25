@@ -573,9 +573,11 @@ Follow `docs/host_requirements.md` "HPC clusters". In short:
 
 - Install on the login node with `OMM_INSTALL_ARCH=<arch of the job GPUs>` and
   every path on project storage, not `$HOME`. Verify each model with
-  `setup_verify.py` inside a GPU job (SLURM `--gres=gpu:1` or `--gpus=1`, with
-  `HF_HUB_OFFLINE=1`); it refuses on a node without a GPU, and that refusal is not
-  an install error.
+  `setup_verify.py` inside a GPU job (SLURM `--gres=gpu:1` or `--gpus=1`, after
+  `source env.sh`, which switches on offline mode on a node without internet);
+  it refuses on a node without a GPU, and that refusal is not an install error.
+  Do not redirect `$HOME` or add network workarounds yourself: set
+  `OMM_SHARED_CACHE_ROOT` (the docs' export block) and `install.sh` handles both.
 - A login node may cap tasks per user. `install.sh` lowers its own parallelism
   when it finds the cap; you and your tool calls count against the same cap, so
   run one install at a time and nothing else heavy beside it.

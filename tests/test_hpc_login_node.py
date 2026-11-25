@@ -350,3 +350,114 @@ def test_the_d3_build_caps_blas_threads(tmp_path, monkeypatch):
     run = lambda argv, **kw: SimpleNamespace(returncode=0, stdout="compute_80", stderr="")  # noqa: E731
     env, _ = build_d3.build_env(prefix, {"PATH": "/usr/bin"}, run=run)
     assert env["OPENBLAS_NUM_THREADS"] == env["OMP_NUM_THREADS"] == "1"
+
+
+# ── offline compute nodes: fail network access at once ───────────────────────
+
+def _hooked(code: str, offline: str | None, tmp_path: Path) -> subprocess.CompletedProcess:
+    site = tmp_path / "site"
+    site.mkdir(exist_ok=True)
+    (site / "_omm_offline.py").write_text((REPO / "oh_my_mlip" / "_offline_hook.py").read_text())
+    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(site)}
+    if offline is not None:
+        env["OMM_OFFLINE"] = offline
+    return subprocess.run([sys.executable, "-c", "import _omm_offline\n" + code],
+                          capture_output=True, text=True, env=env, timeout=60)
+
+
+def test_the_offline_hook_fails_internet_access_at_once_and_keeps_local(tmp_path):
+    code = ("import socket, time, os\n"
+            "t = time.time()\n"
+            "try:\n    socket.create_connection(('8.8.8.8', 443), timeout=20); print('connected')\n"
+            "except OSError as e:\n    print('blocked', round(time.time() - t, 1), 'offline mode' in str(e))\n"
+            "try:\n    socket.getaddrinfo('huggingface.co', 443); print('resolved')\n"
+            "except socket.gaierror:\n    print('no-dns')\n"
+            "srv = socket.socket(); srv.bind(('127.0.0.1', 0)); srv.listen(1)\n"
+            "socket.create_connection(srv.getsockname(), timeout=5).close(); print('local-ok')\n"
+            "print(os.environ.get('HF_HUB_OFFLINE'))\n")
+    out = _hooked(code, "1", tmp_path).stdout.split()
+    assert out[0] == "blocked" and float(out[1]) < 1.0 and out[2] == "True"
+    assert out[3:] == ["no-dns", "local-ok", "1"]
+
+
+def test_the_offline_hook_does_nothing_unless_asked(tmp_path):
+    code = "import socket; print(socket.getaddrinfo.__module__)"
+    for value in (None, "0"):
+        assert _hooked(code, value, tmp_path).stdout.strip() == "socket"
+
+
+def test_offline_env_switches_on_only_without_internet(monkeypatch):
+    from oh_my_mlip import offline
+
+    def refused(addr, timeout):
+        raise OSError("timed out")
+
+    class Ok:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(offline, "_probe_cache", None)
+    got = offline.offline_env({"PATH": "/bin"}, connect=refused)
+    assert got["OMM_OFFLINE"] == got["HF_HUB_OFFLINE"] == "1"
+    monkeypatch.setattr(offline, "_probe_cache", None)
+    assert "OMM_OFFLINE" not in offline.offline_env({}, connect=lambda a, timeout: Ok())
+    # the user's choice is never overridden, and no probe runs
+    monkeypatch.setattr(offline, "_probe_cache", None)
+    assert offline.offline_env({"OMM_OFFLINE": "0"}, connect=refused) == {"OMM_OFFLINE": "0"}
+    assert offline._probe_cache is None
+
+
+def test_workers_get_offline_mode_and_install_sh_installs_the_hook():
+    assert "return offline_env(child_env)" in (REPO / "oh_my_mlip" / "provider.py").read_text()
+    text = (REPO / "install.sh").read_text()
+    func = text[text.index("install_offline_hook() {"):text.index("prefetch_weights() {")]
+    assert '"$site/_omm_offline.py"' in func and "import _omm_offline" in func
+    body = text[text.index("install_one() {"):]
+    assert body.index('  install_offline_hook "$prefix"\n') < body.index('  prefetch_weights "$env_name" "$prefix"\n')
+    env_sh = (REPO / "env.sh").read_text()
+    assert "export OMM_OFFLINE=1 HF_HUB_OFFLINE=1" in env_sh and 'if [ -z "${OMM_OFFLINE:-}" ]' in env_sh
+
+
+# ── frameworks that write to ~/.cache whatever the variables say ─────────────
+
+def test_home_caches_become_links_into_the_shared_root(tmp_path):
+    home, root = tmp_path / "home", tmp_path / "proj" / "cache"
+    (home / ".cache" / "grace").mkdir(parents=True)              # already there: kept, listed
+    (home / ".cache" / "tace").parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(tmp_path / "elsewhere", home / ".cache" / "tace")  # an existing link: kept
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "OMM_SHARED_CACHE_ROOT": str(root)}
+    proc = subprocess.run(["bash", str(REPO / "scripts" / "home_cache_links.sh")],
+                          capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, proc.stderr
+    link = home / ".cache" / "sevennet"
+    assert link.is_symlink() and Path(os.readlink(link)) == root / "home" / ".cache" / "sevennet"
+    assert (home / ".local" / "mattersim").is_symlink()
+    assert not (home / ".cache" / "grace").is_symlink() and str(home / ".cache" / "grace") in proc.stderr
+    assert Path(os.readlink(home / ".cache" / "tace")) == tmp_path / "elsewhere"
+    # nothing at all without a shared root
+    env.pop("OMM_SHARED_CACHE_ROOT")
+    env["HOME"] = str(tmp_path / "home2")
+    subprocess.run(["bash", str(REPO / "scripts" / "home_cache_links.sh")], env=env, check=True)
+    assert not (tmp_path / "home2").exists()
+
+
+# ── a failed NequIP / Allegro compile leaves nothing behind ──────────────────
+
+def test_a_failed_compile_removes_its_partial_outputs(monkeypatch, tmp_path, capsys):
+    home = tmp_path / "hub"
+    root = home / "models" / "nequip"
+    root.mkdir(parents=True)
+    out_dir = home / "models" / "compiled" / "sm80"
+    out_dir.mkdir(parents=True)
+    monkeypatch.setattr(prepare_nequip_weights, "host_arch", lambda: "sm80")
+    monkeypatch.setattr(prepare_nequip_weights, "fetch_package", lambda version, r: r / "x.zip")
+
+    def fake_run(cmd, env=None):
+        out = Path(cmd[2])
+        Path(str(out) + ".partial").write_bytes(b"x" * 10)        # what a crashed compile leaves
+        return SimpleNamespace(returncode=1)
+
+    monkeypatch.setattr(prepare_nequip_weights.subprocess, "run", fake_run)
+    assert prepare_nequip_weights.main(["--target-root", str(root)]) == 1
+    assert list(out_dir.iterdir()) == []
+    assert "removed 1 partial file(s)" in capsys.readouterr().err

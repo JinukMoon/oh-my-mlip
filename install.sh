@@ -95,7 +95,7 @@ REQUESTED=()
 # shift the validated torch stack. Bump deliberately (single knob here) and
 # re-verify; override for testing a release candidate without editing:
 #   OMM_CATBENCH_VERSION=1.2.0 ./install.sh <env>
-CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.4}"
+CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.7}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -623,6 +623,18 @@ OMM_PREFETCH_WARNINGS=()
 # Face token are skipped and listed. A variant that cannot be prefetched is a
 # warning, not a failed env: the framework still downloads it on first use
 # where there is internet. OMM_PREFETCH=0 skips this step.
+# Offline mode for this env's interpreters (oh_my_mlip/_offline_hook.py): a .pth
+# line runs it at every start; it does nothing unless OMM_OFFLINE=1, which env.sh
+# and the hub set on a node without internet.
+install_offline_hook() {
+  local prefix="$1" site
+  site="$("$prefix/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null)" || return 0
+  [ -n "$site" ] && [ -d "$site" ] && [ -w "$site" ] || return 0
+  cp "$OH_MY_MLIP_HOME/oh_my_mlip/_offline_hook.py" "$site/_omm_offline.py" \
+    && printf 'import _omm_offline\n' > "$site/omm_offline.pth" \
+    || echo "  could not add the offline-mode hook to $site; on a node without internet a loader may wait for the network." >&2
+}
+
 prefetch_weights() {
   local env_name="$1" prefix="$2"
   [ "${OMM_PREFETCH:-1}" != "0" ] || return 0
@@ -739,6 +751,7 @@ install_one() {
       # failed build warns and leaves a marker instead of failing it
       build_d3_kernel "$env_name" "$prefix" warn || return 1
       # an env installed before weights were downloaded at install time
+      install_offline_hook "$prefix"
       [ -e "$prefix/.omm_prefetch.json" ] || prefetch_weights "$env_name" "$prefix"
       return 0
     fi
@@ -928,6 +941,8 @@ install_one() {
     fi
   fi
 
+  install_offline_hook "$prefix"
+  bash "$OH_MY_MLIP_HOME/scripts/home_cache_links.sh"
   prefetch_weights "$env_name" "$prefix"
 
   # Build the D3 kernel now (scripts/build_d3.py), with this env's own ninja,

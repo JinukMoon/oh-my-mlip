@@ -217,7 +217,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  compiling {version} for {arch} -> {out}", flush=True)
         rc = subprocess.run(cmd, env=env).returncode
         if rc != 0 or not (out.is_file() and out.stat().st_size > 0):
-            print(f"  {version}: nequip-compile failed (rc={rc})", file=sys.stderr)
+            # a failed compile leaves nothing behind: a partial .pt2 would look
+            # present to the next run, and each one is hundreds of MB
+            leftovers = [p for p in out_dir.glob(f"{version}_{arch}*") if p.is_file()]
+            for path in leftovers:
+                path.unlink(missing_ok=True)
+            note = f"; removed {len(leftovers)} partial file(s)" if leftovers else ""
+            print(f"  {version}: nequip-compile failed (rc={rc}){note}", file=sys.stderr)
             failed += 1
     return 1 if failed else 0
 

@@ -5,7 +5,7 @@
 # installed with: pip install --no-deps -r <this file>
 --extra-index-url https://download.pytorch.org/whl/cu130
 bibtexparser==1.4.4
-catbench==1.1.4
+catbench==1.1.7
 certifi==2026.7.22
 charset-normalizer==3.5.1
 cloudpickle==3.1.2

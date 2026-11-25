@@ -7,7 +7,7 @@
 annotated-types==0.8.0
 array-api-compat==1.15.0
 bracex==3.0.1
-catbench==1.1.4
+catbench==1.1.7
 certifi==2026.7.22
 charset-normalizer==3.5.1
 colorama==0.4.6

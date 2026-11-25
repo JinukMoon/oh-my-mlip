@@ -115,6 +115,12 @@ compute) in batch jobs.
          TORCH_EXTENSIONS_DIR=$P/cache/torch_ext TRITON_CACHE_DIR=$P/cache/triton TMPDIR=$P/tmp
   ```
   Export the same lines in every job script, so the job finds the weights.
+  With `OMM_SHARED_CACHE_ROOT` set, `env.sh` also moves the NequIP cache and
+  `XDG_CACHE_HOME` there, and `install.sh` replaces the caches that some frameworks
+  write to a fixed place in your home (`~/.cache/sevennet`, `matris`, `tace`, `nequix`,
+  `eqnorm`, `grace`, `deepmd`, `~/.local/mattersim`) with symlinks into
+  `$OMM_SHARED_CACHE_ROOT/home`. One that already exists as a directory is left
+  where it is and listed, so you can move it yourself.
 - **Task limits.** A login node may cap the processes and threads one user can
   run (cgroup `pids.max`, often 100 to 1000; `ulimit -u` does not show it). Over
   the cap, the install hangs and your shell and new logins fail too.
@@ -139,6 +145,12 @@ compute) in batch jobs.
   compile needs that GPU. On a login node without a GPU, the install downloads the
   model packages and prints the compile command; run it first in a GPU job (no
   internet needed there).
+- **Offline GPU nodes.** A node that drops outbound packets without answering makes
+  a loader that checks a URL before using its cache (ORB, for one) wait until the
+  job's time limit. `env.sh` tests the network (3 s) and, without internet, sets
+  `OMM_OFFLINE=1`; every env `install.sh` built then fails network access at once,
+  and the loaders use the downloaded weights. `run()`, workers and `setup_verify`
+  test it the same way. Set `OMM_OFFLINE=1` (or `0`) yourself to skip the test.
 - **Verify in a GPU job.** `setup_verify.py` refuses at once on a node without a
   GPU. A SLURM job for one model (account, partition and GPU syntax are site-specific):
   ```bash
@@ -147,7 +159,7 @@ compute) in batch jobs.
   #SBATCH -o verify_%j.out
   # the same exports as for the install, then:
   source "$OH_MY_MLIP_HOME/env.sh"
-  export HF_HUB_OFFLINE=1          # the node has no internet: use the downloaded weights only
+  export OMM_OFFLINE=1             # the node has no internet: use the downloaded weights only
   python3 "$OH_MY_MLIP_HOME/scripts/setup_verify.py" MACE-MPA-0 --json
   ```
 

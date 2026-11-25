@@ -45,11 +45,28 @@ if [ -n "${OMM_SHARED_CACHE_ROOT:-}" ]; then
   export FAIRCHEM_CACHE_DIR="${OMM_SHARED_CACHE_ROOT}/fairchem"  # UMA + eSEN. NOTE: fairchem reads FAIRCHEM_CACHE_DIR (NOT FAIRCHEM_CACHE)
   export TORCH_HOME="${OMM_SHARED_CACHE_ROOT}/torch"             # torch.hub cache
   export CACHED_PATH_CACHE_ROOT="${OMM_SHARED_CACHE_ROOT}/cached_path"  # ORB (orb_models uses cached_path)
+  export NEQUIP_CACHE_DIR="${NEQUIP_CACHE_DIR:-${OMM_SHARED_CACHE_ROOT}/nequip}"  # NequIP/Allegro model cache (~/.nequip)
+  export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${OMM_SHARED_CACHE_ROOT}/xdg}"      # MACE and other XDG-aware caches
+  # Frameworks that write ~/.cache/<name> (or ~/.local/<name>) whatever the
+  # variables say (SevenNet, MatRIS, TACE, Nequix, Eqnorm, GRACE, DeePMD, MatterSim)
+  # are pointed here by install.sh with symlinks (scripts/home_cache_links.sh).
 fi
-# NOTE: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are intentionally NOT forced here.
-#   The public edition fetches weights on first run (gated models need the user's HF_TOKEN).
-#   Set them to 1 yourself once everything is cached if you want to pin offline:
-#   export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1
+# NOTE: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are NOT forced where there is internet:
+#   weights are fetched on first run (gated models need the user's HF_TOKEN).
+# Where there is none (HPC compute nodes often drop outbound packets silently, and a
+# loader that checks a URL before using its cache then waits until the job's time
+# limit), offline mode is switched on: OMM_OFFLINE=1 makes every non-local
+# connection in the envs' interpreters fail at once (oh_my_mlip/_offline_hook.py,
+# installed into each env by install.sh), so loaders use the weights install.sh
+# downloaded. Test: a TCP connection to huggingface.co or pypi.org within 3 s.
+# OMM_OFFLINE=0 (or 1) set beforehand is kept and skips the test.
+if [ -z "${OMM_OFFLINE:-}" ]; then
+  if ! timeout 3 bash -c 'exec 3<>/dev/tcp/huggingface.co/443' 2>/dev/null \
+     && ! timeout 3 bash -c 'exec 3<>/dev/tcp/pypi.org/443' 2>/dev/null; then
+    export OMM_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+    echo "oh-my-mlip: no internet on this node: offline mode on (OMM_OFFLINE=1); models use downloaded weights." >&2
+  fi
+fi
 
 # ── 2) catbench D3 ──
 #   The arch-specific pair_d3.so (catbench/dispersion/cuda/pair_d3.so) is never shipped;

@@ -9,7 +9,7 @@ bibtexparser==1.4.4
 boto3==1.44.5
 botocore==1.44.5
 cached_path==1.8.10
-catbench==1.1.4
+catbench==1.1.7
 certifi==2026.10.23
 cffi==2.1.1
 charset-normalizer==3.5.2

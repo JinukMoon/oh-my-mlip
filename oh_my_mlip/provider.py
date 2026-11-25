@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from oh_my_mlip.fetch import ensure_weights
+from oh_my_mlip.offline import offline_env
 from oh_my_mlip import registry
 
 __all__ = ["get_calculator", "run", "Worker", "WorkerPool"]
@@ -344,7 +345,9 @@ class Worker:
         # (override included); the parent's os.environ is never changed
         from oh_my_mlip.fetch import gated_token_env
         child_env.update(gated_token_env(self.spec, child_env))
-        return child_env
+        # a node without internet (HPC compute nodes): fail network access at once
+        # instead of letting a loader wait on a URL check (oh_my_mlip/offline.py)
+        return offline_env(child_env)
 
     def _build_cmd(self) -> list[str]:
         cmd = [self._python_exe, "-m", "oh_my_mlip._worker", "--model", self.model]
