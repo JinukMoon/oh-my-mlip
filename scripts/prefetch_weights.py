@@ -63,6 +63,38 @@ def variants(env_name: str, models: dict | None = None) -> list[tuple[str, str]]
     return out
 
 
+_DENIED_RE = re.compile(r"Permission denied: '([^']+)'")
+
+
+def complete_weight_refused(lines: list[str], spec: dict) -> str | None:
+    """The path of a weight the framework tried to write again although it is
+    complete: the build failed with PermissionError on a file whose size and
+    sha256 match the registry (seen with TACE: the finished .pt was read-only)."""
+    size, digest = spec.get("weights_size"), spec.get("weights_sha256")
+    if not size:
+        return None
+    for line in reversed(lines):
+        match = _DENIED_RE.search(line)
+        if not match:
+            continue
+        path = Path(match.group(1)).expanduser()
+        try:
+            if path.stat().st_size != int(size):
+                return None
+        except OSError:
+            return None
+        if digest:
+            import hashlib
+            h = hashlib.sha256()
+            with path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            if h.hexdigest() != digest:
+                return None
+        return str(path)
+    return None
+
+
 def prefetch_one(family: str, version: str, run=subprocess.run, env: dict | None = None) -> tuple[str, str]:
     """(state, detail): state is ok / skipped / failed."""
     env = dict(os.environ if env is None else env)
@@ -90,6 +122,10 @@ def prefetch_one(family: str, version: str, run=subprocess.run, env: dict | None
     if proc.returncode == 0:
         return "ok", "downloaded by the framework (calculator built on the CPU)"
     lines = [ln for ln in ((proc.stderr or "") + (proc.stdout or "")).splitlines() if ln.strip()]
+    done = complete_weight_refused(lines, spec)
+    if done:
+        return "ok", (f"weight already complete at {done} (size and sha256 match the registry); the "
+                      f"framework's attempt to write it again was refused, which does not matter")
     return "failed", (f"calculator build on the CPU failed: {lines[-1] if lines else f'exit {proc.returncode}'} "
                       f"(the weight may still be cached; the GPU verify job on an offline node tells)")
 

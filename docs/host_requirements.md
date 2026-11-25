@@ -120,7 +120,12 @@ compute) in batch jobs.
   write to a fixed place in your home (`~/.cache/sevennet`, `matris`, `tace`, `nequix`,
   `eqnorm`, `grace`, `deepmd`, `~/.local/mattersim`) with symlinks into
   `$OMM_SHARED_CACHE_ROOT/home`. One that already exists as a directory is left
-  where it is and listed, so you can move it yourself.
+  where it is and listed, so you can move it yourself. The links stay in your home
+  after you delete the hub or the cache root; a later install with a new root
+  points them at the new one.
+- **No conda on the cluster?** Some sites offer only Anaconda modules or none.
+  Install Miniforge on project storage (not in `$HOME`) and put its `bin/` on
+  `PATH`; `install.sh` then finds `mamba` there.
 - **Task limits.** A login node may cap the processes and threads one user can
   run (cgroup `pids.max`, often 100 to 1000; `ulimit -u` does not show it). Over
   the cap, the install hangs and your shell and new logins fail too.

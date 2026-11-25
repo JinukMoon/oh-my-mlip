@@ -728,7 +728,12 @@ def run(
     finally:
         worker.shutdown()
     if not resp.get("ok"):
+        # the worker's own stderr holds what a subprocess printed before the
+        # exception (a compiler's error message from torch.compile / triton);
+        # without it the failure cannot be diagnosed afterwards
+        tail = [ln for ln in worker._stderr_lines if not ln.startswith("[oh-my-mlip]")][-40:]
+        extra = ("\n  worker stderr (last lines):\n    " + "\n    ".join(tail)) if tail else ""
         raise WorkerError(
-            f"run({model}) failed: {resp.get('error', 'unknown error')}"
+            f"run({model}) failed: {resp.get('error', 'unknown error')}{extra}"
         )
     return resp["results"]

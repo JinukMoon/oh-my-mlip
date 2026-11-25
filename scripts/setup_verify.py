@@ -69,6 +69,7 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -336,6 +337,19 @@ NO_GPU_REASON = ("no NVIDIA GPU is visible to this process (nvidia-smi is missin
                  "can install, not verify")
 
 
+# A JIT compile step that fails once and passes when run again (seen: the C
+# compiler of triton's launcher build inside torch.compile, on a cold cache on a
+# parallel file system). Only this class is retried, once; any other failure is
+# reported as it is.
+_COMPILE_RETRY_RE = re.compile(r"triton|inductor|torch\._dynamo", re.I)
+_COMPILE_FAIL_RE = re.compile(r"CalledProcessError|returned non-zero exit status|CompilationError|"
+                              r"BackendCompilerFailed", re.I)
+
+
+def compile_retry_worth(stderr: str) -> bool:
+    return bool(_COMPILE_RETRY_RE.search(stderr or "") and _COMPILE_FAIL_RE.search(stderr or ""))
+
+
 def verify_one(model: str, version: str | None, structure: str | None, home: Path,
                *, quiet: bool, no_local_record: bool) -> dict:
     """Run the oracle for ONE (model, version) and return its verdict dict.
@@ -384,6 +398,21 @@ def verify_one(model: str, version: str | None, structure: str | None, home: Pat
     )
 
     verdict = decide_verdict(skew, rc, bool(gpu.get("seen")), parse_witness_json(stdout), stderr)
+    if not verdict["pass"] and compile_retry_worth(stderr):
+        first_log = log_dir / f"{log_stem}.attempt1.stderr.log"
+        try:
+            first_log.write_text(stderr or "", encoding="utf-8")
+        except OSError:
+            pass
+        first_reason = verdict.get("reason")
+        rc, _elapsed, stdout, stderr, gpu = stream_process(
+            command, env=env, log_path=log_dir / f"{log_stem}.log",
+            stderr_path=log_dir / f"{log_stem}.stderr.log", collect=True,
+            monitor_gpu=not skew["skew"], cwd=home, gpu_sample_seconds=0.2, quiet=quiet,
+        )
+        verdict = decide_verdict(skew, rc, bool(gpu.get("seen")), parse_witness_json(stdout), stderr)
+        verdict["retried"] = {"why": "a JIT compile step failed (torch.compile / triton)",
+                              "first_reason": first_reason, "first_stderr_log": str(first_log)}
     verdict["model"] = model
     verdict["version"] = version
     verdict["env"] = env_name

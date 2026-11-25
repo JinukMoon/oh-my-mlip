@@ -424,7 +424,8 @@ def test_home_caches_become_links_into_the_shared_root(tmp_path):
     home, root = tmp_path / "home", tmp_path / "proj" / "cache"
     (home / ".cache" / "grace").mkdir(parents=True)              # already there: kept, listed
     (home / ".cache" / "tace").parent.mkdir(parents=True, exist_ok=True)
-    os.symlink(tmp_path / "elsewhere", home / ".cache" / "tace")  # an existing link: kept
+    (tmp_path / "elsewhere").mkdir()
+    os.symlink(tmp_path / "elsewhere", home / ".cache" / "tace")  # a working link elsewhere: kept
     env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "OMM_SHARED_CACHE_ROOT": str(root)}
     proc = subprocess.run(["bash", str(REPO / "scripts" / "home_cache_links.sh")],
                           capture_output=True, text=True, env=env)
@@ -650,3 +651,74 @@ def test_omm_offline_allow_lets_listed_public_hosts_through(tmp_path):
     assert out[4:] == ["connect", "True"]
     blocked = _hooked_with_dns(_RESOLVE + "r('example.org')\n", tmp_path)
     assert blocked == ["example.org", "blocked"]
+
+
+# ── run 3 follow-ups ─────────────────────────────────────────────────────────
+
+def test_home_cache_links_repair_a_deleted_target_and_a_dangling_link(tmp_path):
+    home, root = tmp_path / "home", tmp_path / "proj" / "cache"
+    (home / ".cache").mkdir(parents=True)
+    # ours, but its directory was deleted with an earlier run
+    os.symlink(root / "home" / ".cache" / "sevennet", home / ".cache" / "sevennet")
+    # into an old root that no longer exists
+    os.symlink(tmp_path / "old_run" / "cache" / "matris", home / ".cache" / "matris")
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "OMM_SHARED_CACHE_ROOT": str(root)}
+    proc = subprocess.run(["bash", str(REPO / "scripts" / "home_cache_links.sh")],
+                          capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, proc.stderr
+    assert (root / "home" / ".cache" / "sevennet").is_dir() and "re-created" in proc.stdout
+    assert Path(os.readlink(home / ".cache" / "matris")) == root / "home" / ".cache" / "matris"
+    assert (home / ".cache" / "matris").is_dir() and "now point into" in proc.stdout
+
+
+def test_parallel_verify_jobs_lose_no_ledger_record(tmp_path):
+    """Verify jobs finishing at once on a cluster: every record survives."""
+    script = (f"import sys; sys.path.insert(0, {str(REPO)!r})\n"
+              "from oh_my_mlip.registry import record_local_verified\n"
+              "v = sys.argv[1]\n"
+              "for i in range(20):\n"
+              f"    record_local_verified({{'version': f'{{v}}-{{i}}', 'model': 'M', 'env': 'e', 'python': 'p'}}, "
+              f"{{'device': 'cuda'}}, [], {str(tmp_path)!r})\n")
+    procs = [subprocess.Popen([sys.executable, "-c", script, f"V{k}"]) for k in range(6)]
+    assert all(p.wait(timeout=120) == 0 for p in procs)
+    data = json.loads((tmp_path / "models.local.json").read_text())
+    assert len(data) == 120
+
+
+def test_only_a_jit_compile_failure_is_retried():
+    assert setup_verify.compile_retry_worth(
+        "torch._dynamo.exc.BackendCompilerFailed: ... subprocess.CalledProcessError: Command "
+        "'['/env/bin/x86_64-conda-linux-gnu-gcc', '/tmp/main.c', ...]' returned non-zero exit status 1.")
+    assert not setup_verify.compile_retry_worth("RuntimeError: CUDA out of memory")
+    assert not setup_verify.compile_retry_worth("FileNotFoundError: model.pt")
+
+
+def test_a_compile_failure_is_retried_once_and_the_first_stderr_kept(monkeypatch, tmp_path):
+    monkeypatch.setattr(setup_verify, "predict_driver_skew", lambda env, home: {"skew": False})
+    monkeypatch.setattr(setup_verify, "gpu_visible", lambda: True)
+    monkeypatch.setattr(setup_verify, "check_d3", lambda *a, **k: {"state": "skipped"})
+    monkeypatch.setattr(setup_verify, "verified_arch_and_recipe", lambda env, home: ("sm80", "orb"))
+    first = ("triton launcher: gcc: error: ...\nsubprocess.CalledProcessError: Command '['gcc']' "
+             "returned non-zero exit status 1.")
+    witness = '{"energy_ev": -1.0, "fmax_ev_a": 0.1, "forces_shape": [2, 3], "gpu_mem_allocated_bytes": 5}'
+    outputs = iter([(1, 0.0, "", first, {"seen": False}), (0, 0.0, witness, "", {"seen": True})])
+    monkeypatch.setattr(setup_verify, "stream_process", lambda *a, **k: next(outputs))
+    home = tmp_path / "hub"
+    (home / "envs").mkdir(parents=True)
+    (home / "envs" / "orb.yml").write_text("name: orb\n")
+    (home / "models.json").write_text(json.dumps({"_meta": {}, "ORB": {"env": "orb", "versions": {"ORB-v3": {}}}}))
+    v = setup_verify.verify_one("ORB", None, None, home, quiet=True, no_local_record=True)
+    assert v["pass"] is True and "first_reason" in v["retried"]
+    assert "gcc: error" in Path(v["retried"]["first_stderr_log"]).read_text()
+
+
+def test_a_refused_rewrite_of_a_complete_weight_counts_as_downloaded(tmp_path):
+    import hashlib
+    weight = tmp_path / "TACE-OAM-L.pt"
+    weight.write_bytes(b"x" * 100)
+    spec = {"weights_size": 100, "weights_sha256": hashlib.sha256(b"x" * 100).hexdigest()}
+    lines = ["Traceback ...", f"PermissionError: [Errno 13] Permission denied: '{weight}'"]
+    assert prefetch_weights.complete_weight_refused(lines, spec) == str(weight)
+    assert prefetch_weights.complete_weight_refused(lines, {**spec, "weights_size": 99}) is None
+    assert prefetch_weights.complete_weight_refused(lines, {**spec, "weights_sha256": "0" * 64}) is None
+    assert prefetch_weights.complete_weight_refused(lines, {}) is None

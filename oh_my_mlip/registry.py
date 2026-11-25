@@ -204,7 +204,26 @@ def record_local_verified(
     home_path: str | None = None,
 ) -> None:
     """Upsert one verified-model record (incremental: new installs append,
-    re-verifications overwrite their own entry, other entries untouched)."""
+    re-verifications overwrite their own entry, other entries untouched).
+
+    Several verify jobs can finish at once (GPU jobs on a cluster): the
+    read-modify-write runs under an exclusive lock on models.local.json.lock,
+    and the new file replaces the old one in one rename, so no record is lost
+    and no reader sees a half-written file."""
+    import fcntl
+
+    path = local_models_path(home_path)
+    with open(str(path) + ".lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            _upsert_local(path, spec, verdict, weights, home_path)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def _upsert_local(path: Path, spec: dict, verdict: dict, weights: list[str], home_path: str | None) -> None:
+    import tempfile
+
     data = load_local_models(home_path)
     data[spec["version"]] = {
         "model": spec["model"],
@@ -217,9 +236,15 @@ def record_local_verified(
         "weights": weights,
         "verified_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
-    local_models_path(home_path).write_text(
-        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".models.local.", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 def models_json_path() -> Path:

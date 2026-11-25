@@ -64,6 +64,7 @@ cache/
 .gjc_closure_artifacts/
 env_map.local.json
 models.local.json
+models.local.json.lock
 
 # runtime artifacts emitted by the feature scripts (never committed)
 jobs/
