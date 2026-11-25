@@ -351,7 +351,10 @@ built on the user's machine:
   `nvcc`, `ninja` and conda compiler, so the bare interpreter never compiles it.
   A failed build never fails the env (energies and forces do not need D3): it
   prints a WARNING with the log and the rerun command, leaves `state=failed` in
-  `<prefix>/.omm_d3`, and an install.sh re-run tries it again. On a read-only
+  `<prefix>/.omm_d3`, and an install.sh re-run tries it again. While that marker
+  says `failed`, constructing catbench's `DispersionCorrection` in that env raises
+  at once with the reason (a start-up hook install.sh puts in the env) instead of
+  compiling again; report such a model as "ready, D3 unavailable". On a read-only
   hub the kernel goes to torch's extensions cache. `setup_verify.py` reports one
   D3 calculation as its own `d3` item, apart from the energy/forces `pass`.
 - **Whole envs on a newer GPU (sm120, Blackwell)**: a torch wheel built for CUDA
@@ -554,7 +557,11 @@ For each target:
    false` is a clean GPU pass; `degraded: true` is a CPU pass with a reason;
    `pass: false` goes back to step 3.
 5. **Report:** model, env path, `energy_ev`, `forces_shape`, `device`, `degraded`
-   (with reason), `gpu_pid_confirmed`.
+   (with reason), `gpu_pid_confirmed`, and the `d3` state. When `d3` is not
+   `pass` (the kernel build failed at install), report the model as
+   "ready, D3 unavailable", never plain "ready": a D3 request in that env fails at
+   once with the build's reason (`<prefix>/.omm_d3`), and re-running `install.sh
+   <env>` retries the build.
 
 After a batch, retry each failed target through steps 1–4, then run
 `scripts/setup_sweep.py report`; targets that never ran show as `not_attempted`.

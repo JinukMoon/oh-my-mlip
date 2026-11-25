@@ -641,16 +641,22 @@ OMM_PREFETCH_WARNINGS=()
 # Face token are skipped and listed. A variant that cannot be prefetched is a
 # warning, not a failed env: the framework still downloads it on first use
 # where there is internet. OMM_PREFETCH=0 skips this step.
-# Offline mode for this env's interpreters (oh_my_mlip/_offline_hook.py): a .pth
-# line runs it at every start; it does nothing unless OMM_OFFLINE=1, which env.sh
-# and the hub set on a node without internet.
-install_offline_hook() {
+# Start-up hooks for this env's interpreters, each run by a .pth line: offline
+# mode (oh_my_mlip/_offline_hook.py; nothing unless OMM_OFFLINE=1, which env.sh
+# and the hub set on a node without internet) and the D3 guard
+# (oh_my_mlip/_d3_guard.py; nothing unless the env's D3 build failed).
+install_env_hooks() {
   local prefix="$1" site
   site="$("$prefix/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null)" || return 0
   [ -n "$site" ] && [ -d "$site" ] && [ -w "$site" ] || return 0
   cp "$OH_MY_MLIP_HOME/oh_my_mlip/_offline_hook.py" "$site/_omm_offline.py" \
     && printf 'import _omm_offline\n' > "$site/omm_offline.pth" \
     || echo "  could not add the offline-mode hook to $site; on a node without internet a loader may wait for the network." >&2
+  # and the D3 guard (oh_my_mlip/_d3_guard.py): after a failed D3 kernel build,
+  # a D3 request fails at once with the reason instead of compiling again
+  cp "$OH_MY_MLIP_HOME/oh_my_mlip/_d3_guard.py" "$site/_omm_d3_guard.py" \
+    && printf 'import _omm_d3_guard\n' > "$site/omm_d3_guard.pth" \
+    || echo "  could not add the D3 guard to $site." >&2
 }
 
 prefetch_weights() {
@@ -807,7 +813,7 @@ install_one() {
       # failed build warns and leaves a marker instead of failing it
       build_d3_kernel "$env_name" "$prefix" warn || return 1
       # an env installed before weights were downloaded at install time
-      install_offline_hook "$prefix"
+      install_env_hooks "$prefix"
       [ -e "$prefix/.omm_prefetch.json" ] || prefetch_weights "$env_name" "$prefix"
       return 0
     fi
@@ -1002,7 +1008,7 @@ install_one() {
     fi
   fi
 
-  install_offline_hook "$prefix"
+  install_env_hooks "$prefix"
   bash "$OH_MY_MLIP_HOME/scripts/home_cache_links.sh"
   prefetch_weights "$env_name" "$prefix"
 

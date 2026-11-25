@@ -410,10 +410,10 @@ def test_offline_env_switches_on_only_without_internet(monkeypatch):
 def test_workers_get_offline_mode_and_install_sh_installs_the_hook():
     assert "return offline_env(child_env)" in (REPO / "oh_my_mlip" / "provider.py").read_text()
     text = (REPO / "install.sh").read_text()
-    func = text[text.index("install_offline_hook() {"):text.index("prefetch_weights() {")]
+    func = text[text.index("install_env_hooks() {"):text.index("prefetch_weights() {")]
     assert '"$site/_omm_offline.py"' in func and "import _omm_offline" in func
     body = text[text.index("install_one() {"):]
-    assert body.index('  install_offline_hook "$prefix"\n') < body.index('  prefetch_weights "$env_name" "$prefix"\n')
+    assert body.index('  install_env_hooks "$prefix"\n') < body.index('  prefetch_weights "$env_name" "$prefix"\n')
     env_sh = (REPO / "env.sh").read_text()
     assert "export OMM_OFFLINE=1 HF_HUB_OFFLINE=1" in env_sh and 'if [ -z "${OMM_OFFLINE:-}" ]' in env_sh
 
@@ -592,3 +592,50 @@ def test_install_rebuilds_pyg_before_catbench_and_a_failure_withholds_the_sentin
     i = body.index('rebuild_pyg_for_old_glibc "$env_name" "$prefix" || {')
     assert i < body.index("installing catbench") < body.index(': > "$sentinel"')
     assert "return 1" in body[i:i + 200]
+
+
+# ── after a failed D3 build, D3 fails at once with the reason ────────────────
+
+def _guarded_env(tmp_path: Path, marker: str | None) -> tuple[Path, dict]:
+    """An env prefix (sys.prefix of a venv) with the guard and a fake catbench."""
+    import venv
+    prefix = tmp_path / "env"
+    venv.EnvBuilder(with_pip=False).create(prefix)
+    site = Path(subprocess.run([str(prefix / "bin" / "python"), "-c",
+                                "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
+                               capture_output=True, text=True).stdout.strip())
+    (site / "_omm_d3_guard.py").write_text((REPO / "oh_my_mlip" / "_d3_guard.py").read_text())
+    (site / "omm_d3_guard.pth").write_text("import _omm_d3_guard\n")
+    pkg = site / "catbench" / "dispersion"
+    pkg.mkdir(parents=True)
+    (site / "catbench" / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text("class DispersionCorrection:\n    def apply(self, calc):\n        return ('d3', calc)\n")
+    if marker is not None:
+        (prefix / ".omm_d3").write_text(marker)
+    return prefix, {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+
+
+_USE_D3 = ("from catbench.dispersion import DispersionCorrection\n"
+           "try:\n    print(DispersionCorrection().apply('calc'))\n"
+           "except RuntimeError as e:\n    print('REFUSED', e)\n")
+
+
+def test_a_failed_d3_build_makes_d3_fail_at_once_with_the_reason(tmp_path):
+    prefix, env = _guarded_env(tmp_path, "state=failed\ndetail=fatbinary crashed\nlog=/x/.omm_d3_build.log\n")
+    out = subprocess.run([str(prefix / "bin" / "python"), "-c", _USE_D3], capture_output=True, text=True, env=env).stdout
+    assert out.startswith("REFUSED D3 is unavailable in this env")
+    assert "fatbinary crashed" in out and "/x/.omm_d3_build.log" in out and "re-run install.sh env" in out
+    assert "Energies and forces work" in out
+
+
+@pytest.mark.parametrize("marker", [None, "state=built\ndetail=ok\n", "state=present\ndetail=ok\n"])
+def test_d3_is_untouched_when_the_build_did_not_fail(tmp_path, marker):
+    prefix, env = _guarded_env(tmp_path, marker)
+    out = subprocess.run([str(prefix / "bin" / "python"), "-c", _USE_D3], capture_output=True, text=True, env=env).stdout
+    assert out.strip() == "('d3', 'calc')"
+
+
+def test_install_sh_installs_the_d3_guard():
+    text = (REPO / "install.sh").read_text()
+    func = text[text.index("install_env_hooks() {"):text.index("prefetch_weights() {")]
+    assert '"$site/_omm_d3_guard.py"' in func and "import _omm_d3_guard" in func
