@@ -639,3 +639,14 @@ def test_install_sh_installs_the_d3_guard():
     text = (REPO / "install.sh").read_text()
     func = text[text.index("install_env_hooks() {"):text.index("prefetch_weights() {")]
     assert '"$site/_omm_d3_guard.py"' in func and "import _omm_d3_guard" in func
+
+
+def test_omm_offline_allow_lets_listed_public_hosts_through(tmp_path):
+    code = (_RESOLVE + "r('example.org'); r('93.184.216.34')\n"
+            "s = socket.socket(); s.settimeout(0.2)\n"
+            "rc = s.connect_ex(('93.184.216.34', 22)); print('connect', rc != __import__('errno').ENETUNREACH)\n")
+    out = _hooked_with_dns(code, tmp_path, {"OMM_OFFLINE_ALLOW": "Example.org, 93.184.216.34"})
+    assert out[:4] == ["example.org", "93.184.216.34", "93.184.216.34", "93.184.216.34"]
+    assert out[4:] == ["connect", "True"]
+    blocked = _hooked_with_dns(_RESOLVE + "r('example.org')\n", tmp_path)
+    assert blocked == ["example.org", "blocked"]

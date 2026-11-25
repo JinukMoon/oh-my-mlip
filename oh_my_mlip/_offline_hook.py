@@ -13,7 +13,9 @@ public internet address fails at once with OSError, which such loaders treat as
 once with a clear error instead of hanging. Loopback, private (RFC 1918, ULA) and
 link-local destinations stay reachable, also by name (DDP rendezvous with
 MASTER_ADDR=<another node>, licence servers, site mirrors), and so do the proxy
-hosts named in http(s)_proxy / all_proxy.
+hosts named in http(s)_proxy / all_proxy, and the hosts listed in
+OMM_OFFLINE_ALLOW (comma-separated names or addresses, e.g. a login node whose
+name resolves to a public address).
 
 env.sh and oh_my_mlip (setup_verify, run(), Worker) set OMM_OFFLINE=1 when a
 3-second connection test to the internet fails; OMM_OFFLINE=0 turns it off.
@@ -68,23 +70,32 @@ def _proxy_hosts(env):
     return hosts
 
 
+def _allow_list(env):
+    """OMM_OFFLINE_ALLOW: comma-separated host names or addresses that stay
+    reachable although they are public (a login node whose name resolves to a
+    public address, a site service)."""
+    return {h.strip().lower() for h in env.get("OMM_OFFLINE_ALLOW", "").split(",") if h.strip()}
+
+
 def _install():
     real_getaddrinfo = socket.getaddrinfo
     real_connect = socket.socket.connect
     real_connect_ex = socket.socket.connect_ex
-    proxies = _proxy_hosts(os.environ)
-    allowed = set()          # addresses that a proxy name resolved to
+    proxies = _proxy_hosts(os.environ) | _allow_list(os.environ)
+    allowed = {h for h in proxies if _private_ip(h) is False}   # allowed address literals
+
 
     def getaddrinfo(host, *args, **kwargs):
         if _local_name(host):
             return real_getaddrinfo(host, *args, **kwargs)
         name = host.decode("ascii", "ignore") if isinstance(host, bytes) else str(host)
+        if name.lower() in proxies:            # a proxy, or listed in OMM_OFFLINE_ALLOW
+            infos = real_getaddrinfo(host, *args, **kwargs)
+            allowed.update(info[4][0] for info in infos)
+            return infos
         if _private_ip(name) is False:        # a public address literal
             raise socket.gaierror(socket.EAI_NONAME, _MSG)
         infos = real_getaddrinfo(host, *args, **kwargs)
-        if name.lower() in proxies:
-            allowed.update(info[4][0] for info in infos)
-            return infos
         # cluster-internal names (another compute node as MASTER_ADDR, a licence
         # server, a site mirror) resolve to private addresses: keep only those
         local = [info for info in infos if _private_ip(info[4][0])]

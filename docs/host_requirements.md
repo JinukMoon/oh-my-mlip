@@ -151,6 +151,9 @@ compute) in batch jobs.
   `OMM_OFFLINE=1`; every env `install.sh` built then fails network access at once,
   and the loaders use the downloaded weights. `run()`, workers and `setup_verify`
   test it the same way. Set `OMM_OFFLINE=1` (or `0`) yourself to skip the test.
+  Private addresses (another compute node, a site mirror) and the proxy stay
+  reachable. A site host with a public address that a job must reach (for example
+  a login node) goes in `OMM_OFFLINE_ALLOW=<host>[,<host>...]`.
 - **Verify in a GPU job.** `setup_verify.py` refuses at once on a node without a
   GPU. A SLURM job for one model (account, partition and GPU syntax are site-specific):
   ```bash
