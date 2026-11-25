@@ -16,7 +16,8 @@ them verbatim; this skill carries no procedure of its own.
 Success oracle: `scripts/setup_verify.py <variant> --json` passes with
 `degraded: false`; it computes energy and forces and confirms GPU use. Its
 `d3` item (one D3 calculation) is reported separately: a D3 fail is a D3
-problem to report, not an energy/forces fail.
+problem to report, not an energy/forces fail; say "ready, D3 unavailable"
+(AGENTS.md §9.4 step 5), never plain "ready".
 `install.sh` exit 0, or energies printed by `run_examples/single_point.py`,
 are never sufficient on their own.
 

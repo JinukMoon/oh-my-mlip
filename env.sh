@@ -45,11 +45,43 @@ if [ -n "${OMM_SHARED_CACHE_ROOT:-}" ]; then
   export FAIRCHEM_CACHE_DIR="${OMM_SHARED_CACHE_ROOT}/fairchem"  # UMA + eSEN. NOTE: fairchem reads FAIRCHEM_CACHE_DIR (NOT FAIRCHEM_CACHE)
   export TORCH_HOME="${OMM_SHARED_CACHE_ROOT}/torch"             # torch.hub cache
   export CACHED_PATH_CACHE_ROOT="${OMM_SHARED_CACHE_ROOT}/cached_path"  # ORB (orb_models uses cached_path)
+  export NEQUIP_CACHE_DIR="${NEQUIP_CACHE_DIR:-${OMM_SHARED_CACHE_ROOT}/nequip}"  # NequIP/Allegro model cache (~/.nequip)
+  export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${OMM_SHARED_CACHE_ROOT}/xdg}"      # MACE and other XDG-aware caches
+  # Frameworks that write ~/.cache/<name> (or ~/.local/<name>) whatever the
+  # variables say (SevenNet, MatRIS, TACE, Nequix, Eqnorm, GRACE, DeePMD, MatterSim)
+  # are pointed here by install.sh with symlinks (scripts/home_cache_links.sh).
 fi
-# NOTE: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are intentionally NOT forced here.
-#   The public edition fetches weights on first run (gated models need the user's HF_TOKEN).
-#   Set them to 1 yourself once everything is cached if you want to pin offline:
-#   export HF_HUB_OFFLINE=1; export TRANSFORMERS_OFFLINE=1
+# NOTE: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are NOT forced where there is internet:
+#   weights are fetched on first run (gated models need the user's HF_TOKEN).
+# Where there is none (HPC compute nodes often drop outbound packets silently, and a
+# loader that checks a URL before using its cache then waits until the job's time
+# limit), offline mode is switched on: OMM_OFFLINE=1 makes every non-local
+# connection in the envs' interpreters fail at once (oh_my_mlip/_offline_hook.py,
+# installed into each env by install.sh), so loaders use the weights install.sh
+# downloaded. Test (omm_internet_ok): through the proxy when http(s)_proxy is set
+# (curl -sI), else a TCP connection, to huggingface.co or pypi.org within 3 s.
+# OMM_OFFLINE=0 (or 1) set beforehand is kept and skips the test.
+omm_internet_ok() {
+  local t="${1:-3}" host
+  if [ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}${all_proxy:-}${ALL_PROXY:-}" ]; then
+    # a site that reaches the internet only through a proxy: test through it
+    command -v curl >/dev/null 2>&1 || return 0      # cannot test: assume online
+    for host in huggingface.co pypi.org; do
+      curl -sI -o /dev/null --max-time "$t" "https://$host" 2>/dev/null && return 0
+    done
+    return 1
+  fi
+  for host in huggingface.co pypi.org; do
+    timeout "$t" bash -c "exec 3<>/dev/tcp/$host/443" 2>/dev/null && return 0
+  done
+  return 1
+}
+if [ -z "${OMM_OFFLINE:-}" ]; then
+  if ! omm_internet_ok 3; then
+    export OMM_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+    echo "oh-my-mlip: no internet on this node: offline mode on (OMM_OFFLINE=1); models use downloaded weights." >&2
+  fi
+fi
 
 # ── 2) catbench D3 ──
 #   The arch-specific pair_d3.so (catbench/dispersion/cuda/pair_d3.so) is never shipped;

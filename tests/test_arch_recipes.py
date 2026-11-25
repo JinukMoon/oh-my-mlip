@@ -318,10 +318,10 @@ def test_no_python_stops_instead_of_using_the_base_recipe(mini_home, tmp_path):
     env["OH_MY_MLIP_HOME"] = str(mini_home)
     dry = subprocess.run(["bash", str(mini_home / "install.sh"), "--dry-run", "mace"],
                          capture_output=True, text=True, cwd=str(mini_home), env=env)
-    assert "STOP 'mace'" in dry.stdout and "no python3" in dry.stdout and "would create" not in dry.stdout
+    assert "STOP 'mace'" in dry.stdout and "no Python 3.8 or newer" in dry.stdout and "would create" not in dry.stdout
     real = subprocess.run(["bash", str(mini_home / "install.sh"), "mace"],
                           capture_output=True, text=True, cwd=str(mini_home), env=env)
-    assert real.returncode == 1 and "no python3" in real.stderr and "Nothing was downloaded" in real.stderr
+    assert real.returncode == 1 and "no Python 3.8 or newer" in real.stderr and "Nothing was downloaded" in real.stderr
     assert not log.exists() and not (mini_home / "envs" / "mace").exists()
 
 

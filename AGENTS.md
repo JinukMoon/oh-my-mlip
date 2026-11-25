@@ -349,9 +349,12 @@ built on the user's machine:
 - **D3 kernel**: `install.sh` and `scripts/adopt_env.py` build catbench's
   `pair_d3.so` once per env with `scripts/build_d3.py`, using the env's own
   `nvcc`, `ninja` and conda compiler, so the bare interpreter never compiles it.
-  A failed build fails a fresh install of that env; for an env already in use
-  (an install.sh re-run, `adopt_env.py`) it prints a WARNING with the log and the
-  rerun command and leaves `state=failed` in `<prefix>/.omm_d3`. On a read-only
+  A failed build never fails the env (energies and forces do not need D3): it
+  prints a WARNING with the log and the rerun command, leaves `state=failed` in
+  `<prefix>/.omm_d3`, and an install.sh re-run tries it again. While that marker
+  says `failed`, constructing catbench's `DispersionCorrection` in that env raises
+  at once with the reason (a start-up hook install.sh puts in the env) instead of
+  compiling again; report such a model as "ready, D3 unavailable". On a read-only
   hub the kernel goes to torch's extensions cache. `setup_verify.py` reports one
   D3 calculation as its own `d3` item, apart from the energy/forces `pass`.
 - **Whole envs on a newer GPU (sm120, Blackwell)**: a torch wheel built for CUDA
@@ -554,7 +557,11 @@ For each target:
    false` is a clean GPU pass; `degraded: true` is a CPU pass with a reason;
    `pass: false` goes back to step 3.
 5. **Report:** model, env path, `energy_ev`, `forces_shape`, `device`, `degraded`
-   (with reason), `gpu_pid_confirmed`.
+   (with reason), `gpu_pid_confirmed`, and the `d3` state. When `d3` is not
+   `pass` (the kernel build failed at install), report the model as
+   "ready, D3 unavailable", never plain "ready": a D3 request in that env fails at
+   once with the build's reason (`<prefix>/.omm_d3`), and re-running `install.sh
+   <env>` retries the build.
 
 After a batch, retry each failed target through steps 1–4, then run
 `scripts/setup_sweep.py report`; targets that never ran show as `not_attempted`.
@@ -566,6 +573,28 @@ as `skipped_gated`.
 These also need the compiled model for the GPU (§6). `install.sh` runs the
 prepare scripts; if verification fails with a missing or mismatched `.pt2`, run
 the prepare script again on this machine.
+
+### 9.6 HPC clusters (login node without a GPU, GPU nodes without internet)
+
+Follow `docs/host_requirements.md` "HPC clusters". In short:
+
+- Install on the login node with `OMM_INSTALL_ARCH=<arch of the job GPUs>` and
+  every path on project storage, not `$HOME`. Verify each model with
+  `setup_verify.py` inside a GPU job (SLURM `--gres=gpu:1` or `--gpus=1`, after
+  `source env.sh`, which switches on offline mode on a node without internet);
+  it refuses on a node without a GPU, and that refusal is not an install error.
+  Do not redirect `$HOME` or add network workarounds yourself: set
+  `OMM_SHARED_CACHE_ROOT` (the docs' export block) and `install.sh` handles both.
+- A login node may cap tasks per user. `install.sh` lowers its own parallelism
+  when it finds the cap; you and your tool calls count against the same cap, so
+  run one install at a time and nothing else heavy beside it.
+- Some login nodes end all your processes when your last session closes, so a
+  `nohup` launch (§9.4) does not outlive the session: keep this session running
+  until the install ends. If it was cut, run the same command again (finished
+  envs are skipped; an interrupted env asks for `--rebuild <env>`).
+- After each env, read `envs/<env>/.omm_prefetch.json`: a variant marked
+  `failed` may not load on an offline GPU node. For NequIP and Allegro, run the
+  compile command the install printed as the first step of the GPU job.
 
 ## 10. Recipes — from request to plan, approval, run and evidence
 

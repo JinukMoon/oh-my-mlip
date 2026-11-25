@@ -47,7 +47,7 @@ from oh_my_mlip import registry  # noqa: E402
 from upstream_recipes import UPSTREAM  # noqa: E402
 
 DOC = REPO / "docs" / "recipes.md"
-CATBENCH_PIN = "1.1.4"
+CATBENCH_PIN = "1.1.7"
 # Rendered in place of the host's real GPU arch (sm86/sm89/...) in compile paths.
 ARCH_PLACEHOLDER = "${OMM_ARCH}"
 

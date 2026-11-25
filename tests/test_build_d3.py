@@ -288,15 +288,17 @@ def test_probe_code_runs_and_finds_catbench_without_importing_it(tmp_path):
 
 # ── install.sh and adopt_env.py run it ──────────────────────────────────────
 
-def test_install_sh_prebuilds_d3_and_fails_the_env_on_a_failed_build():
+def test_install_sh_prebuilds_d3_and_a_failed_build_only_warns():
+    """A failed D3 build never makes an env not-ready (energies and forces do not need it);
+    it leaves the failed marker and is listed at the end of the run."""
     text = (REPO / "install.sh").read_text()
     func = text[text.index("build_d3_kernel() {"):text.index("install_one() {")]
     assert '"$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode"' in func
     body = text[text.index("install_one() {"):]
-    # a fresh build fails the env (before the sentinel); an installed env only warns
-    assert body.count('build_d3_kernel "$env_name" "$prefix" || return 1\n') == 1
-    assert body.index('build_d3_kernel "$env_name" "$prefix" || return 1\n') < body.index(': > "$sentinel"')
-    assert body.count('build_d3_kernel "$env_name" "$prefix" warn || return 1') == 1
+    assert 'build_d3_kernel "$env_name" "$prefix" || return 1\n' not in body
+    assert body.count('build_d3_kernel "$env_name" "$prefix" warn || return 1') == 2   # fresh and installed
+    fresh = body.rindex('build_d3_kernel "$env_name" "$prefix" warn || return 1')
+    assert fresh < body.index(': > "$sentinel"')
     assert "D3 warm-up" not in text
 
 
@@ -308,7 +310,7 @@ def _run_build_d3_kernel(tmp_path: Path, mode: str, rc: int) -> subprocess.Compl
     home = tmp_path / "hub"
     _exe(home / "scripts" / "build_d3.py", "")
     (home / "scripts" / "build_d3.py").write_text(f"import sys\nsys.exit({rc})\n")
-    script = (f"OH_MY_MLIP_HOME={home}; THREAD_CAPS=(env)\n{func}\n"
+    script = (f"OH_MY_MLIP_HOME={home}; HOST_PY={sys.executable}; THREAD_CAPS=(env)\n{func}\n"
               f"build_d3_kernel uma {tmp_path}/envs/uma {mode}; echo \"returned=$?\"\n{summary}")
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
@@ -322,7 +324,7 @@ def test_install_sh_fresh_build_fails_on_a_failed_d3_build(tmp_path):
 def test_install_sh_installed_env_warns_and_keeps_going(tmp_path):
     proc = _run_build_d3_kernel(tmp_path, "warn", 3)
     assert "returned=0" in proc.stdout and "FAILED" not in proc.stderr
-    assert "install.sh: WARNING: the D3 kernel could not be built for these already-installed envs" in proc.stderr
+    assert "install.sh: WARNING: the D3 kernel could not be built for these envs" in proc.stderr
     assert f"uma (log: {tmp_path}/envs/uma/.omm_d3_build.log)" in proc.stderr
     # an unexpected error in warn mode (not the WARN exit) still fails
     assert "returned=1" in _run_build_d3_kernel(tmp_path, "warn", 1).stdout
@@ -338,7 +340,7 @@ def test_install_dry_run_shows_the_d3_build():
     env = {**os.environ, "OMM_INSTALL_ARCH": "sm120", "OH_MY_MLIP_HOME": str(REPO)}
     out = subprocess.run(["bash", str(REPO / "install.sh"), "--dry-run", "uma"], capture_output=True,
                          text=True, cwd=str(REPO), env=env).stdout
-    assert f"then: python3 {REPO}/scripts/build_d3.py {REPO}/envs/uma" in out
+    assert f"/scripts/build_d3.py {REPO}/envs/uma  (D3 kernel" in out   # run by a Python 3.8+ (host_python)
 
 
 def _adopt_home(tmp_path: Path) -> Path:
@@ -375,6 +377,7 @@ def test_adoption_builds_d3_and_a_failed_build_warns_with_a_marker(tmp_path: Pat
          "  *_load*) echo 'RuntimeError: Ninja is required to load C++ extensions' >&2; exit 1 ;;\n"
          "esac\nexit 0\n")
     _exe(prefix / "bin" / "nvcc", 'echo "compute_75 compute_120"\n')
+    _exe(prefix / "bin" / "ninja", "exit 0\n")             # present, yet torch's build still fails
     proc = _adopt(home, prefix)
     assert proc.returncode == 0, proc.stderr                 # the env is in use: warn, do not fail
     assert "WARNING: D3 kernel build failed for alpha" in proc.stderr and "Ninja is required" in proc.stderr

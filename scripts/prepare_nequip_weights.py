@@ -10,6 +10,12 @@ scripts/upstream_recipes.py (NequIP / Allegro fetch recipes), except that the
 model package is downloaded here first (see MODELS) and compiled from disk.
 
 Existing non-empty outputs are kept (per-arch artifacts; rerun after deleting).
+
+On a host without a usable GPU (an HPC login node, where the install runs
+because compute nodes often have no internet) the packages are downloaded and
+the compile is left for a GPU node: the script prints the command to run there
+and exits 4 (DEFERRED), which install.sh accepts. The compile itself reads only
+the downloaded package, so it works on an offline GPU node.
 """
 from __future__ import annotations
 
@@ -78,9 +84,15 @@ def local_package(zip_dir: str, name: str, md5: str) -> str | None:
     return str(path)
 
 
-def host_arch() -> str:
+DEFERRED = 4
+
+
+def host_arch() -> str | None:
+    """sm<major><minor> of the GPU torch sees, or None without a usable GPU."""
     import torch
 
+    if not torch.cuda.is_available():
+        return None
     major, minor = torch.cuda.get_device_capability()
     return f"sm{major}{minor}"
 
@@ -91,6 +103,15 @@ def compile_env(prefix: Path) -> dict:
     env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
     # MAX_JOBS=4: oeq's first import JIT-builds at nproc and can wedge on a stale lock.
     env.setdefault("MAX_JOBS", "4")
+    # torch inductor compiles the AOT model with `g++` from PATH unless CXX is
+    # set. An old system g++ (8.5 on RHEL/Rocky 8) builds a model that
+    # segfaults when it is run (nequip-compile rc=-11 in its own output check).
+    # Use the env's conda compiler (GCC 13) and its libstdc++ instead.
+    gcc, gxx = prefix / "bin" / "x86_64-conda-linux-gnu-gcc", prefix / "bin" / "x86_64-conda-linux-gnu-g++"
+    if os.access(gcc, os.X_OK) and os.access(gxx, os.X_OK):
+        env.setdefault("CC", str(gcc))
+        env.setdefault("CXX", str(gxx))
+        env["LD_LIBRARY_PATH"] = str(prefix / "lib") + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     # nvrtc.h (and other CUDA headers) ship in the env's pip nvidia-* wheels.
     # crt/host_defines.h etc. come from the conda CUDA toolkit (<env>/targets/*/include).
     includes = (sorted(glob.glob(str(prefix / "lib" / "python3*" / "site-packages" / "nvidia" / "*" / "include")))
@@ -141,6 +162,25 @@ def fetch_package(version: str, target_root: Path) -> Path:
     return package
 
 
+def download_only(env_name: str, target_root: Path) -> int:
+    """No GPU here: download every package, print the GPU-node compile command."""
+    failed = 0
+    for _uri, version, _extra, zip_name, *_ in MODELS[env_name]:
+        try:
+            fetch_package(version, target_root)
+        except Exception as exc:  # noqa: BLE001 - reported, the other models still run
+            print(f"  {version}: download failed ({exc}); rerun to resume it, or set "
+                  f"OMM_NEQUIP_ZIP_DIR to a directory holding {zip_name}", file=sys.stderr)
+            failed += 1
+    if failed:
+        return 1
+    cmd = f"{sys.executable} {Path(__file__).resolve()} --target-root {target_root}"
+    print(f"  no usable GPU on this host: {env_name} packages downloaded, not compiled. NequIP / Allegro load a "
+          f"model compiled for one GPU architecture, so compile it on a GPU node (no internet needed there), "
+          f"e.g. as the first step of the GPU job:\n    {cmd}", flush=True)
+    return DEFERRED
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--target-root", required=True, help="$OH_MY_MLIP_HOME/models/<env> (env name = basename)")
@@ -156,6 +196,8 @@ def main(argv: list[str] | None = None) -> int:
     prefix = Path(sys.executable).resolve().parent.parent
     compiler = prefix / "bin" / "nequip-compile"
     arch = host_arch() if not args.dry_run else "${ARCH}"
+    if arch is None:
+        return download_only(env_name, target_root)
     out_dir = home / "models" / "compiled" / arch
     env = compile_env(prefix)
 
@@ -184,7 +226,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  compiling {version} for {arch} -> {out}", flush=True)
         rc = subprocess.run(cmd, env=env).returncode
         if rc != 0 or not (out.is_file() and out.stat().st_size > 0):
-            print(f"  {version}: nequip-compile failed (rc={rc})", file=sys.stderr)
+            # a failed compile leaves nothing behind: a partial .pt2 would look
+            # present to the next run, and each one is hundreds of MB
+            leftovers = [p for p in out_dir.glob(f"{version}_{arch}*") if p.is_file()]
+            for path in leftovers:
+                path.unlink(missing_ok=True)
+            note = f"; removed {len(leftovers)} partial file(s)" if leftovers else ""
+            print(f"  {version}: nequip-compile failed (rc={rc}){note}", file=sys.stderr)
             failed += 1
     return 1 if failed else 0
 

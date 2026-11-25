@@ -237,7 +237,7 @@ def test_every_real_weight_script_accepts_the_arguments_adoption_passes(tmp_path
 
 def test_adoption_and_install_sh_call_the_weight_scripts_the_same_way():
     text = (REPO_ROOT / "install.sh").read_text()
-    assert 'python3 "$prestage" ||' in text
+    assert '"$HOST_PY" "$prestage" ||' in text      # a Python 3.8+ (install.sh's host_python)
     assert '"$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name"' in text
 
 

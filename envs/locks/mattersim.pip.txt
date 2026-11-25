@@ -21,7 +21,7 @@ bibtexparser==2.0.1
 blake3==1.0.9
 boto3==1.43.93
 botocore==1.43.93
-catbench==1.1.4
+catbench==1.1.7
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.1

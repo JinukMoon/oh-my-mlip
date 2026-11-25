@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from oh_my_mlip.fetch import ensure_weights
+from oh_my_mlip.offline import offline_env
 from oh_my_mlip import registry
 
 __all__ = ["get_calculator", "run", "Worker", "WorkerPool"]
@@ -324,6 +325,17 @@ class Worker:
             child_env["LIBRARY_PATH"] = os.pathsep.join(lib_dirs) + (
                 os.pathsep + existing_lp if existing_lp else ""
             )
+        # JIT builds in the worker (OpenEquivariance's libtorch_tp_jit via torch
+        # cpp_extension) use `c++` from PATH unless CXX is set; an old system g++
+        # (8.5 on RHEL/Rocky 8) cannot compile it against torch 2.9 headers
+        # ("non-constant condition for static assertion"), the extension is then
+        # silently missing and the .pt2 load fails with "Couldn't resolve type
+        # ...libtorch_tp_jit.TorchJITConv". Use the env's conda compilers when it has them.
+        _gcc = os.path.join(env_bin, "x86_64-conda-linux-gnu-gcc") if env_bin else ""
+        _gxx = os.path.join(env_bin, "x86_64-conda-linux-gnu-g++") if env_bin else ""
+        if _gcc and os.access(_gcc, os.X_OK) and os.access(_gxx, os.X_OK):
+            child_env.setdefault("CC", _gcc)
+            child_env.setdefault("CXX", _gxx)
         # env_run is already parsed + allowlisted by registry.resolve().
         child_env.update(self.spec["env_run"])
         # The child runs `<env>/bin/python -m oh_my_mlip._worker`, and oh_my_mlip
@@ -344,7 +356,9 @@ class Worker:
         # (override included); the parent's os.environ is never changed
         from oh_my_mlip.fetch import gated_token_env
         child_env.update(gated_token_env(self.spec, child_env))
-        return child_env
+        # a node without internet (HPC compute nodes): fail network access at once
+        # instead of letting a loader wait on a URL check (oh_my_mlip/offline.py)
+        return offline_env(child_env)
 
     def _build_cmd(self) -> list[str]:
         cmd = [self._python_exe, "-m", "oh_my_mlip._worker", "--model", self.model]
@@ -714,7 +728,12 @@ def run(
     finally:
         worker.shutdown()
     if not resp.get("ok"):
+        # the worker's own stderr holds what a subprocess printed before the
+        # exception (a compiler's error message from torch.compile / triton);
+        # without it the failure cannot be diagnosed afterwards
+        tail = [ln for ln in worker._stderr_lines if not ln.startswith("[oh-my-mlip]")][-40:]
+        extra = ("\n  worker stderr (last lines):\n    " + "\n    ".join(tail)) if tail else ""
         raise WorkerError(
-            f"run({model}) failed: {resp.get('error', 'unknown error')}"
+            f"run({model}) failed: {resp.get('error', 'unknown error')}{extra}"
         )
     return resp["results"]

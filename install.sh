@@ -52,7 +52,8 @@
 #
 # Requires conda (or mamba) on PATH. The D3 kernel is built at the end of each
 # env's install by scripts/build_d3.py with the env's own nvcc; a failed build
-# fails the env. An env without any nvcc keeps D3 off (the MLIP still runs).
+# is a warning (the env stays usable without D3). An env without any nvcc keeps
+# D3 off (the MLIP still runs).
 
 set -euo pipefail
 
@@ -95,7 +96,7 @@ REQUESTED=()
 # shift the validated torch stack. Bump deliberately (single knob here) and
 # re-verify; override for testing a release candidate without editing:
 #   OMM_CATBENCH_VERSION=1.2.0 ./install.sh <env>
-CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.4}"
+CATBENCH_PIN="${OMM_CATBENCH_VERSION:-1.1.7}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -331,9 +332,9 @@ HOST_ARCH=""
 pick_recipe() {
   local env_name="$1" py_bin out err rc=0
   RECIPE_STEM=""; RECIPE_REASON=""
-  py_bin="$(command -v python3 || command -v python || true)"
+  py_bin="${HOST_PY:-}"
   if [ -z "$py_bin" ]; then
-    RECIPE_REASON="cannot choose a recipe: no python3 (or python) on PATH to run scripts/select_recipe.py, which reads envs/_arch_recipes.json and the GPU arch. Put a python 3 on PATH (any version; it uses the standard library only) and re-run"
+    RECIPE_REASON="cannot choose a recipe: no Python 3.8 or newer on PATH to run scripts/select_recipe.py, which reads envs/_arch_recipes.json and the GPU arch. Put one on PATH (or set OMM_PYTHON) and re-run"
     return 3
   fi
   err="$(mktemp)"
@@ -439,6 +440,35 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$STATUS" -eq 0 ]; then
   fi
 fi
 
+# ── The Python that runs install.sh's own helper scripts ──
+# scripts/select_recipe.py, task_limit.py, build_d3.py and the prestage helpers
+# need Python 3.8+. A bare `python3` can be older (3.6 on Rocky/RHEL 8 login
+# nodes), so take the first 3.8+ of: $OMM_PYTHON, python3, python3.13 ...
+# python3.8, the python next to the conda/mamba in use, python.
+host_python() {
+  local c conda_py=""
+  if [ -n "$CONDA_BIN" ] && command -v "$CONDA_BIN" >/dev/null 2>&1; then
+    conda_py="$(dirname "$(command -v "$CONDA_BIN")")/python"
+  fi
+  for c in "${OMM_PYTHON:-}" python3 python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 "$conda_py" python; do
+    [ -n "$c" ] || continue
+    c="$(command -v "$c" 2>/dev/null)" || continue
+    if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' 2>/dev/null; then
+      echo "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+HOST_PY="$(host_python || true)"
+if [ -z "$HOST_PY" ] && [ "$DRY_RUN" -eq 0 ] && [ "$STATUS" -eq 0 ]; then
+  echo "install.sh: no Python 3.8 or newer found (python3 here is $(python3 --version 2>&1 || echo 'missing'))." >&2
+  echo "  install.sh's helper scripts need one. Load a newer Python (e.g. the conda/mamba module, or" >&2
+  echo "  /usr/bin/python3.9 on RHEL/Rocky 8), or set OMM_PYTHON=<path to python3.8+>, and re-run." >&2
+  echo "  Nothing was downloaded or installed." >&2
+  exit 1
+fi
+
 echo "oh-my-mlip install (build from recipe)"
 echo "  OH_MY_MLIP_HOME = $OH_MY_MLIP_HOME"
 echo "  recipes dir     = $ENVS_DIR"
@@ -478,13 +508,13 @@ if [ "$DRY_RUN" -eq 1 ]; then
       echo "    then: $ENVS_DIR/$env_name/bin/pip install catbench==${CATBENCH_PIN}"
       prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
       if [ -e "$prestage" ]; then
-        echo "    then: python3 $prestage  (pre-stage upstream weights before first use)"
+        echo "    then: ${HOST_PY:-python3} $prestage  (pre-stage upstream weights before first use)"
       fi
       prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
       if [ -e "$prepare" ]; then
         echo "    then: $ENVS_DIR/$env_name/bin/python $prepare --target-root $OH_MY_MLIP_HOME/models/$env_name  (prepare weights with the env interpreter)"
       fi
-      echo "    then: python3 $OH_MY_MLIP_HOME/scripts/build_d3.py $ENVS_DIR/$env_name  (D3 kernel, pair_d3.so)"
+      echo "    then: ${HOST_PY:-python3} $OH_MY_MLIP_HOME/scripts/build_d3.py $ENVS_DIR/$env_name  (D3 kernel, pair_d3.so)"
       warn_driver_skew "$env_name" "$recipe"
     else
       echo "  SKIP '$env_name': no recipe at $recipe"
@@ -532,8 +562,26 @@ if [ "$STATUS" -eq 1 ]; then
 fi
 
 # ── Real install path ──
+# An install downloads packages and weights, so it never runs in offline mode:
+# env.sh's network test is skipped here (OMM_OFFLINE=0) and install.sh makes its
+# own, with retries, so one slow answer on a login node does not stop it.
+OMM_OFFLINE_ASKED="${OMM_OFFLINE:-}"
+export OMM_OFFLINE=0
+unset HF_HUB_OFFLINE TRANSFORMERS_OFFLINE HF_DATASETS_OFFLINE
 # shellcheck source=/dev/null
 source "$OH_MY_MLIP_HOME/env.sh"
+omm_online=0
+if [ "$OMM_OFFLINE_ASKED" != "1" ]; then
+  for _ in 1 2 3; do
+    if omm_internet_ok 5; then omm_online=1; break; fi
+  done
+fi
+if [ "$omm_online" -ne 1 ]; then
+  echo "install.sh: no internet on this node$([ "$OMM_OFFLINE_ASKED" = "1" ] && echo " (OMM_OFFLINE=1 is set)"): install on a node" >&2
+  echo "  that has internet (on a cluster, the login node) and verify in a batch job on a GPU node." >&2
+  echo "  Nothing was downloaded or installed." >&2
+  exit 1
+fi
 
 # ── Thread caps for in-env prep steps (thread-limited-host safety) ──
 # On hosts with task limits (e.g. HPC login nodes with cgroup pids.max constraints),
@@ -541,22 +589,100 @@ source "$OH_MY_MLIP_HOME/env.sh"
 # weight preparation and D3 compilation, leaving weights unmaterialized. Cap them
 # uniformly: 4 BLAS/OMP threads + 1 inductor compile worker is plenty for a one-shot
 # prep step and harmless on unconstrained hosts.
-THREAD_CAPS=(env OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4
-  NUMEXPR_NUM_THREADS=4 TORCHINDUCTOR_COMPILE_THREADS=1)
+# ── Low-parallel mode under a per-user task limit (HPC login nodes) ──
+# A login node can cap tasks (processes + threads) per user with the cgroup pids
+# controller (pids.max = 150 on a EuroHPC login node) while `ulimit -u` looks huge.
+# mamba's .pyc compile pool (os.cpu_count() workers), OpenBLAS threads and
+# ninja/pip build jobs then hit the cap: the pool deadlocks, and the user's
+# shell, agent and new logins can no longer fork. scripts/task_limit.py reads
+# the limit and, below 4096 tasks or when OMM_MAX_PARALLEL is set, exports caps
+# for every pool the install starts (a value already set wins).
+OMM_TL_OUT=""
+if [ -n "${HOST_PY:-}" ] && OMM_TL_OUT="$("$HOST_PY" "$OH_MY_MLIP_HOME/scripts/task_limit.py" --exports)"; then
+  eval "$OMM_TL_OUT"
+else
+  # the limit could not be read: assume a low one (an unknown cap is the dangerous case)
+  echo "install.sh: WARNING: could not read this host's task limit (scripts/task_limit.py did not run);" >&2
+  echo "  building in low-parallel mode to be safe." >&2
+  OMM_LOW_PARALLEL="${OMM_MAX_PARALLEL:-2}"
+  OMM_TASK_LIMIT="unknown"
+  for kv in MAMBA_COMPILE_PYC=false MAMBA_EXTRACT_THREADS=$OMM_LOW_PARALLEL MAMBA_DOWNLOAD_THREADS=$OMM_LOW_PARALLEL \
+            CONDA_FETCH_THREADS=$OMM_LOW_PARALLEL CONDA_EXTRACT_THREADS=$OMM_LOW_PARALLEL CONDA_VERIFY_THREADS=1 \
+            CONDA_EXECUTE_THREADS=1 MAX_JOBS=$OMM_LOW_PARALLEL CMAKE_BUILD_PARALLEL_LEVEL=$OMM_LOW_PARALLEL \
+            MAKEFLAGS=-j$OMM_LOW_PARALLEL OMP_NUM_THREADS=$OMM_LOW_PARALLEL MKL_NUM_THREADS=$OMM_LOW_PARALLEL \
+            OPENBLAS_NUM_THREADS=$OMM_LOW_PARALLEL NUMEXPR_NUM_THREADS=$OMM_LOW_PARALLEL; do
+    k="${kv%%=*}"
+    [ -n "${!k:-}" ] || export "${kv?}"
+  done
+fi
+if [ -n "${OMM_LOW_PARALLEL:-}" ]; then
+  echo "install.sh: this host limits tasks per user (${OMM_TASK_LIMIT:-unknown}); building with at most"
+  echo "  ${OMM_LOW_PARALLEL} parallel jobs/threads (no .pyc precompile; Python writes it on first import)."
+  echo "  Keep other heavy work off this login node until the install ends; set OMM_MAX_PARALLEL to change it."
+fi
+
+THREAD_CAPS=(env OMP_NUM_THREADS="${OMM_LOW_PARALLEL:-4}" MKL_NUM_THREADS="${OMM_LOW_PARALLEL:-4}"
+  OPENBLAS_NUM_THREADS="${OMM_LOW_PARALLEL:-4}" NUMEXPR_NUM_THREADS="${OMM_LOW_PARALLEL:-4}"
+  TORCHINDUCTOR_COMPILE_THREADS=1)
 
 # D3 kernel prebuild for one env (scripts/build_d3.py): a no-op when
-# pair_d3.so exists or the env has no torch/catbench (GRACE). Mode "error" (a
-# fresh install): a failed build fails the env (return 1, no sentinel). Mode
-# "warn" (an env that was already installed): a failed build prints a WARNING
+# pair_d3.so exists or the env has no torch/catbench (GRACE). install.sh uses
+# mode "warn" for fresh and installed envs alike: a failed build prints a WARNING
 # with the log and the rerun command, leaves the failed marker <prefix>/.omm_d3
 # (setup_verify and --status report it) and is listed again at the end of the
-# run; the env stays ready.
+# run; the env stays ready. Mode "error" (return 1) is kept for callers that want it.
 OMM_D3_WARNINGS=()
+OMM_PREFETCH_WARNINGS=()
+
+# Download every weight of an env's variants, so the env runs on a node without
+# internet (HPC compute nodes): explicit weight paths through oh_my_mlip.fetch,
+# by-name weights (mace_mp('medium-mpa-0'), SevenNet, ORB, ...) by building each
+# calculator once on the CPU (no calculation). Gated variants without a Hugging
+# Face token are skipped and listed. A variant that cannot be prefetched is a
+# warning, not a failed env: the framework still downloads it on first use
+# where there is internet. OMM_PREFETCH=0 skips this step.
+# Start-up hooks for this env's interpreters, each run by a .pth line: offline
+# mode (oh_my_mlip/_offline_hook.py; nothing unless OMM_OFFLINE=1, which env.sh
+# and the hub set on a node without internet) and the D3 guard
+# (oh_my_mlip/_d3_guard.py; nothing unless the env's D3 build failed).
+install_env_hooks() {
+  local prefix="$1" site
+  site="$("$prefix/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null)" || return 0
+  [ -n "$site" ] && [ -d "$site" ] && [ -w "$site" ] || return 0
+  cp "$OH_MY_MLIP_HOME/oh_my_mlip/_offline_hook.py" "$site/_omm_offline.py" \
+    && printf 'import _omm_offline\n' > "$site/omm_offline.pth" \
+    || echo "  could not add the offline-mode hook to $site; on a node without internet a loader may wait for the network." >&2
+  # and the D3 guard (oh_my_mlip/_d3_guard.py): after a failed D3 kernel build,
+  # a D3 request fails at once with the reason instead of compiling again
+  cp "$OH_MY_MLIP_HOME/oh_my_mlip/_d3_guard.py" "$site/_omm_d3_guard.py" \
+    && printf 'import _omm_d3_guard\n' > "$site/omm_d3_guard.pth" \
+    || echo "  could not add the D3 guard to $site." >&2
+}
+
+prefetch_weights() {
+  local env_name="$1" prefix="$2"
+  [ "${OMM_PREFETCH:-1}" != "0" ] || return 0
+  echo "  downloading the weights of '$env_name' for offline use (scripts/prefetch_weights.py) ..."
+  # the env's own libstdc++ first, as the provider does for the worker: on a host
+  # with an old system libstdc++ (RHEL/Rocky 8) TACE failed with "GLIBCXX_3.4.29 not found".
+  "${THREAD_CAPS[@]}" CUDA_VISIBLE_DEVICES="" LD_LIBRARY_PATH="$prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$prefix/bin/python" "$OH_MY_MLIP_HOME/scripts/prefetch_weights.py" "$env_name" \
+    || OMM_PREFETCH_WARNINGS+=("$env_name (see $prefix/.omm_prefetch.json)")
+}
+
 build_d3_kernel() {
   local env_name="$1" prefix="$2" mode="${3:-error}" rc=0
   local log="$prefix/.omm_d3_build.log"
   echo "  D3 kernel (pair_d3.so) for '$env_name' ..."
-  "${THREAD_CAPS[@]}" python3 "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode" || rc=$?
+  # torch's cpp_extension needs ninja. The sm120 siblings ship it; the base
+  # recipes do not, and a host without a system ninja (Rocky 8 on an HPC
+  # login node) then fails with "Ninja is required". Add the same pinned wheel
+  # the sevennet/nequip recipes use, only to an env that has nvcc and no ninja.
+  if [ -x "$prefix/bin/nvcc" ] && [ ! -x "$prefix/bin/ninja" ] && [ -x "$prefix/bin/pip" ]; then
+    echo "  adding ninja==1.13.0 to '$env_name' (needed to build the D3 kernel) ..."
+    "${THREAD_CAPS[@]}" "$prefix/bin/pip" install --quiet "ninja==1.13.0" \
+      || echo "  could not install ninja into '$env_name'; the D3 build below will say why it fails." >&2
+  fi
+  "${THREAD_CAPS[@]}" "$HOST_PY" "$OH_MY_MLIP_HOME/scripts/build_d3.py" "$prefix" --log "$log" --on-fail "$mode" || rc=$?
   if [ "$rc" -eq 0 ]; then
     return 0
   fi
@@ -565,8 +691,44 @@ build_d3_kernel() {
     return 0
   fi
   echo "  D3 kernel build FAILED for '$env_name' — no sentinel written. Build log: $log" >&2
-  echo "  Retry after fixing it: python3 $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
+  echo "  Retry after fixing it: $HOST_PY $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
   return 1
+}
+
+# PyG's compiled extensions (torch_scatter, torch_sparse, ...) come as wheels from
+# data.pyg.org; those for torch >= 2.7 need glibc 2.32, so on an older system
+# (RHEL/Rocky 8: glibc 2.28) they install but do not import ("GLIBC_2.32 not
+# found"). Each one that fails to import for that reason is rebuilt from its
+# source release, same version, with the env's own compiler (the conda gcc that
+# cuda-nvcc brings), nvcc and CUDA headers. A host where the wheels load is untouched.
+rebuild_pyg_for_old_glibc() {
+  local env_name="$1" prefix="$2" line pkg ver mod err cpath
+  local -a todo=()
+  while IFS= read -r line; do
+    pkg="${line%%==*}"; ver="${line#*==}"
+    mod="$(printf '%s' "$pkg" | tr '[:upper:]-' '[:lower:]_')"
+    err="$("$prefix/bin/python" -c "import torch, $mod" 2>&1 >/dev/null || true)"
+    case "$err" in *GLIBC_*) todo+=("$pkg==${ver%%+*}") ;; esac
+  done < <("$prefix/bin/pip" list --format=freeze 2>/dev/null \
+             | grep -iE '^(torch[-_]scatter|torch[-_]sparse|torch[-_]cluster|torch[-_]spline[-_]conv|pyg[-_]lib)==' || true)
+  [ "${#todo[@]}" -gt 0 ] || return 0
+  echo "  '$env_name': the PyG wheels need a newer glibc than this system's ($(getconf GNU_LIBC_VERSION 2>/dev/null || echo unknown));"
+  echo "  building ${todo[*]} from source with the env's compiler (several minutes) ..."
+  if [ ! -x "$prefix/bin/x86_64-conda-linux-gnu-g++" ]; then
+    echo "  '$env_name': no conda C++ compiler in the env to build them with; add gxx to the recipe." >&2
+    return 1
+  fi
+  cpath="$(find "$prefix"/lib/python3*/site-packages/nvidia -maxdepth 2 -name include -type d 2>/dev/null | paste -sd: -)"
+  ( export PATH="$prefix/bin:$PATH" CUDA_HOME="$prefix" FORCE_CUDA=1 \
+      CC="$prefix/bin/x86_64-conda-linux-gnu-gcc" CXX="$prefix/bin/x86_64-conda-linux-gnu-g++" \
+      CPATH="${cpath:+$cpath:}$prefix/targets/x86_64-linux/include" \
+      LIBRARY_PATH="$prefix/targets/x86_64-linux/lib" LD_LIBRARY_PATH="$prefix/lib" \
+      TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-7.0;7.5;8.0;8.6;8.9;9.0}" \
+      MAX_JOBS="${OMM_LOW_PARALLEL:-4}" MAKEFLAGS="-j${OMM_LOW_PARALLEL:-4}"
+    for spec in "${todo[@]}"; do
+      "${THREAD_CAPS[@]}" "$prefix/bin/pip" install --no-deps --no-binary :all: --no-build-isolation \
+        --force-reinstall --no-cache-dir "$spec" || exit 1
+    done ) || { echo "  '$env_name': building ${todo[*]} from source FAILED." >&2; return 1; }
 }
 
 install_one() {
@@ -650,6 +812,9 @@ install_one() {
       # (a no-op when pair_d3.so is already there); the env is in use, so a
       # failed build warns and leaves a marker instead of failing it
       build_d3_kernel "$env_name" "$prefix" warn || return 1
+      # an env installed before weights were downloaded at install time
+      install_env_hooks "$prefix"
+      [ -e "$prefix/.omm_prefetch.json" ] || prefetch_weights "$env_name" "$prefix"
       return 0
     fi
     if [ "$vrc" -eq 99 ]; then
@@ -795,6 +960,11 @@ install_one() {
   # real-build test confirmed catbench 1.1.2 does NOT downgrade the pinned
   # torch+cuXXX wheel, while '--no-deps' would drop catbench's real runtime deps
   # (requests, xlsxwriter, ...) and break 'from catbench.adsorption import ...'.
+  rebuild_pyg_for_old_glibc "$env_name" "$prefix" || {
+    echo "  '$env_name' cannot import its PyG extensions on this system — no sentinel written." >&2
+    return 1
+  }
+
   echo "  installing catbench (==${CATBENCH_PIN}) into '$env_name' ..."
   "$prefix/bin/pip" install "catbench==${CATBENCH_PIN}" || {
     echo "  catbench install FAILED for '$env_name' — no sentinel written." >&2
@@ -812,7 +982,7 @@ install_one() {
   prestage="$OH_MY_MLIP_HOME/scripts/prestage_${env_name}_weights.py"
   if [ -e "$prestage" ]; then
     echo "  pre-staging weights for '$env_name' via $(basename "$prestage") ..."
-    python3 "$prestage" || echo "  (weight pre-stage skipped/failed; framework will retry its own download on first use)"
+    "$HOST_PY" "$prestage" || echo "  (weight pre-stage skipped/failed; framework will retry its own download on first use)"
   fi
 
   # Prepare weights that require the ENV's own tooling (not pure stdlib): some
@@ -826,17 +996,30 @@ install_one() {
   prepare="$OH_MY_MLIP_HOME/scripts/prepare_${env_name}_weights.py"
   if [ -e "$prepare" ]; then
     echo "  preparing weights for '$env_name' via $(basename "$prepare") (env interpreter) ..."
-    if ! "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name"; then
+    local prc=0
+    "${THREAD_CAPS[@]}" "$prefix/bin/python" "$prepare" --target-root "$OH_MY_MLIP_HOME/models/$env_name" || prc=$?
+    if [ "$prc" -eq 4 ]; then
+      # NequIP / Allegro on a host without a GPU (an HPC login node): the model
+      # package is downloaded, the per-GPU compile has to run on a GPU node.
+      echo "  '$env_name': model package downloaded; the GPU compile runs later on a GPU node (see above)."
+    elif [ "$prc" -ne 0 ]; then
       echo "  weight prepare FAILED for '$env_name' ($(basename "$prepare")); inference cannot work until it succeeds." >&2
       weights_prepared=0
     fi
   fi
 
+  install_env_hooks "$prefix"
+  bash "$OH_MY_MLIP_HOME/scripts/home_cache_links.sh"
+  prefetch_weights "$env_name" "$prefix"
+
   # Build the D3 kernel now (scripts/build_d3.py), with this env's own ninja,
   # nvcc and conda compiler, so the first D3 call through the bare interpreter
   # (resolve()["python"], no env bin on PATH) never has to compile. A failed
-  # build fails this env: no sentinel, so a re-run retries it.
-  build_d3_kernel "$env_name" "$prefix" || return 1
+  # build does not fail the env: energies and forces do not need D3. It leaves
+  # the failed marker (setup_verify and --status report it), is listed at the
+  # end of the run, and a re-run tries the build again. (Seen: CUDA 12.1's
+  # fatbinary crashing on an HPC login node, which no recipe change here fixes.)
+  build_d3_kernel "$env_name" "$prefix" warn || return 1
 
   if [ "${weights_prepared:-1}" -eq 0 ]; then
     # The sentinel means "ready to use". Writing it after a failed weight
@@ -862,9 +1045,15 @@ done
 
 echo
 if [ "${#OMM_D3_WARNINGS[@]}" -gt 0 ]; then
-  echo "install.sh: WARNING: the D3 kernel could not be built for these already-installed envs" >&2
-  echo "  (they stay usable without D3; each has a 'state=failed' marker in <prefix>/.omm_d3):" >&2
+  echo "install.sh: WARNING: the D3 kernel could not be built for these envs. They are installed and" >&2
+  echo "  compute energies and forces; only the D3 correction is unavailable (marker 'state=failed' in" >&2
+  echo "  <prefix>/.omm_d3, reported by setup_verify). Re-running install.sh tries the build again:" >&2
   for w in "${OMM_D3_WARNINGS[@]}"; do echo "    $w" >&2; done
+fi
+if [ "${#OMM_PREFETCH_WARNINGS[@]}" -gt 0 ]; then
+  echo "install.sh: WARNING: some weights could not be downloaded ahead of use. These envs work where there" >&2
+  echo "  is internet, but a node without internet (an HPC compute node) cannot load those variants:" >&2
+  for w in "${OMM_PREFETCH_WARNINGS[@]}"; do echo "    $w" >&2; done
 fi
 if [ "$rc" -eq 0 ]; then
   echo "install.sh: done. Try: $OH_MY_MLIP_HOME/run_examples/single_point.py"

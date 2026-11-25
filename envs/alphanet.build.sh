@@ -29,7 +29,12 @@ echo "== alphanet [2] AlphaNet package (pinned SHA, --no-deps) + runtime deps ==
 # AlphaNet runtime deps for the torch inference path. NOTE: do NOT install
 # matscipy here — it forces numpy>=2 which breaks the torch 2.1.2 ABI and is a
 # JAX-path dep, not needed for AlphaNetCalculator (torch). Keep numpy==1.26.4.
+# pandas==3.0.6 (the lock's version): without it install.sh's catbench step pulls the
+# newest pandas and with it numpy 2, which torch 2.1.2 cannot use (seen on a fresh
+# build, 2026-11-24). setuptools==78.1.1: torch 2.1.2's cpp_extension (the D3 kernel
+# build) imports pkg_resources, which newer setuptools no longer ship.
 "$PIP" install pydantic==2.13.5 pydantic_settings==2.15.0 rich==15.0.0 scikit-learn==1.9.1 "numpy==1.26.4" \
+  pandas==3.0.6 setuptools==78.1.1 \
   || { echo DEPS_FAILED; exit 14; }
 
 echo "== alphanet [3] import smoke =="

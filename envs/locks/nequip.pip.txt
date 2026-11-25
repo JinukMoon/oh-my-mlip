@@ -10,7 +10,7 @@ aiohttp==3.14.3
 aiosignal==1.4.0
 antlr4-python3-runtime==4.9.3
 attrs==26.1.0
-catbench==1.1.4
+catbench==1.1.7
 certifi==2026.7.22
 charset-normalizer==3.5.1
 e3nn==0.5.7
