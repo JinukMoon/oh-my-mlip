@@ -66,7 +66,7 @@ Pinned combination:
 ```bash
 conda env create -f $OMM/envs/sevennet.yml -p <prefix>
 #   equivalent explicit form:
-#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* cuda-nvrtc-dev=12.6.85 cuda-driver-dev=12.6.77 ase=3.28.0
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* cuda-nvrtc-dev=12.6.85 cuda-driver-dev=12.6.77 libcublas-dev=12.6.4.1 ase=3.28.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 sevenn @ git+https://github.com/MDIL-SNU/SevenNet.git@e72eb2c9ebf6895a9d6fa3318f0ae4409d0f9f73 cuequivariance==0.8.0 cuequivariance-torch==0.8.0 e3nn==0.5.6 openequivariance==0.6.6 ninja==1.13.0
 <prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
 ```
@@ -747,7 +747,8 @@ bash $OMM/envs/alphanet.build.sh <prefix>      # single conda solve impossible -
 #     torch==2.1.2+cu121 torch-geometric==2.6.1 torch_scatter==2.1.2+pt21cu121 \
 #     lightning==2.6.6 tensorboard==2.21.0 "numpy==1.26.4"
 #     <prefix>/bin/pip install --no-deps "alphanet @ git+https://github.com/zmyybc/AlphaNet.git@65f8ea9330459e0106867d1c694aec4139c6cb19"
-#     <prefix>/bin/pip install pydantic==2.13.5 pydantic_settings==2.15.0 rich==15.0.0 scikit-learn==1.9.1 "numpy==1.26.4"
+#     <prefix>/bin/pip install pydantic==2.13.5 pydantic_settings==2.15.0 rich==15.0.0 scikit-learn==1.9.1 "numpy==1.26.4" \
+#     pandas==3.0.6 setuptools==78.1.1
 <prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
 ```
 
@@ -816,7 +817,7 @@ Pinned combination:
 ```bash
 conda env create -f $OMM/envs/eqnorm.yml -p <prefix>
 #   equivalent explicit form:
-#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=11.8.* ase=3.25.0
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=11.8.* cuda-cudart=11.8.89 cuda-cudart-dev=11.8.89 ase=3.25.0
 #     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu118 --find-links https://data.pyg.org/whl/torch-2.6.0+cu118.html torch==2.6.0+cu118 eqnorm @ git+https://github.com/yzchen08/eqnorm.git@57527db44fee9fab3fb5775dd860ca4bbe014f44 torch-geometric==2.6.1 torch-scatter==2.1.2+pt26cu118 e3nn==0.5.6 vesin==0.3.7 setuptools==78.1.1
 <prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
 ```

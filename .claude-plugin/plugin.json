@@ -1,6 +1,6 @@
 {
   "name": "oh-my-mlip",
-  "version": "skills-2026.11.25",
+  "version": "skills-2026.11.25.2",
   "description": "oh-my-mlip: install, benchmark, fine-tune, and distill 20+ MLIP frameworks. One registry, many MLIPs — every action a rerunnable file.",
   "author": {
     "name": "Jinuk Moon"
@@ -23,6 +23,6 @@
     "./skills/distill/"
   ],
   "metadata": {
-    "content_sha256": "d7484dbd9efca1a36a47121f3442a140324156603c2dfecb05c9406be230b0da"
+    "content_sha256": "8ed5b8d6377ec8b1459d6f92b136e9d1a89084ca22e59022840f2ee6c43247d8"
   }
 }

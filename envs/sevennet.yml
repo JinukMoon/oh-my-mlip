@@ -39,6 +39,10 @@ dependencies:
   # libcuda.so link stub (targets/<arch>/lib/stubs, put on LIBRARY_PATH by the
   # provider). The real driver libcuda is what loads at runtime.
   - cuda-driver-dev=12.6.77
+  # openequivariance's CMake build includes cublas_v2.h, which neither cuda-nvcc nor
+  # the pip nvidia-cublas wheel puts on the include path; a host without a system
+  # CUDA toolkit then fails the build (same as envs/sevennet.cu128.yml).
+  - libcublas-dev=12.6.4.1
   # ase is pinned to avoid upstream breakage; unpinned ase can introduce
   # incompatibilities with other packages. verify_determinism verifies the pin.
   - ase=3.28.0

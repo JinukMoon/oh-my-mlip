@@ -543,3 +543,52 @@ def test_install_sh_never_runs_offline():
     tail = text[i:i + 900]
     assert "omm_internet_ok 5" in tail and "install on a node" in tail and "exit 1" in tail
     assert tail.index("exit 1") < text[i:].index("THREAD_CAPS=(")
+
+
+# ── PyG wheels that need a newer glibc are rebuilt from source ───────────────
+
+def _pyg_env(tmp_path: Path, import_error: str, with_gxx: bool = True) -> tuple[Path, str]:
+    prefix = tmp_path / "envs" / "equflash"
+    log = tmp_path / "pip.log"
+    _exe(prefix / "bin" / "pip",
+         f'if [ "$1" = list ]; then printf "torch_scatter==2.1.2+pt29cu126\\ntorch-sparse==0.6.18+pt29cu126\\n'
+         f'torch==2.9.1+cu126\\n"; exit 0; fi\necho "CXX=$CXX CUDA_HOME=$CUDA_HOME $*" >> {log}\n')
+    err = tmp_path / "import_error.txt"
+    err.write_text(import_error)
+    _exe(prefix / "bin" / "python", f'cat {err} >&2; [ ! -s {err} ]\n')
+    if with_gxx:
+        _exe(prefix / "bin" / "x86_64-conda-linux-gnu-g++", "exit 0\n")
+        _exe(prefix / "bin" / "x86_64-conda-linux-gnu-gcc", "exit 0\n")
+    text = (REPO / "install.sh").read_text()
+    func = text[text.index("rebuild_pyg_for_old_glibc() {"):text.index("install_one() {")]
+    script = f"THREAD_CAPS=(env)\n{func}\nrebuild_pyg_for_old_glibc equflash {prefix}; echo rc=$?"
+    return log, script
+
+
+def test_pyg_wheels_failing_on_glibc_are_rebuilt_from_source_with_the_env_compiler(tmp_path):
+    log, script = _pyg_env(tmp_path, "OSError: /lib64/libc.so.6: version `GLIBC_2.32' not found")
+    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert "rc=0" in proc.stdout, proc.stderr
+    calls = log.read_text().splitlines()
+    assert [c.split()[-1] for c in calls] == ["torch_scatter==2.1.2", "torch-sparse==0.6.18"]
+    assert all("--no-binary :all: --no-build-isolation" in c and "x86_64-conda-linux-gnu-g++" in c for c in calls)
+
+
+def test_pyg_wheels_that_load_are_left_alone(tmp_path):
+    log, script = _pyg_env(tmp_path, "")
+    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert "rc=0" in proc.stdout and not log.exists()
+
+
+def test_pyg_rebuild_without_a_compiler_fails_the_env_with_a_reason(tmp_path):
+    log, script = _pyg_env(tmp_path, "version `GLIBC_2.32' not found", with_gxx=False)
+    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert "rc=1" in proc.stdout and "no conda C++ compiler" in proc.stderr and not log.exists()
+
+
+def test_install_rebuilds_pyg_before_catbench_and_a_failure_withholds_the_sentinel():
+    body = (REPO / "install.sh").read_text()
+    body = body[body.index("install_one() {"):]
+    i = body.index('rebuild_pyg_for_old_glibc "$env_name" "$prefix" || {')
+    assert i < body.index("installing catbench") < body.index(': > "$sentinel"')
+    assert "return 1" in body[i:i + 200]

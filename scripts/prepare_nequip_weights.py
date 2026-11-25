@@ -103,6 +103,15 @@ def compile_env(prefix: Path) -> dict:
     env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
     # MAX_JOBS=4: oeq's first import JIT-builds at nproc and can wedge on a stale lock.
     env.setdefault("MAX_JOBS", "4")
+    # torch inductor compiles the AOT model with `g++` from PATH unless CXX is
+    # set. An old system g++ (8.5 on RHEL/Rocky 8) builds a model that
+    # segfaults when it is run (nequip-compile rc=-11 in its own output check).
+    # Use the env's conda compiler (GCC 13) and its libstdc++ instead.
+    gcc, gxx = prefix / "bin" / "x86_64-conda-linux-gnu-gcc", prefix / "bin" / "x86_64-conda-linux-gnu-g++"
+    if os.access(gcc, os.X_OK) and os.access(gxx, os.X_OK):
+        env.setdefault("CC", str(gcc))
+        env.setdefault("CXX", str(gxx))
+        env["LD_LIBRARY_PATH"] = str(prefix / "lib") + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     # nvrtc.h (and other CUDA headers) ship in the env's pip nvidia-* wheels.
     # crt/host_defines.h etc. come from the conda CUDA toolkit (<env>/targets/*/include).
     includes = (sorted(glob.glob(str(prefix / "lib" / "python3*" / "site-packages" / "nvidia" / "*" / "include")))

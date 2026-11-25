@@ -52,7 +52,8 @@
 #
 # Requires conda (or mamba) on PATH. The D3 kernel is built at the end of each
 # env's install by scripts/build_d3.py with the env's own nvcc; a failed build
-# fails the env. An env without any nvcc keeps D3 off (the MLIP still runs).
+# is a warning (the env stays usable without D3). An env without any nvcc keeps
+# D3 off (the MLIP still runs).
 
 set -euo pipefail
 
@@ -625,12 +626,11 @@ THREAD_CAPS=(env OMP_NUM_THREADS="${OMM_LOW_PARALLEL:-4}" MKL_NUM_THREADS="${OMM
   TORCHINDUCTOR_COMPILE_THREADS=1)
 
 # D3 kernel prebuild for one env (scripts/build_d3.py): a no-op when
-# pair_d3.so exists or the env has no torch/catbench (GRACE). Mode "error" (a
-# fresh install): a failed build fails the env (return 1, no sentinel). Mode
-# "warn" (an env that was already installed): a failed build prints a WARNING
+# pair_d3.so exists or the env has no torch/catbench (GRACE). install.sh uses
+# mode "warn" for fresh and installed envs alike: a failed build prints a WARNING
 # with the log and the rerun command, leaves the failed marker <prefix>/.omm_d3
 # (setup_verify and --status report it) and is listed again at the end of the
-# run; the env stays ready.
+# run; the env stays ready. Mode "error" (return 1) is kept for callers that want it.
 OMM_D3_WARNINGS=()
 OMM_PREFETCH_WARNINGS=()
 
@@ -657,7 +657,9 @@ prefetch_weights() {
   local env_name="$1" prefix="$2"
   [ "${OMM_PREFETCH:-1}" != "0" ] || return 0
   echo "  downloading the weights of '$env_name' for offline use (scripts/prefetch_weights.py) ..."
-  "${THREAD_CAPS[@]}" CUDA_VISIBLE_DEVICES="" "$prefix/bin/python" "$OH_MY_MLIP_HOME/scripts/prefetch_weights.py" "$env_name" \
+  # the env's own libstdc++ first, as the provider does for the worker: on a host
+  # with an old system libstdc++ (RHEL/Rocky 8) TACE failed with "GLIBCXX_3.4.29 not found".
+  "${THREAD_CAPS[@]}" CUDA_VISIBLE_DEVICES="" LD_LIBRARY_PATH="$prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$prefix/bin/python" "$OH_MY_MLIP_HOME/scripts/prefetch_weights.py" "$env_name" \
     || OMM_PREFETCH_WARNINGS+=("$env_name (see $prefix/.omm_prefetch.json)")
 }
 
@@ -685,6 +687,42 @@ build_d3_kernel() {
   echo "  D3 kernel build FAILED for '$env_name' — no sentinel written. Build log: $log" >&2
   echo "  Retry after fixing it: $HOST_PY $OH_MY_MLIP_HOME/scripts/build_d3.py $prefix" >&2
   return 1
+}
+
+# PyG's compiled extensions (torch_scatter, torch_sparse, ...) come as wheels from
+# data.pyg.org; those for torch >= 2.7 need glibc 2.32, so on an older system
+# (RHEL/Rocky 8: glibc 2.28) they install but do not import ("GLIBC_2.32 not
+# found"). Each one that fails to import for that reason is rebuilt from its
+# source release, same version, with the env's own compiler (the conda gcc that
+# cuda-nvcc brings), nvcc and CUDA headers. A host where the wheels load is untouched.
+rebuild_pyg_for_old_glibc() {
+  local env_name="$1" prefix="$2" line pkg ver mod err cpath
+  local -a todo=()
+  while IFS= read -r line; do
+    pkg="${line%%==*}"; ver="${line#*==}"
+    mod="$(printf '%s' "$pkg" | tr '[:upper:]-' '[:lower:]_')"
+    err="$("$prefix/bin/python" -c "import torch, $mod" 2>&1 >/dev/null || true)"
+    case "$err" in *GLIBC_*) todo+=("$pkg==${ver%%+*}") ;; esac
+  done < <("$prefix/bin/pip" list --format=freeze 2>/dev/null \
+             | grep -iE '^(torch[-_]scatter|torch[-_]sparse|torch[-_]cluster|torch[-_]spline[-_]conv|pyg[-_]lib)==' || true)
+  [ "${#todo[@]}" -gt 0 ] || return 0
+  echo "  '$env_name': the PyG wheels need a newer glibc than this system's ($(getconf GNU_LIBC_VERSION 2>/dev/null || echo unknown));"
+  echo "  building ${todo[*]} from source with the env's compiler (several minutes) ..."
+  if [ ! -x "$prefix/bin/x86_64-conda-linux-gnu-g++" ]; then
+    echo "  '$env_name': no conda C++ compiler in the env to build them with; add gxx to the recipe." >&2
+    return 1
+  fi
+  cpath="$(find "$prefix"/lib/python3*/site-packages/nvidia -maxdepth 2 -name include -type d 2>/dev/null | paste -sd: -)"
+  ( export PATH="$prefix/bin:$PATH" CUDA_HOME="$prefix" FORCE_CUDA=1 \
+      CC="$prefix/bin/x86_64-conda-linux-gnu-gcc" CXX="$prefix/bin/x86_64-conda-linux-gnu-g++" \
+      CPATH="${cpath:+$cpath:}$prefix/targets/x86_64-linux/include" \
+      LIBRARY_PATH="$prefix/targets/x86_64-linux/lib" LD_LIBRARY_PATH="$prefix/lib" \
+      TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-7.0;7.5;8.0;8.6;8.9;9.0}" \
+      MAX_JOBS="${OMM_LOW_PARALLEL:-4}" MAKEFLAGS="-j${OMM_LOW_PARALLEL:-4}"
+    for spec in "${todo[@]}"; do
+      "${THREAD_CAPS[@]}" "$prefix/bin/pip" install --no-deps --no-binary :all: --no-build-isolation \
+        --force-reinstall --no-cache-dir "$spec" || exit 1
+    done ) || { echo "  '$env_name': building ${todo[*]} from source FAILED." >&2; return 1; }
 }
 
 install_one() {
@@ -916,6 +954,11 @@ install_one() {
   # real-build test confirmed catbench 1.1.2 does NOT downgrade the pinned
   # torch+cuXXX wheel, while '--no-deps' would drop catbench's real runtime deps
   # (requests, xlsxwriter, ...) and break 'from catbench.adsorption import ...'.
+  rebuild_pyg_for_old_glibc "$env_name" "$prefix" || {
+    echo "  '$env_name' cannot import its PyG extensions on this system — no sentinel written." >&2
+    return 1
+  }
+
   echo "  installing catbench (==${CATBENCH_PIN}) into '$env_name' ..."
   "$prefix/bin/pip" install "catbench==${CATBENCH_PIN}" || {
     echo "  catbench install FAILED for '$env_name' — no sentinel written." >&2
@@ -966,8 +1009,11 @@ install_one() {
   # Build the D3 kernel now (scripts/build_d3.py), with this env's own ninja,
   # nvcc and conda compiler, so the first D3 call through the bare interpreter
   # (resolve()["python"], no env bin on PATH) never has to compile. A failed
-  # build fails this env: no sentinel, so a re-run retries it.
-  build_d3_kernel "$env_name" "$prefix" || return 1
+  # build does not fail the env: energies and forces do not need D3. It leaves
+  # the failed marker (setup_verify and --status report it), is listed at the
+  # end of the run, and a re-run tries the build again. (Seen: CUDA 12.1's
+  # fatbinary crashing on an HPC login node, which no recipe change here fixes.)
+  build_d3_kernel "$env_name" "$prefix" warn || return 1
 
   if [ "${weights_prepared:-1}" -eq 0 ]; then
     # The sentinel means "ready to use". Writing it after a failed weight
@@ -993,8 +1039,9 @@ done
 
 echo
 if [ "${#OMM_D3_WARNINGS[@]}" -gt 0 ]; then
-  echo "install.sh: WARNING: the D3 kernel could not be built for these already-installed envs" >&2
-  echo "  (they stay usable without D3; each has a 'state=failed' marker in <prefix>/.omm_d3):" >&2
+  echo "install.sh: WARNING: the D3 kernel could not be built for these envs. They are installed and" >&2
+  echo "  compute energies and forces; only the D3 correction is unavailable (marker 'state=failed' in" >&2
+  echo "  <prefix>/.omm_d3, reported by setup_verify). Re-running install.sh tries the build again:" >&2
   for w in "${OMM_D3_WARNINGS[@]}"; do echo "    $w" >&2; done
 fi
 if [ "${#OMM_PREFETCH_WARNINGS[@]}" -gt 0 ]; then

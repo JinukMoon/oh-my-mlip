@@ -25,6 +25,11 @@ dependencies:
   - pip
   # CUDA 11.8 toolchain (provides nvcc for the first-run D3 compile)
   - cuda-nvcc=11.8.*
+  # the D3 kernel build needs cuda_runtime.h and libcudart.so, which cuda-nvcc 11.8
+  # does not bring; a host without a system CUDA toolkit has neither. Both pinned:
+  # an unpinned cuda-cudart resolves to 13.x; 11.8.89 is the nvidia channel's 11.8 build
+  - cuda-cudart=11.8.89
+  - cuda-cudart-dev=11.8.89
   # ase is pinned to avoid upstream breakage; unpinned ase floats to breaking releases
   - ase=3.25.0
   - pip:

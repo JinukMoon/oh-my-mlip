@@ -295,6 +295,16 @@ def build_env(prefix: Path, base: dict, run=subprocess.run) -> tuple[dict | None
     for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         env.setdefault(key, "1")
     env.setdefault("PYTHONUTF8", "1")
+    # the env's own libstdc++ first, as oh_my_mlip/provider.py does for the
+    # worker. Without it torch loads an old system libstdc++ (RHEL/Rocky 8) and a
+    # conda-built numpy then fails with
+    # "GLIBCXX_3.4.29 not found" (seen in the nequix env).
+    env_lib = str(prefix / "lib")
+    if os.path.isdir(env_lib):
+        env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+        # and for the link step (-lcudart): torch passes only -L$CUDA_HOME/lib64, which a
+        # conda env does not have; its libcudart.so is in <prefix>/lib (seen in eqnorm, CUDA 11.8)
+        env["LIBRARY_PATH"] = env_lib + (os.pathsep + env["LIBRARY_PATH"] if env.get("LIBRARY_PATH") else "")
     return env, ""
 
 
