@@ -461,3 +461,85 @@ def test_a_failed_compile_removes_its_partial_outputs(monkeypatch, tmp_path, cap
     assert prepare_nequip_weights.main(["--target-root", str(root)]) == 1
     assert list(out_dir.iterdir()) == []
     assert "removed 1 partial file(s)" in capsys.readouterr().err
+
+
+# ── offline mode: proxies, cluster-internal names, and never during an install ─
+
+_FAKE_DNS = ("import socket\n"
+             "_real = socket.getaddrinfo\n"
+             "_table = {'gnx507': '10.11.0.7', 'mirror.site': 'fd00::5', 'proxy.site': '198.51.100.9',\n"
+             "          'example.org': '93.184.216.34'}\n"
+             "def _fake(host, port, *a, **k):\n"
+             "    if host in _table:\n"
+             "        fam = socket.AF_INET6 if ':' in _table[host] else socket.AF_INET\n"
+             "        return [(fam, socket.SOCK_STREAM, 6, '', (_table[host], port))]\n"
+             "    return _real(host, port, *a, **k)\n"
+             "socket.getaddrinfo = _fake\n")
+
+
+def _hooked_with_dns(code: str, tmp_path: Path, extra_env: dict | None = None) -> list[str]:
+    site = tmp_path / "site"
+    site.mkdir(exist_ok=True)
+    (site / "_omm_offline.py").write_text((REPO / "oh_my_mlip" / "_offline_hook.py").read_text())
+    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(site), "OMM_OFFLINE": "1", **(extra_env or {})}
+    proc = subprocess.run([sys.executable, "-c", _FAKE_DNS + "import _omm_offline\n" + code],
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout.split()
+
+
+_RESOLVE = ("def r(h):\n"
+            "    try:\n        print(h, socket.getaddrinfo(h, 29500)[0][4][0])\n"
+            "    except socket.gaierror:\n        print(h, 'blocked')\n")
+
+
+def test_cluster_internal_names_and_private_addresses_stay_reachable(tmp_path):
+    """DDP rendezvous with MASTER_ADDR=<another compute node>, a site mirror, a private IP."""
+    out = _hooked_with_dns(_RESOLVE + "for h in ('gnx507', 'mirror.site', '172.16.4.2', 'example.org', '93.184.216.34'):\n"
+                           "    r(h)\n", tmp_path)
+    assert out == ["gnx507", "10.11.0.7", "mirror.site", "fd00::5", "172.16.4.2", "172.16.4.2",
+                   "example.org", "blocked", "93.184.216.34", "blocked"]
+
+
+def test_the_proxy_host_stays_reachable(tmp_path):
+    code = (_RESOLVE + "r('proxy.site'); r('example.org')\n"
+            "s = socket.socket(); s.settimeout(0.2)\n"
+            "rc = s.connect_ex(('198.51.100.9', 3128)); print('proxy-connect', rc != __import__('errno').ENETUNREACH)\n")
+    out = _hooked_with_dns(code, tmp_path, {"https_proxy": "http://proxy.site:3128"})
+    assert out[:4] == ["proxy.site", "198.51.100.9", "example.org", "blocked"]
+    assert out[4:] == ["proxy-connect", "True"]          # not refused by the hook (the network may still say no)
+
+
+def test_a_proxy_site_is_tested_through_its_proxy(monkeypatch):
+    from oh_my_mlip import offline
+    no_direct = lambda addr, timeout: (_ for _ in ()).throw(OSError("direct blocked"))  # noqa: E731
+    asked = []
+    monkeypatch.setattr(offline, "_probe_cache", None)
+    got = offline.offline_env({"https_proxy": "http://proxy.site:3128"}, connect=no_direct,
+                              head=lambda host: asked.append(host) or True)
+    assert "OMM_OFFLINE" not in got and asked == ["huggingface.co"]
+    env_sh = (REPO / "env.sh").read_text()
+    func = env_sh[env_sh.index("omm_internet_ok() {"):env_sh.index('if [ -z "${OMM_OFFLINE:-}" ]; then')]
+    assert "curl -sI" in func and "https_proxy" in func
+
+
+def test_env_sh_through_a_proxy_uses_curl(tmp_path):
+    env_sh = (REPO / "env.sh").read_text()
+    func = env_sh[env_sh.index("omm_internet_ok() {"):env_sh.index('if [ -z "${OMM_OFFLINE:-}" ]; then')]
+    bin_dir = tmp_path / "bin"
+    _exe(bin_dir / "curl", f'echo "$@" >> {tmp_path}/curl.log\nexit 0\n')
+    script = f"{func}\nomm_internet_ok 3 && echo online"
+    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                          env={"PATH": f"{bin_dir}:/usr/bin:/bin", "https_proxy": "http://proxy.site:3128"})
+    assert proc.stdout.strip() == "online"
+    assert "-sI -o /dev/null --max-time 3 https://huggingface.co" in (tmp_path / "curl.log").read_text()
+
+
+def test_install_sh_never_runs_offline():
+    text = (REPO / "install.sh").read_text()
+    i = text.index('source "$OH_MY_MLIP_HOME/env.sh"\nomm_online=0')
+    head = text[i - 600:i]
+    assert "export OMM_OFFLINE=0" in head and "unset HF_HUB_OFFLINE" in head
+    tail = text[i:i + 900]
+    assert "omm_internet_ok 5" in tail and "install on a node" in tail and "exit 1" in tail
+    assert tail.index("exit 1") < text[i:].index("THREAD_CAPS=(")

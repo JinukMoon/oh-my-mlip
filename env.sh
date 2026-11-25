@@ -58,11 +58,26 @@ fi
 # limit), offline mode is switched on: OMM_OFFLINE=1 makes every non-local
 # connection in the envs' interpreters fail at once (oh_my_mlip/_offline_hook.py,
 # installed into each env by install.sh), so loaders use the weights install.sh
-# downloaded. Test: a TCP connection to huggingface.co or pypi.org within 3 s.
+# downloaded. Test (omm_internet_ok): through the proxy when http(s)_proxy is set
+# (curl -sI), else a TCP connection, to huggingface.co or pypi.org within 3 s.
 # OMM_OFFLINE=0 (or 1) set beforehand is kept and skips the test.
+omm_internet_ok() {
+  local t="${1:-3}" host
+  if [ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}${all_proxy:-}${ALL_PROXY:-}" ]; then
+    # a site that reaches the internet only through a proxy: test through it
+    command -v curl >/dev/null 2>&1 || return 0      # cannot test: assume online
+    for host in huggingface.co pypi.org; do
+      curl -sI -o /dev/null --max-time "$t" "https://$host" 2>/dev/null && return 0
+    done
+    return 1
+  fi
+  for host in huggingface.co pypi.org; do
+    timeout "$t" bash -c "exec 3<>/dev/tcp/$host/443" 2>/dev/null && return 0
+  done
+  return 1
+}
 if [ -z "${OMM_OFFLINE:-}" ]; then
-  if ! timeout 3 bash -c 'exec 3<>/dev/tcp/huggingface.co/443' 2>/dev/null \
-     && ! timeout 3 bash -c 'exec 3<>/dev/tcp/pypi.org/443' 2>/dev/null; then
+  if ! omm_internet_ok 3; then
     export OMM_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
     echo "oh-my-mlip: no internet on this node: offline mode on (OMM_OFFLINE=1); models use downloaded weights." >&2
   fi

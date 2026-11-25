@@ -561,8 +561,26 @@ if [ "$STATUS" -eq 1 ]; then
 fi
 
 # ── Real install path ──
+# An install downloads packages and weights, so it never runs in offline mode:
+# env.sh's network test is skipped here (OMM_OFFLINE=0) and install.sh makes its
+# own, with retries, so one slow answer on a login node does not stop it.
+OMM_OFFLINE_ASKED="${OMM_OFFLINE:-}"
+export OMM_OFFLINE=0
+unset HF_HUB_OFFLINE TRANSFORMERS_OFFLINE HF_DATASETS_OFFLINE
 # shellcheck source=/dev/null
 source "$OH_MY_MLIP_HOME/env.sh"
+omm_online=0
+if [ "$OMM_OFFLINE_ASKED" != "1" ]; then
+  for _ in 1 2 3; do
+    if omm_internet_ok 5; then omm_online=1; break; fi
+  done
+fi
+if [ "$omm_online" -ne 1 ]; then
+  echo "install.sh: no internet on this node$([ "$OMM_OFFLINE_ASKED" = "1" ] && echo " (OMM_OFFLINE=1 is set)"): install on a node" >&2
+  echo "  that has internet (on a cluster, the login node) and verify in a batch job on a GPU node." >&2
+  echo "  Nothing was downloaded or installed." >&2
+  exit 1
+fi
 
 # ── Thread caps for in-env prep steps (thread-limited-host safety) ──
 # On hosts with task limits (e.g. HPC login nodes with cgroup pids.max constraints),
