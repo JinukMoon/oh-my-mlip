@@ -178,9 +178,18 @@ def test_every_sibling_is_selected_and_pins_its_cuda_tag():
             assert "pt2" not in code.replace("pt27cu128", "").replace("pt29cu128", ""), stem
 
 
+def _copy_recipes(envs: Path) -> None:
+    """The recipe files of envs/ only. A checkout with built envs (envs/<env>/, several
+    GB each) must not be copied: two of these tests once filled 56 GB of /tmp."""
+    envs.mkdir()
+    for f in ENVS.iterdir():
+        if f.is_file():
+            shutil.copy2(f, envs / f.name)
+
+
 def test_lint_catches_a_dead_or_headerless_sibling(tmp_path):
     envs = tmp_path / "envs"
-    shutil.copytree(ENVS, envs, ignore=shutil.ignore_patterns("locks"))
+    _copy_recipes(envs)
     (envs / "orb.cu999.yml").write_text((envs / "orb.cu128.yml").read_text())
     (envs / "chgnet.cu999.yml").write_text("# build_status: clean\nname: x\ndependencies: [python=3.11.13]\n")
     expected = json.loads((envs / "_expected.json").read_text())
@@ -195,7 +204,7 @@ def test_lint_catches_a_dead_or_headerless_sibling(tmp_path):
 
 def test_lint_requires_a_reason_and_full_coverage(tmp_path):
     envs = tmp_path / "envs"
-    shutil.copytree(ENVS, envs, ignore=shutil.ignore_patterns("locks"))
+    _copy_recipes(envs)
     table = json.loads((envs / "_arch_recipes.json").read_text())
     table["sm120"]["mace"] = {"recipe": None}
     del table["sm120"]["uma"]
