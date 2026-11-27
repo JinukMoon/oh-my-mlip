@@ -26,12 +26,12 @@ Two licenses matter separately:
 | ❔ **Weights license not stated** | **SevenNet** (`SevenNet-MF-OMPA`, `SevenNet-Omni`) | The checkpoint files oh-my-mlip downloads carry no license statement (details below). |
 | 🔗 **Weak copyleft (LGPL-3.0)** | **DeePMD** (`DPA-3.1-3M-FT`), **DPA4** (`DPA-4.0.1-pro-MPtrj`) | Using the library is fine; modifications *to the library* must stay LGPL. |
 | 🔒 **Gated weights** | **UMA** (all `UMA-*` variants), **eSEN** (`eSEN-30M-OAM`) | Code is MIT, but the weights are under Meta licenses on Hugging Face (FAIR Chemistry License for UMA, OMat24 License for eSEN): accept the license, get access approved, log in with your token. Commercial use is permitted, subject to Meta's Acceptable Use Policy; the FAIR Chemistry License (UMA) also requires compliance with applicable laws, including trade control laws. |
-| 📎 **Attribution (CC-BY-4.0) weights** | **NequIP** (`NequIP-OAM-*`), **Allegro** (`Allegro-OAM-L`), **TACE** (`TACE-OAM-L`), **DPA** weights (`DPA-3.1-3M-FT`, `DPA-4.0.1-pro-MPtrj`), **MatRIS** (`MatRIS-10M-OAM`, see below) | Free incl. commercial, but you must credit the authors. |
+| 📎 **Attribution (CC-BY-4.0) weights** | **NequIP** (`NequIP-OAM-*`), **Allegro** (`Allegro-OAM-L`), **TACE** (`TACE-OAM-L`, `TECE-OAM-RRA-1.0`), **DPA** weights (`DPA-3.1-3M-FT`, `DPA-4.0.1-pro-MPtrj`), **MatRIS** (`MatRIS-10M-OAM`, see below) | Free incl. commercial, but you must credit the authors. |
 
 Everything else below is permissive (MIT / Apache-2.0 / BSD-3-Clause), commercial
 use allowed.
 
-## Full table — 20 frameworks / 32 model variants
+## Full table — 20 frameworks / 33 model variants
 
 | Framework | Our variant(s) | GitHub | Code license | Weights license | Gated |
 |---|---|---|---|---|---|
@@ -54,7 +54,7 @@ use allowed.
 | **EquFlash** | EquFlashV2, EquFlash-v1 | [SamsungDS/GGNN](https://github.com/SamsungDS/GGNN) | **CC BY-NC-SA 4.0 — non-commercial** | **Conflict**: the hosting figshare record ([32630910](https://figshare.com/articles/32630910), a Matbench Discovery submission bundle) says CC BY 4.0; the repo license (Samsung Electronics) is CC BY-NC-SA 4.0 and no statement covers the weights | no |
 | **MatRIS** | MatRIS-10M-OAM | [HPC-AI-Team/MatRIS](https://github.com/HPC-AI-Team/MatRIS) | BSD-3-Clause | CC BY 4.0 on the hosting figshare record ([30475253](https://figshare.com/articles/30475253)); the repo and [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/matris-10m-oam) declare BSD-3-Clause (both permissive) | no |
 | **DPA4** | DPA-4.0.1-pro-MPtrj | [deepmodeling/deepmd-kit](https://github.com/deepmodeling/deepmd-kit) | **LGPL-3.0** | CC-BY-4.0 (the hosting figshare record [32647224](https://figshare.com/articles/32647224); also declared on [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj)) | no |
-| **TACE** | TACE-OAM-L | [xvzemin/tace](https://github.com/xvzemin/tace) | MIT | CC-BY-4.0 ([xvzemin/tace-foundations](https://huggingface.co/xvzemin/tace-foundations)) | no |
+| **TACE** | TACE-OAM-L, TECE-OAM-RRA-1.0 | [xvzemin/tace](https://github.com/xvzemin/tace) | MIT | CC-BY-4.0 ([xvzemin/tace-foundations](https://huggingface.co/xvzemin/tace-foundations)) | no |
 
 ¹ MatterSim: only the two open checkpoints (1M / 5M) are MIT; more advanced versions are gated behind Azure Quantum Elements (commercial Microsoft platform).
 Weights licenses are read from the record that hosts the checkpoint file oh-my-mlip downloads: the Hugging Face license tag, the Zenodo or figshare record's license, or the repository LICENSE when the file lives in the repository. Where another upstream declaration disagrees, the table gives both.

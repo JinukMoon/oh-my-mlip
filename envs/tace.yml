@@ -1,16 +1,19 @@
 # build_status: candidate
-# candidate-reason: TACE C/CUDA extension requires a CUDA toolkit for compilation. GPU inference requires a driver at the CUDA 13.0+ level (torch 2.11.0+cu130).
+# candidate-reason: GPU inference requires a driver at the CUDA 13.0+ level (torch 2.14.1+cu130). The EquivariantX (EQX) kernels compile once per user at the first call (NVRTC, about 40 s) into ~/.cache/eqx.
 # oh-my-mlip env recipe: TACE (tace)
 #
-# Pins: python 3.11.15 / torch 2.11.0+cu130.
+# Pins: python 3.11.15 / torch 2.14.1+cu130 / tace 0.2.4 with the eqx extra.
 # install.sh build-from-recipe is the PRIMARY install path.
 #
 #   - torch is pinned to CUDA 13.0 (cu130) from the official PyTorch wheel index;
 #     the host NVIDIA driver must satisfy the cu130 min-driver floor.
 #   - cuda-nvcc 13.0.* is included for first-run D3 dispersion kernel compilation.
 #   - torch-geometric and e3nn are public dependencies.
-#   - TACE is the public github.com/xvzemin/tace repo, pinned to a specific commit
-#     for reproducibility. Requires CUDA build tools for the C/CUDA extension.
+#   - TACE 0.2.4 from PyPI with the eqx extra: the EquivariantX CUDA kernels
+#     (inference with enable_eqx=True), same accuracy as the eager path (single
+#     point dE <= 0.005 meV/atom, max |dF| <= 0.018 meV/A against tace 0.2.0
+#     eager), several times faster. The kernels are compiled with NVRTC at the
+#     first call and cached in ~/.cache/eqx; ninja is pinned for that JIT build.
 #   - catbench is NOT in this recipe's pip block: install.sh installs it as a
 #     post-create step (`pip install catbench==1.1.7`, WITH deps). A real build
 #     showed `--no-deps` drops catbench's runtime deps (requests/xlsxwriter) and
@@ -32,8 +35,9 @@ dependencies:
   - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu130
-      - torch==2.11.0+cu130
-      - torch-geometric==2.8.0
+      - torch==2.14.1+cu130
+      - torch-geometric==2.8.1
       - e3nn==0.6.0
-      # TACE framework (public github.com/xvzemin/tace, pinned sha): C/CUDA build.
-      - TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
+      # TACE framework (github.com/xvzemin/tace) with the EquivariantX kernels
+      - tace[eqx]==0.2.4
+      - ninja==1.13.2

@@ -1,6 +1,6 @@
 # base + ninja + pinned gxx 15.3.0 for sm120 (D3 kernel build); otherwise identical to envs/tace.yml
 # build_status: candidate
-# candidate-reason: TACE C/CUDA extension requires a CUDA toolkit for compilation. GPU inference requires a driver at the CUDA 13.0+ level (torch 2.11.0+cu130).
+# candidate-reason: GPU inference requires a driver at the CUDA 13.0+ level (torch 2.14.1+cu130). The EquivariantX (EQX) kernels compile once per user at the first call (NVRTC, about 40 s) into ~/.cache/eqx.
 # sibling_of: tace
 # arch: sm120
 # oh-my-mlip SIBLING recipe for sm120 (Blackwell, compute capability 12.0).
@@ -41,8 +41,9 @@ dependencies:
   - ase=3.29.0
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu130
-      - torch==2.11.0+cu130
-      - torch-geometric==2.8.0
+      - torch==2.14.1+cu130
+      - torch-geometric==2.8.1
       - e3nn==0.6.0
-      # TACE framework (public github.com/xvzemin/tace, pinned sha): C/CUDA build.
-      - TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
+      # TACE framework (github.com/xvzemin/tace) with the EquivariantX kernels
+      - tace[eqx]==0.2.4
+      - ninja==1.13.2

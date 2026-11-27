@@ -47,7 +47,7 @@ Run this to see the current state:
 python scripts/verify_weights_integrity.py
 ```
 
-At the time of writing, 16 of the 32 model variants carry a fingerprint and 16
+At the time of writing, 17 of the 33 model variants carry a fingerprint and 16
 are `fingerprint-pending`. A model is pending when there is no single file to
 pin: the weights ship inside the framework's package or are resolved by name
 into the framework's own cache, or the loadable file is produced on your machine.

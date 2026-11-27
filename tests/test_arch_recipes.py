@@ -178,9 +178,18 @@ def test_every_sibling_is_selected_and_pins_its_cuda_tag():
             assert "pt2" not in code.replace("pt27cu128", "").replace("pt29cu128", ""), stem
 
 
+def _copy_recipes(envs: Path) -> None:
+    """The recipe files of envs/ only. A checkout with built envs (envs/<env>/, several
+    GB each) must not be copied: two of these tests once filled 56 GB of /tmp."""
+    envs.mkdir()
+    for f in ENVS.iterdir():
+        if f.is_file():
+            shutil.copy2(f, envs / f.name)
+
+
 def test_lint_catches_a_dead_or_headerless_sibling(tmp_path):
     envs = tmp_path / "envs"
-    shutil.copytree(ENVS, envs, ignore=shutil.ignore_patterns("locks"))
+    _copy_recipes(envs)
     (envs / "orb.cu999.yml").write_text((envs / "orb.cu128.yml").read_text())
     (envs / "chgnet.cu999.yml").write_text("# build_status: clean\nname: x\ndependencies: [python=3.11.13]\n")
     expected = json.loads((envs / "_expected.json").read_text())
@@ -195,7 +204,7 @@ def test_lint_catches_a_dead_or_headerless_sibling(tmp_path):
 
 def test_lint_requires_a_reason_and_full_coverage(tmp_path):
     envs = tmp_path / "envs"
-    shutil.copytree(ENVS, envs, ignore=shutil.ignore_patterns("locks"))
+    _copy_recipes(envs)
     table = json.loads((envs / "_arch_recipes.json").read_text())
     table["sm120"]["mace"] = {"recipe": None}
     del table["sm120"]["uma"]
@@ -251,11 +260,14 @@ def test_committed_docs_mark_only_the_candidate_entries_as_candidate():
     models = json.loads((REPO / "models.json").read_text())
     env_of = {fam: info["env"] for fam, info in models.items() if not fam.startswith("_")}
     doc = (REPO / "docs" / "model_status.md").read_text()
+    # a flagged env shows "candidate" only once a variant passed there; tace's new
+    # stack (tace 0.2.4 + EQX, torch 2.14.1) has not been run on sm120 yet
+    passed = {e for e in flagged if e != "tace"}
     rows = [ln.split(" | ") for ln in doc.splitlines() if ln.startswith("| ") and "| candidate |" in ln]
-    assert {env_of[r[1]] for r in rows} == flagged
+    assert {env_of[r[1]] for r in rows} == passed
     readme = (REPO / "README.md").read_text()
     rows = [ln for ln in readme.splitlines() if ln.startswith("| ") and ln.rstrip().endswith("| candidate |")]
-    assert {env_of[r.split(" | ")[0][2:]] for r in rows} == flagged
+    assert {env_of[r.split(" | ")[0][2:]] for r in rows} == passed
 
 
 def test_mcp_status_agrees_with_the_generated_table():

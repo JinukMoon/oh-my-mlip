@@ -1416,7 +1416,7 @@ Check it works: `python3 $OMM/scripts/setup_verify.py DPA-4.0.1-pro-MPtrj --json
 
 ## TACE — env `tace`
 
-pin: python 3.11.15 · torch==2.11.0+cu130 · variants: `TACE-OAM-L`
+pin: python 3.11.15 · torch==2.14.1+cu130 · variants: `TACE-OAM-L`, `TECE-OAM-RRA-1.0`
 
 ### A. install
 
@@ -1434,17 +1434,17 @@ Pinned combination:
 conda env create -f $OMM/envs/tace.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* ase=3.29.0
-#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 torch-geometric==2.8.0 e3nn==0.6.0 TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.14.1+cu130 torch-geometric==2.8.1 e3nn==0.6.0 tace[eqx]==0.2.4 ninja==1.13.2
 <prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
 ```
 
-On sm120 `install.sh` builds the sibling recipe `envs/tace.cu130.yml` instead (torch==2.11.0+cu130; the base wheels carry no sm120 kernels) — **candidate**: see the recipe header for its caveat:
+On sm120 `install.sh` builds the sibling recipe `envs/tace.cu130.yml` instead (torch==2.14.1+cu130; the base wheels carry no sm120 kernels) — **candidate**: see the recipe header for its caveat:
 
 ```bash
 conda env create -f $OMM/envs/tace.cu130.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.15 pip cuda-nvcc=13.0.* gxx=15.3.0 ninja=1.13.2 ase=3.29.0
-#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130 torch-geometric==2.8.0 e3nn==0.6.0 TACE @ git+https://github.com/xvzemin/tace.git@2b2214e040207b559d6bb4f92072ec1299827ba0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.14.1+cu130 torch-geometric==2.8.1 e3nn==0.6.0 tace[eqx]==0.2.4 ninja==1.13.2
 <prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
 ```
 
@@ -1457,6 +1457,9 @@ Upstream acquisition ([source](https://tace.readthedocs.io/en/latest/guide/found
 <prefix>/bin/python -c "from tace.foundations import tace_foundations; tace_foundations['TACE-OAM-L']"
 echo "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a  $HOME/.cache/tace/TACE-OAM-L.pt" | sha256sum -c -
 # manual download: HF xvzemin/tace-foundations
+#
+# recorded fingerprints — verify with: python3 $OMM/scripts/verify_weights_integrity.py
+#   TECE-OAM-RRA-1.0: 9f36562582d931347c3904f763e820edcaf5f27c3f13beb6776e49fcc7de38bb  (890,523,407 B)
 ```
 
 ### C. ASE calculator
@@ -1464,10 +1467,20 @@ echo "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a  $HOME/.c
 `TACE-OAM-L`
 
 ```python
-from tace.foundations import tace_foundations
 from tace.interface.ase import TACEAseCalc
-model = tace_foundations['TACE-OAM-L']
-calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])
+import importlib.metadata as _md; _tv = _md.version('tace'); import re as _re; _ok = tuple(int((_re.match(r'\d*', x).group() or 0)) for x in (_tv.split('.') + ['0', '0'])[:3]) >= (0, 2, 4)
+if not _ok: raise RuntimeError(f"TACE-OAM-L: this env has tace {_tv}; the registry runs tace 0.2.4 with the EquivariantX kernels (enable_eqx). Rebuild the env: ./install.sh --rebuild tace (or adopt an env built from envs/tace.yml)")
+calc = TACEAseCalc(model='$OMM/models/tace/TACE-OAM-L.pt', dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'], enable_eqx=True)
+atoms.calc = calc
+```
+
+`TECE-OAM-RRA-1.0`
+
+```python
+from tace.interface.ase import TACEAseCalc
+import importlib.metadata as _md; _tv = _md.version('tace'); import re as _re; _ok = tuple(int((_re.match(r'\d*', x).group() or 0)) for x in (_tv.split('.') + ['0', '0'])[:3]) >= (0, 2, 4)
+if not _ok: raise RuntimeError(f"TECE-OAM-RRA-1.0: this env has tace {_tv}; the registry runs tace 0.2.4 with the EquivariantX kernels (enable_eqx). Rebuild the env: ./install.sh --rebuild tace (or adopt an env built from envs/tace.yml)")
+calc = TACEAseCalc(model='$OMM/models/tace/TECE-OAM-RRA-1.0.pt', dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'], enable_eqx=True)
 atoms.calc = calc
 ```
 

@@ -59,5 +59,6 @@ How to read the columns:
 | EquFlash-v1 | EquFlash | on-demand-hf | no | validated | [GitHub](https://github.com/SamsungDS/GGNN){ .md-button .omm-repo } |
 | MatRIS-10M-OAM | MatRIS | auto-download | no | candidate | [GitHub](https://github.com/HPC-AI-Team/MatRIS){ .md-button .omm-repo } |
 | DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | no | candidate | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
-| TACE-OAM-L | TACE | auto-download | no | candidate | [GitHub](https://github.com/xvzemin/tace){ .md-button .omm-repo } |
+| TACE-OAM-L | TACE | on-demand-hf | no | not checked | [GitHub](https://github.com/xvzemin/tace){ .md-button .omm-repo } |
+| TECE-OAM-RRA-1.0 | TACE | on-demand-hf | no | not checked | [GitHub](https://github.com/xvzemin/tace){ .md-button .omm-repo } |
 <!-- STATUS_TABLE_DETAILED_END -->
