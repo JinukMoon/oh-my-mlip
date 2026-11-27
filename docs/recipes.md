@@ -601,6 +601,8 @@ atoms.calc = calc
 
 ```python
 from tensorpotential.calculator import TPCalculator
+import importlib.metadata as _md; import re as _re; _tv = _md.version('tensorpotential'); _ok = tuple(int((_re.match(r'\d*', x).group() or 0)) for x in (_tv.split('.') + ['0', '0'])[:3]) >= (0, 6, 0)
+if not _ok: raise RuntimeError(f"GRACE-2L-OAM-L: this env has tensorpotential {_tv}; this model needs tensorpotential 0.6 or newer. Rebuild the env: ./install.sh --rebuild grace (or adopt an env built from envs/grace.yml)")
 calc = TPCalculator('$OMM/models/grace/GRACE-2L-OAM-L')
 atoms.calc = calc
 ```
@@ -609,6 +611,8 @@ atoms.calc = calc
 
 ```python
 from tensorpotential.calculator import TPCalculator
+import importlib.metadata as _md; import re as _re; _tv = _md.version('tensorpotential'); _ok = tuple(int((_re.match(r'\d*', x).group() or 0)) for x in (_tv.split('.') + ['0', '0'])[:3]) >= (0, 6, 0)
+if not _ok: raise RuntimeError(f"GRACE-3L-OAM-L: this env has tensorpotential {_tv}; this model needs tensorpotential 0.6 or newer. Rebuild the env: ./install.sh --rebuild grace (or adopt an env built from envs/grace.yml)")
 calc = TPCalculator('$OMM/models/grace/GRACE-3L-OAM-L')
 atoms.calc = calc
 ```

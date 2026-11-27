@@ -454,7 +454,10 @@ def resolve_foundation_checkpoint(version: str, resolved: dict) -> str:
     override = _FOUNDATION_OVERRIDE.get(version)
     if override:
         return override.replace("${OH_MY_MLIP_HOME}", reg.home())
-    for line in resolved["inference"]:
+    # the line that builds the calculator; check lines before it (a version or
+    # head guard) also hold quoted strings
+    lines = [ln for ln in resolved["inference"] if re.match(r"\s*(calc|model|orbff|predictor)\s*=", ln)]
+    for line in lines or resolved["inference"]:
         m = _QUOTED_RE.search(line)
         if m:
             return m.group(1)
