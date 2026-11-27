@@ -1468,7 +1468,7 @@ echo "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a  $HOME/.c
 
 ```python
 from tace.interface.ase import TACEAseCalc
-import importlib.metadata as _md; _tv = _md.version('tace'); _ok = tuple(int(x) for x in _tv.split('.')[:3]) >= (0, 2, 4)
+import importlib.metadata as _md; _tv = _md.version('tace'); import re as _re; _ok = tuple(int((_re.match(r'\d*', x).group() or 0)) for x in (_tv.split('.') + ['0', '0'])[:3]) >= (0, 2, 4)
 if not _ok: raise RuntimeError(f"TACE-OAM-L: this env has tace {_tv}; the registry runs tace 0.2.4 with the EquivariantX kernels (enable_eqx). Rebuild the env: ./install.sh --rebuild tace (or adopt an env built from envs/tace.yml)")
 calc = TACEAseCalc(model='$OMM/models/tace/TACE-OAM-L.pt', dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'], enable_eqx=True)
 atoms.calc = calc
@@ -1478,7 +1478,7 @@ atoms.calc = calc
 
 ```python
 from tace.interface.ase import TACEAseCalc
-import importlib.metadata as _md; _tv = _md.version('tace'); _ok = tuple(int(x) for x in _tv.split('.')[:3]) >= (0, 2, 4)
+import importlib.metadata as _md; _tv = _md.version('tace'); import re as _re; _ok = tuple(int((_re.match(r'\d*', x).group() or 0)) for x in (_tv.split('.') + ['0', '0'])[:3]) >= (0, 2, 4)
 if not _ok: raise RuntimeError(f"TECE-OAM-RRA-1.0: this env has tace {_tv}; the registry runs tace 0.2.4 with the EquivariantX kernels (enable_eqx). Rebuild the env: ./install.sh --rebuild tace (or adopt an env built from envs/tace.yml)")
 calc = TACEAseCalc(model='$OMM/models/tace/TECE-OAM-RRA-1.0.pt', dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'], enable_eqx=True)
 atoms.calc = calc
