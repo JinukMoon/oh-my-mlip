@@ -1163,3 +1163,22 @@ def test_energy_and_force_keys_reach_the_converter(tmp_path, monkeypatch):
                           python_bin="/x/python", energy_key="dft_E", force_key="dft_F")
     cmd = seen["cmd"]
     assert cmd[cmd.index("--energy-key") + 1] == "dft_E" and cmd[cmd.index("--force-key") + 1] == "dft_F"
+
+
+def test_foundation_checkpoint_skips_guard_lines_before_the_calculator():
+    """A version or head guard before the calculator line also holds quoted strings."""
+    resolved = {"inference": [
+        "import importlib.metadata as _md; _tv = _md.version('tace'); _ok = True",
+        "if not _ok: raise RuntimeError('old tace')",
+        "calc = TACEAseCalc(model='/hub/models/tace/TACE-OAM-L.pt', device='cuda')"]}
+    assert ft_run.resolve_foundation_checkpoint("TACE-OAM-L", resolved) == "/hub/models/tace/TACE-OAM-L.pt"
+
+
+def test_finetune_script_puts_the_env_bin_first_on_path(tmp_path):
+    """A JIT build during training (TACE's EquivariantX kernels) runs ninja from PATH."""
+    env = tmp_path / "envs" / "tace"
+    (env / "bin").mkdir(parents=True)
+    (env / "lib").mkdir()
+    body = ft_run._render_body({"python": str(env / "bin" / "python")}, ["tace-train"], tmp_path)
+    assert f'export PATH="{env / "bin"}:$PATH"' in body
+    assert body.index("export PATH=") < body.index("exec tace-train")

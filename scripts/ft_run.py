@@ -454,7 +454,10 @@ def resolve_foundation_checkpoint(version: str, resolved: dict) -> str:
     override = _FOUNDATION_OVERRIDE.get(version)
     if override:
         return override.replace("${OH_MY_MLIP_HOME}", reg.home())
-    for line in resolved["inference"]:
+    # the line that builds the calculator; check lines before it (a version or
+    # head guard) also hold quoted strings
+    lines = [ln for ln in resolved["inference"] if re.match(r"\s*(calc|model|orbff|predictor)\s*=", ln)]
+    for line in lines or resolved["inference"]:
         m = _QUOTED_RE.search(line)
         if m:
             return m.group(1)
@@ -2561,6 +2564,9 @@ def _render_body(resolved: dict, argv: list[str], out_dir: Path, *,
     env_lib = Path(os.path.expandvars(resolved.get("python", ""))).parent.parent / "lib"
     if resolved.get("python") and env_lib.is_dir():
         lines.append(f'export LD_LIBRARY_PATH="{env_lib}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"')
+        # and its bin/ first on PATH: a JIT extension build during training (TACE's
+        # EquivariantX kernels) runs ninja and nvcc from PATH ("Ninja is required")
+        lines.append(f'export PATH="{env_lib.parent / "bin"}:$PATH"')
     for key, value in (resolved.get("env_run") or {}).items():
         lines.append(f'export {key}="{value}"')
     for key, value in (extra_env or {}).items():
