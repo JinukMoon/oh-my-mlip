@@ -10,7 +10,7 @@ Mirrors tests/test_gen_recipes.py's discipline for the fine-tuning doc
      fine-tuning section;
   3. every family's upstream `src` URL is quoted somewhere in the doc, so a
      citation can never be silently dropped;
-  4. coverage: all 32 variants carry a classification -- each is either
+  4. coverage: all 34 variants carry a classification -- each is either
      "supported-ish" (status starts with 'documented', has an entrypoint,
      and its family carries a src) or `not-supported` with a `reason` and
      at least one `evidence` URL;
@@ -83,7 +83,7 @@ def test_every_src_appears_in_rendered_doc(models: dict, families: list[str]):
         assert src in text, f"{fam}: src URL missing from the rendered doc"
 
 
-def test_coverage_32_of_32_classified(models: dict, families: list[str]):
+def test_coverage_34_of_34_classified(models: dict, families: list[str]):
     """Every variant is either supported-ish (documented status + entrypoint
     + a family src) or not-supported with a reason and >=1 evidence URL."""
     total = 0
@@ -101,7 +101,7 @@ def test_coverage_32_of_32_classified(models: dict, families: list[str]):
             assert UPSTREAM_FT[fam].get("src", "").startswith("http"), (
                 f"{fam}/{v}: family {fam} carries no src"
             )
-    assert total == 32, f"expected 32 registry variants, found {total}"
+    assert total == 34, f"expected 34 registry variants, found {total}"
 
 
 # The five divergence candidates named in the consensus plan (P2a task 2 /

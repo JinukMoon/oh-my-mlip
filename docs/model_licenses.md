@@ -21,7 +21,7 @@ Two licenses matter separately:
 
 | Restriction | Frameworks (our variants) | What it means |
 |---|---|---|
-| 🚫 **Non-commercial only** | **GRACE** (`GRACE-2L-OAM`), **MACE-MH** weights (`MACE-MH-1-OMAT`, `MACE-MH-1-OC20`) | Academic / research use only. Commercial use needs a separate license from the owner. |
+| 🚫 **Non-commercial only** | **GRACE** (`GRACE-2L-OAM`, `GRACE-2L-OAM-L`, `GRACE-3L-OAM-L`), **MACE-MH** weights (`MACE-MH-1-OMAT`, `MACE-MH-1-OC20`) | Academic / research use only. Commercial use needs a separate license from the owner. |
 | ⚖️ **Upstream declarations conflict** | **EquFlash** (`EquFlashV2`, `EquFlash-v1`), **AlphaNet** (`AlphaNet-v1-OMA`) | The record hosting the weights says one license and the project says another (details in the table below). Nothing upstream resolves it; ask the authors before relying on either. EquFlash's code is non-commercial (CC BY-NC-SA 4.0); AlphaNet's code is GPL-3.0. |
 | ❔ **Weights license not stated** | **SevenNet** (`SevenNet-MF-OMPA`, `SevenNet-Omni`) | The checkpoint files oh-my-mlip downloads carry no license statement (details below). |
 | 🔗 **Weak copyleft (LGPL-3.0)** | **DeePMD** (`DPA-3.1-3M-FT`), **DPA4** (`DPA-4.0.1-pro-MPtrj`) | Using the library is fine; modifications *to the library* must stay LGPL. |
@@ -31,7 +31,7 @@ Two licenses matter separately:
 Everything else below is permissive (MIT / Apache-2.0 / BSD-3-Clause), commercial
 use allowed.
 
-## Full table — 20 frameworks / 32 model variants
+## Full table — 20 frameworks / 34 model variants
 
 | Framework | Our variant(s) | GitHub | Code license | Weights license | Gated |
 |---|---|---|---|---|---|
@@ -42,7 +42,7 @@ use allowed.
 | **Nequix** | Nequix-MP-1 | [atomicarchitects/nequix](https://github.com/atomicarchitects/nequix) | MIT | MIT (the file is in the MIT-licensed repo); the author's figshare copy of the same file ([29927606](https://figshare.com/articles/29927606)) says CC BY 4.0 | no |
 | **DeePMD** | DPA-3.1-3M-FT | [deepmodeling/deepmd-kit](https://github.com/deepmodeling/deepmd-kit) | **LGPL-3.0** | CC-BY-4.0 ([deepmodelingcommunity/DPA-3.1-3M](https://huggingface.co/deepmodelingcommunity/DPA-3.1-3M) on HF) | no |
 | **ORB** | ORB-v3 | [orbital-materials/orb-models](https://github.com/orbital-materials/orb-models) | Apache-2.0 | Apache-2.0 (code + weights) | no |
-| **GRACE** | GRACE-2L-OAM | [ICAMS/grace-tensorpotential](https://github.com/ICAMS/grace-tensorpotential) | **ASL — non-commercial** | ASL — non-commercial | no |
+| **GRACE** | GRACE-2L-OAM, GRACE-2L-OAM-L, GRACE-3L-OAM-L | [ICAMS/grace-tensorpotential](https://github.com/ICAMS/grace-tensorpotential) | **ASL — non-commercial** | ASL — non-commercial | no |
 | **MatterSim** | MatterSim-v1-5M | [microsoft/mattersim](https://github.com/microsoft/mattersim) | MIT | MIT (the 5M checkpoint is downloaded from the GitHub repo on first use) | no¹ |
 | **CHGNet** | CHGNet-v0.3.0 | [CederGroupHub/chgnet](https://github.com/CederGroupHub/chgnet) | BSD-3-Clause | BSD-3-Clause | no |
 | **AlphaNet** | AlphaNet-v1-OMA | [zmyybc/AlphaNet](https://github.com/zmyybc/AlphaNet) | **GPL-3.0** | **Conflict**: the hosting figshare record ([28831364](https://figshare.com/articles/28831364)) says CC BY 4.0; the author's Matbench Discovery submission says GPL-3.0 | no |

@@ -534,7 +534,7 @@ Check it works: `python3 $OMM/scripts/setup_verify.py ORB-v3 --json` (prints ene
 
 ## GRACE — env `grace`
 
-pin: python 3.11.11 · — · variants: `GRACE-2L-OAM`
+pin: python 3.11.11 · — · variants: `GRACE-2L-OAM`, `GRACE-2L-OAM-L`, `GRACE-3L-OAM-L`
 
 ### A. install
 
@@ -550,7 +550,7 @@ Pinned combination:
 conda env create -f $OMM/envs/grace.yml -p <prefix>
 #   equivalent explicit form:
 #     conda create -y -p <prefix> --override-channels -c conda-forge python=3.11.11 pip ase=3.29.0
-#     <prefix>/bin/pip install tensorflow[and-cuda]==2.16.2 tensorpotential==0.5.3
+#     <prefix>/bin/pip install tensorflow[and-cuda]==2.16.2 tensorpotential==0.6.2.1 tf_keras==2.16.0
 <prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
 ```
 
@@ -583,6 +583,8 @@ python3 $OMM/scripts/prepare_grace_weights.py --name GRACE-2L-OAM \
 #
 # recorded fingerprints — verify with: python3 $OMM/scripts/verify_weights_integrity.py
 #   GRACE-2L-OAM: b4e5d384e8e3f5222225748f6eed8479c2363cf0022e9ca8dfa4a4f2fe4325ec  (97,295,519 B)
+#   GRACE-2L-OAM-L: 1ca7e3d36e0b327560e110c81ecae2b51502469180661733b8ede88f26610eb4  (124,563,102 B)
+#   GRACE-3L-OAM-L: 0d7ebce7d3ddbd168d086fbd43c583a4c34fb55b7509f78be3dc89db67651e52  (191,371,901 B)
 ```
 
 ### C. ASE calculator
@@ -592,6 +594,22 @@ python3 $OMM/scripts/prepare_grace_weights.py --name GRACE-2L-OAM \
 ```python
 from tensorpotential.calculator import TPCalculator
 calc = TPCalculator('$OMM/models/grace/GRACE-2L-OAM')
+atoms.calc = calc
+```
+
+`GRACE-2L-OAM-L`
+
+```python
+from tensorpotential.calculator import TPCalculator
+calc = TPCalculator('$OMM/models/grace/GRACE-2L-OAM-L')
+atoms.calc = calc
+```
+
+`GRACE-3L-OAM-L`
+
+```python
+from tensorpotential.calculator import TPCalculator
+calc = TPCalculator('$OMM/models/grace/GRACE-3L-OAM-L')
 atoms.calc = calc
 ```
 

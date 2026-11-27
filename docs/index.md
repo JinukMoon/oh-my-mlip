@@ -5,7 +5,7 @@
 </p>
 
 **Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 20
-machine-learning interatomic-potential frameworks (32 model variants) — MACE,
+machine-learning interatomic-potential frameworks (34 model variants) — MACE,
 SevenNet, NequIP, ORB, UMA, … — behind one registry, and your coding agent
 (Claude Code or Codex) does the work when you ask:
 
