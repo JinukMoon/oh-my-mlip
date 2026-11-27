@@ -26,12 +26,12 @@ Two licenses matter separately:
 | ❔ **Weights license not stated** | **SevenNet** (`SevenNet-MF-OMPA`, `SevenNet-Omni`) | The checkpoint files oh-my-mlip downloads carry no license statement (details below). |
 | 🔗 **Weak copyleft (LGPL-3.0)** | **DeePMD** (`DPA-3.1-3M-FT`), **DPA4** (`DPA-4.0.1-pro-MPtrj`) | Using the library is fine; modifications *to the library* must stay LGPL. |
 | 🔒 **Gated weights** | **UMA** (all `UMA-*` variants), **eSEN** (`eSEN-30M-OAM`) | Code is MIT, but the weights are under Meta licenses on Hugging Face (FAIR Chemistry License for UMA, OMat24 License for eSEN): accept the license, get access approved, log in with your token. Commercial use is permitted, subject to Meta's Acceptable Use Policy; the FAIR Chemistry License (UMA) also requires compliance with applicable laws, including trade control laws. |
-| 📎 **Attribution (CC-BY-4.0) weights** | **NequIP** (`NequIP-OAM-*`), **Allegro** (`Allegro-OAM-L`), **TACE** (`TACE-OAM-L`), **DPA** weights (`DPA-3.1-3M-FT`, `DPA-4.0.1-pro-MPtrj`), **MatRIS** (`MatRIS-10M-OAM`, see below) | Free incl. commercial, but you must credit the authors. |
+| 📎 **Attribution (CC-BY-4.0) weights** | **NequIP** (`NequIP-OAM-*`), **Allegro** (`Allegro-OAM-L`), **TACE** (`TACE-OAM-L`), **Prophet** (`Prophet-OAME-MBD`), **DPA** weights (`DPA-3.1-3M-FT`, `DPA-4.0.1-pro-MPtrj`), **MatRIS** (`MatRIS-10M-OAM`, see below) | Free incl. commercial, but you must credit the authors. |
 
 Everything else below is permissive (MIT / Apache-2.0 / BSD-3-Clause), commercial
 use allowed.
 
-## Full table — 20 frameworks / 32 model variants
+## Full table — 21 frameworks / 33 model variants
 
 | Framework | Our variant(s) | GitHub | Code license | Weights license | Gated |
 |---|---|---|---|---|---|
@@ -55,6 +55,7 @@ use allowed.
 | **MatRIS** | MatRIS-10M-OAM | [HPC-AI-Team/MatRIS](https://github.com/HPC-AI-Team/MatRIS) | BSD-3-Clause | CC BY 4.0 on the hosting figshare record ([30475253](https://figshare.com/articles/30475253)); the repo and [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/matris-10m-oam) declare BSD-3-Clause (both permissive) | no |
 | **DPA4** | DPA-4.0.1-pro-MPtrj | [deepmodeling/deepmd-kit](https://github.com/deepmodeling/deepmd-kit) | **LGPL-3.0** | CC-BY-4.0 (the hosting figshare record [32647224](https://figshare.com/articles/32647224); also declared on [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj)) | no |
 | **TACE** | TACE-OAM-L | [xvzemin/tace](https://github.com/xvzemin/tace) | MIT | CC-BY-4.0 ([xvzemin/tace-foundations](https://huggingface.co/xvzemin/tace-foundations)) | no |
+| **Prophet** | Prophet-OAME-MBD | [kairosmaterial/prophet](https://github.com/kairosmaterial/prophet) | MIT | CC-BY-4.0 ([kairosmaterial/prophet](https://huggingface.co/kairosmaterial/prophet) on HF; also the repo's LICENSE-WEIGHTS). One training set (ELEMENTA) is CC-BY-NC-4.0; that is the dataset's licence, not the weights' | no |
 
 ¹ MatterSim: only the two open checkpoints (1M / 5M) are MIT; more advanced versions are gated behind Azure Quantum Elements (commercial Microsoft platform).
 Weights licenses are read from the record that hosts the checkpoint file oh-my-mlip downloads: the Hugging Face license tag, the Zenodo or figshare record's license, or the repository LICENSE when the file lives in the repository. Where another upstream declaration disagrees, the table gives both.
@@ -94,10 +95,10 @@ in this table are mirrored.
 
 | Safe for commercial use (permissive) | Restricted — check before commercial use |
 |---|---|
-| MACE-MPA-0, NequIP⁴, Allegro⁴, Nequix, ORB, MatterSim (open), CHGNet, Eqnorm, EquiformerV3, PET, MatRIS⁴, TACE⁴, UMA¹, eSEN¹, DeePMD/DPA²,⁴ | **GRACE** (non-commercial), **MACE-MH-1** (non-commercial), **EquFlash** (non-commercial code; weight declarations conflict), **AlphaNet** (GPL-3.0 code; weight declarations conflict), **SevenNet** (weights license not stated) |
+| MACE-MPA-0, NequIP⁴, Allegro⁴, Nequix, ORB, MatterSim (open), CHGNet, Eqnorm, EquiformerV3, PET, MatRIS⁴, TACE⁴, Prophet⁴, UMA¹, eSEN¹, DeePMD/DPA²,⁴ | **GRACE** (non-commercial), **MACE-MH-1** (non-commercial), **EquFlash** (non-commercial code; weight declarations conflict), **AlphaNet** (GPL-3.0 code; weight declarations conflict), **SevenNet** (weights license not stated) |
 
 ¹ UMA and eSEN: commercial use allowed under Meta's FAIR Chemistry License (UMA) and OMat24 License (eSEN), but the weights are gated and Meta's Acceptable Use Policy applies; the FAIR Chemistry License also requires compliance with applicable laws, including trade control laws.
 ² DeePMD / DPA4: LGPL-3.0 — commercial use of the library is allowed; copyleft applies only if you modify the library itself.
-⁴ CC-BY-4.0 weights (NequIP, Allegro, TACE, DPA, MatRIS) require attribution.
+⁴ CC-BY-4.0 weights (NequIP, Allegro, TACE, Prophet, DPA, MatRIS) require attribution.
 
 *Code licenses read from each upstream LICENSE file (2026-06); weights licenses checked against the record hosting each checkpoint (2026-09-21). Verify upstream before relying on any entry.*

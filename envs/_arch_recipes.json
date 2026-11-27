@@ -75,6 +75,10 @@
       "status": "candidate",
       "reason": "sibling recipe not yet built and verified on sm120; base build passed"
     },
+    "prophet": {
+      "recipe": null,
+      "reason": "torch 2.7.1+cu126 carries no sm120 kernels and no sibling recipe for sm120 has been built and checked"
+    },
     "sevennet": {
       "recipe": "sevennet.cu128"
     },

@@ -8,8 +8,8 @@
 [![Docs](https://github.com/JinukMoon/oh-my-mlip/actions/workflows/docs.yml/badge.svg)](https://oh-my-mlip.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 20
-machine-learning interatomic-potential frameworks (32 model variants) behind
+**Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 21
+machine-learning interatomic-potential frameworks (33 model variants) behind
 one registry: each installs into its own conda env from a pinned recipe, and
 every one is installed, used, benchmarked, fine-tuned and distilled the same
 way. Ask Claude Code or Codex, and it does the whole job for you. It drives the
@@ -84,6 +84,7 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | MatRIS | MatRIS-10M-OAM | candidate |
 | DPA4 | DPA-4.0.1-pro-MPtrj | candidate |
 | TACE | TACE-OAM-L | candidate |
+| Prophet | Prophet-OAME-MBD | unsupported |
 <!-- STATUS_TABLE_END -->
 
 The **sm120** column is the newest GPU generation (Blackwell): its state is measured

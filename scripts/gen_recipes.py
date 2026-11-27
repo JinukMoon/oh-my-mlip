@@ -58,6 +58,7 @@ CHK = {
     "AlphaNet": "AlphaNet-v1-OMA", "Eqnorm": "Eqnorm-MPtrj", "fairchemv1": "eSEN-30M-OAM",
     "EquiformerV3": "EqV3-OMatMPtrjSalex", "MatRIS": "MatRIS-10M-OAM",
     "DPA4": "DPA-4.0.1-pro-MPtrj", "TACE": "TACE-OAM-L", "EquFlash": "EquFlashV2",
+    "Prophet": "Prophet-OAME-MBD",
 }
 
 

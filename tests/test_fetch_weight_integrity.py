@@ -91,7 +91,8 @@ def test_only_targets_that_are_the_download_are_size_checked():
     """Registry-wide guard. A variant is size-checked only when its single
     inference target is the downloaded artifact itself. This set was confirmed
     by comparing each recorded weights_size with the real file on a host that
-    had them all (2026-09-21): the six below matched byte for byte, while
+    had them all (2026-09-21): the six below matched byte for byte (Prophet-OAME-MBD
+    added 2026-11-28: 250,015,145 B, the size published with its sha256), while
     DPA-3.1-3M-FT and PET-OAM-XL are derived by a prepare step and did not. A new
     variant joining this set is a conscious decision, not an accident."""
     import json
@@ -111,7 +112,8 @@ def test_only_targets_that_are_the_download_are_size_checked():
                     and not fetch._derives_its_target(spec)):
                 checked.add(version)
     assert checked == {"Nequix-MP-1", "eSEN-30M-OAM", "EqV3-OMatMPtrjSalex",
-                       "EquFlashV2", "EquFlash-v1", "DPA-4.0.1-pro-MPtrj"}
+                       "EquFlashV2", "EquFlash-v1", "DPA-4.0.1-pro-MPtrj",
+                       "Prophet-OAME-MBD"}
 
 
 def test_a_missing_compiled_model_names_the_arch_and_the_compile_command(tmp_path: Path, monkeypatch):

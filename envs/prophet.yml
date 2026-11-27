@@ -1,0 +1,42 @@
+# build_status: clean
+# oh-my-mlip env recipe: Prophet (prophet-mlip, Kairos Materials)
+#
+# Pins: python 3.11.13 / torch 2.7.1+cu126 / prophet-mlip at the commit Matbench
+# Discovery pins for Prophet-OAME-MBD / openequivariance 0.6.8.
+#
+#   - prophet-mlip is not on PyPI: installed from github.com/kairosmaterial/prophet
+#     at dcfdc0b143978652d573630f1d2a6ce09e0c610a with the [kernel] extra.
+#   - openequivariance is pinned to 0.6.8: left free, pip takes 0.8.x, which
+#     needs torch >= 2.10, and use_kernel=True then fails ("OpenEquivariance
+#     requires PyTorch >= 2.10"). With use_kernel=True the results match the e3nn
+#     path (energy <= 0.0035 meV/atom, forces <= 0.001 meV/A), about 2x faster
+#     and with a third of the GPU memory.
+#   - OpenEquivariance JIT-compiles its kernels at the first call (about 25 s,
+#     once per user, into the torch extensions cache): it needs nvcc, nvrtc, the
+#     cuBLAS headers, the libcuda link stub and ninja, all from this env.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install catbench==1.1.7`, WITH deps).
+name: prophet
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.13
+  - pip
+  # CUDA 12.6 toolchain (nvcc for the D3 kernel and OpenEquivariance's JIT)
+  - cuda-nvcc=12.6.*
+  - cuda-nvrtc-dev=12.6.85
+  - cuda-driver-dev=12.6.77
+  - libcublas-dev=12.6.4.1
+  # ase is pinned to avoid upstream breakage. verify_determinism verifies the pin.
+  - ase=3.29.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu126
+      - torch==2.7.1+cu126
+      - torch-geometric==2.8.1
+      - e3nn==0.6.0
+      - matscipy==1.3.1
+      - openequivariance==0.6.8
+      - ninja==1.13.0
+      - prophet-mlip[kernel] @ git+https://github.com/kairosmaterial/prophet.git@dcfdc0b143978652d573630f1d2a6ce09e0c610a

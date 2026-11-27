@@ -875,6 +875,27 @@ UPSTREAM_FT: dict[str, dict] = {
         evidence=["https://github.com/yzchen08/eqnorm/blob/main/README.md",
                   "https://github.com/yzchen08/eqnorm (full repo tree, GitHub trees API)"],
     ),
+    "Prophet": dict(
+        status="not-supported",
+        entrypoint=None,
+        src="https://github.com/kairosmaterial/prophet",
+        cmd=None,
+        config=None,
+        data_format=None,
+        foundation=None,
+        semantics=None,
+        selector_kind=None,
+        selector_path=None,
+        runnable_as_installed=False,
+        blockers=["no trainer, loss, dataset or optimizer code exists in the released "
+                  "package or the public repo (prophet/ holds only the calculator, graph "
+                  "and model modules)"],
+        licence=None,
+        note="The public release is inference-only: the repo tree at the pinned commit "
+             "dcfdc0b and on main (GitHub trees API) has no training script, CLI or "
+             "config.",
+        evidence=["https://github.com/kairosmaterial/prophet (full repo tree at dcfdc0b and main, GitHub trees API)"],
+    ),
     "PET": dict(
         status="documented",
         entrypoint="mtt train options-ft.yaml -o model-ft.pt",

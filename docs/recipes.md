@@ -1478,3 +1478,55 @@ Check it works: `python3 $OMM/scripts/setup_verify.py TACE-OAM-L --json` (prints
 > **Note:** Looking up the foundation key is what downloads the model. Enable only one accelerator backend. torch.cuda.is_available() can return true on a host below the driver floor and fail later at use time, so check the driver and pass device='cpu' from the start if it is short.
 
 ---
+
+## Prophet — env `prophet`
+
+pin: python 3.11.13 · torch==2.7.1+cu126 · variants: `Prophet-OAME-MBD`
+
+### A. install
+
+Upstream ([source](https://github.com/kairosmaterial/prophet)) — requires: Python >= 3.11, PyTorch >= 2.7:
+
+```bash
+pip install "prophet-mlip[kernel] @ git+https://github.com/kairosmaterial/prophet.git"
+```
+
+Pinned combination:
+
+```bash
+conda env create -f $OMM/envs/prophet.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.11.13 pip cuda-nvcc=12.6.* cuda-nvrtc-dev=12.6.85 cuda-driver-dev=12.6.77 libcublas-dev=12.6.4.1 ase=3.29.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 torch-geometric==2.8.1 e3nn==0.6.0 matscipy==1.3.1 openequivariance==0.6.8 ninja==1.13.0 prophet-mlip[kernel] @ git+https://github.com/kairosmaterial/prophet.git@dcfdc0b143978652d573630f1d2a6ce09e0c610a
+<prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
+```
+
+On sm120: **not supported** — torch 2.7.1+cu126 carries no sm120 kernels and no sibling recipe for sm120 has been built and checked. `install.sh` stops before installing.
+
+### B. weights
+
+Upstream acquisition ([source](https://huggingface.co/kairosmaterial/prophet)):
+
+```bash
+# Upstream: download the checkpoint and pass its path to KairosCalculator(model_path=...)
+curl -L "https://huggingface.co/kairosmaterial/prophet/resolve/main/prophet-oame-mbd.pt" -o prophet-oame-mbd.pt
+echo "28b21122f4c6c1a7c5fe9bac8a0182edf9d24a7a65a72a9ca80b8d12d4620514  prophet-oame-mbd.pt" | sha256sum -c -
+```
+
+### C. ASE calculator
+
+`Prophet-OAME-MBD`
+
+```python
+from prophet import KairosCalculator
+calc = KairosCalculator(model_path='$OMM/models/prophet/prophet-oame-mbd.pt', use_kernel=True, device='cuda')
+atoms.calc = calc
+```
+
+Run: `<prefix>/bin/python script.py` — never `conda activate`.
+
+Check it works: `python3 $OMM/scripts/setup_verify.py Prophet-OAME-MBD --json` (prints energy + forces; exit 0 on success).
+
+> **Note:** Not on PyPI. The [kernel] extra adds OpenEquivariance, which compiles its kernels at the first call (it needs nvcc and the CUDA headers); use_kernel=False runs on plain e3nn and also on CPU.
+
+---
