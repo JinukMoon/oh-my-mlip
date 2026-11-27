@@ -454,7 +454,10 @@ def resolve_foundation_checkpoint(version: str, resolved: dict) -> str:
     override = _FOUNDATION_OVERRIDE.get(version)
     if override:
         return override.replace("${OH_MY_MLIP_HOME}", reg.home())
-    for line in resolved["inference"]:
+    # the line that builds the calculator; check lines before it (a version or
+    # head guard) also hold quoted strings
+    lines = [ln for ln in resolved["inference"] if re.match(r"\s*(calc|model|orbff|predictor)\s*=", ln)]
+    for line in lines or resolved["inference"]:
         m = _QUOTED_RE.search(line)
         if m:
             return m.group(1)
@@ -918,9 +921,11 @@ def build_grace(ctx: Context) -> CommandSpec:
             "reference_energy": 0,
         },
         "potential": {
-            # The registry version key IS the upstream foundation-model name
-            # (tensorpotential.calculator.foundation_models.MODELS_METADATA).
-            "finetune_foundation_model": ctx.version,
+            # The upstream foundation-model name
+            # (tensorpotential.calculator.foundation_models.MODELS_METADATA) is the
+            # variant's weights_source; for GRACE-2L-OAM it equals the version key,
+            # for GRACE-2L/3L-OAM-L it is GRACE-2L/3L-OMAT-large-ft-AM.
+            "finetune_foundation_model": ctx.resolved.get("weights_source") or ctx.version,
             # Restrict the chemical embedding to the elements in the data.
             "reduce_elements": True,
         },

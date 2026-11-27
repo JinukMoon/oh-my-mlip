@@ -40,6 +40,8 @@ How to read the columns:
 | DPA-3.1-3M-FT | DeePMD | on-demand-hf | no | candidate | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
 | ORB-v3 | ORB | auto-download | no | validated | [GitHub](https://github.com/orbital-materials/orb-models){ .md-button .omm-repo } |
 | GRACE-2L-OAM | GRACE | on-demand-hf | no | candidate | [GitHub](https://github.com/ICAMS/grace-tensorpotential){ .md-button .omm-repo } |
+| GRACE-2L-OAM-L | GRACE | on-demand-hf | no | not checked | [GitHub](https://github.com/ICAMS/grace-tensorpotential){ .md-button .omm-repo } |
+| GRACE-3L-OAM-L | GRACE | on-demand-hf | no | not checked | [GitHub](https://github.com/ICAMS/grace-tensorpotential){ .md-button .omm-repo } |
 | MatterSim-v1-5M | MatterSim | auto-download | no | validated | [GitHub](https://github.com/microsoft/mattersim){ .md-button .omm-repo } |
 | CHGNet-v0.3.0 | CHGNet | bundled | no | validated | [GitHub](https://github.com/CederGroupHub/chgnet){ .md-button .omm-repo } |
 | AlphaNet-v1-OMA | AlphaNet | on-demand-hf | no | validated | [GitHub](https://github.com/zmyybc/AlphaNet){ .md-button .omm-repo } |

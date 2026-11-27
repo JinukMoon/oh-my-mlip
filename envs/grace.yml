@@ -2,7 +2,11 @@
 # oh-my-mlip env recipe: GRACE (tensorpotential) — TensorFlow backend
 #
 # Pins mirror the official GRACE install (gracemaker.readthedocs.io):
-# python 3.11 / tensorflow[and-cuda]==2.16.2 / tensorpotential==0.5.3 — all PUBLIC PyPI.
+# python 3.11 / tensorflow[and-cuda]==2.16.2 / tensorpotential==0.6.2.1 — all PUBLIC PyPI.
+#   - tensorpotential 0.6.2.1 (0.5.3 is yanked on PyPI) loads the GRACE-*-OAM-L
+#     foundation models (GRACE-3L needs >= 0.6); GRACE-2L-OAM gives bit-identical
+#     energies and forces under 0.5.3 and 0.6.2.1. tf_keras is pinned to the TF 2.16
+#     series it pairs with. Licence: Academic Software License (ASL).
 # install.sh build-from-recipe is the PRIMARY path.
 #
 #   - GRACE is TensorFlow-ONLY — the upstream docs state there is NO PyTorch
@@ -32,4 +36,5 @@ dependencies:
   - pip:
       # TensorFlow-only stack (no torch -> no nvrtc conflict). Public PyPI.
       - tensorflow[and-cuda]==2.16.2
-      - tensorpotential==0.5.3
+      - tensorpotential==0.6.2.1
+      - tf_keras==2.16.0

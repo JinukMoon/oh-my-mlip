@@ -1161,3 +1161,14 @@ def test_energy_and_force_keys_reach_the_converter(tmp_path, monkeypatch):
                           python_bin="/x/python", energy_key="dft_E", force_key="dft_F")
     cmd = seen["cmd"]
     assert cmd[cmd.index("--energy-key") + 1] == "dft_E" and cmd[cmd.index("--force-key") + 1] == "dft_F"
+
+
+def test_grace_finetune_names_the_upstream_foundation_model(tmp_path):
+    """gracemaker looks the foundation model up by its upstream name, which for the
+    -OAM-L variants differs from the registry key (GRACE-3L-OMAT-large-ft-AM)."""
+    import yaml
+    for version, upstream in (("GRACE-2L-OAM", "GRACE-2L-OAM"), ("GRACE-3L-OAM-L", "GRACE-3L-OMAT-large-ft-AM")):
+        ctx = _ctx(version, tmp_path / version)
+        spec = ft_run.build_grace(ctx)
+        cfg = yaml.safe_load(spec.config_text)
+        assert cfg["potential"]["finetune_foundation_model"] == upstream

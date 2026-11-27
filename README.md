@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Every major MLIP in one place, run by your LLM.** oh-my-mlip gathers 20
-machine-learning interatomic-potential frameworks (32 model variants) behind
+machine-learning interatomic-potential frameworks (34 model variants) behind
 one registry: each installs into its own conda env from a pinned recipe, and
 every one is installed, used, benchmarked, fine-tuned and distilled the same
 way. Ask Claude Code or Codex, and it does the whole job for you. It drives the
@@ -71,7 +71,7 @@ Gated models (UMA, eSEN) need a Hugging Face login first — see [Gated models](
 | Nequix | Nequix-MP-1 | validated |
 | DeePMD | DPA-3.1-3M-FT | candidate |
 | ORB | ORB-v3 | validated |
-| GRACE | GRACE-2L-OAM | candidate |
+| GRACE | GRACE-2L-OAM, GRACE-2L-OAM-L, GRACE-3L-OAM-L | partly validated |
 | MatterSim | MatterSim-v1-5M | validated |
 | CHGNet | CHGNet-v0.3.0 | validated |
 | AlphaNet | AlphaNet-v1-OMA | validated |

@@ -331,11 +331,25 @@ data.filename accepts extxyz (dispatched by extension, read via ase.io.read(...,
 python3 $OMM/scripts/ft_run.py GRACE-2L-OAM --dataset <your-dataset> --out ft_grace-2l-oam
 ```
 
+`GRACE-2L-OAM-L`:
+
+```bash
+python3 $OMM/scripts/ft_run.py GRACE-2L-OAM-L --dataset <your-dataset> --out ft_grace-2l-oam-l
+```
+
+`GRACE-3L-OAM-L`:
+
+```bash
+python3 $OMM/scripts/ft_run.py GRACE-3L-OAM-L --dataset <your-dataset> --out ft_grace-3l-oam-l
+```
+
 ### D. Per-variant support matrix
 
 | variant | status | runnable_as_installed | licence |
 |---|---|---|---|
 | `GRACE-2L-OAM` | documented | True | — |
+| `GRACE-2L-OAM-L` | documented | True | — |
+| `GRACE-3L-OAM-L` | documented | True | — |
 
 ---
 
