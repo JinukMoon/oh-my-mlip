@@ -408,7 +408,9 @@ def test_tace_builder_full_finetune_config_and_prestage(tmp_path):
     assert spec.pre_steps == [[ctx.resolved["python"], str(ctx.out / "tace_prestage.py")]]
     prestage = (ctx.out / "tace_prestage.py").read_text()
     compile(prestage, "tace_prestage.py", "exec")
-    assert "NAME = 'TACE-OAM-L'" in prestage and "tace_foundations[NAME]" in prestage
+    # the registry's explicit checkpoint, not a fresh download by name
+    assert "NAME = '" in prestage and "tace_foundations[NAME]" in prestage  # fallback kept for a bare name
+    assert "models/tace/TACE-OAM-L.pt" in prestage
     cfg = yaml.safe_load(spec.config_text)
     assert cfg["finetune"] is None and cfg["resume_from_model"] is None
     assert "finetune_from_model" in cfg              # filled by the prestage step

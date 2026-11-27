@@ -110,8 +110,11 @@ def test_only_targets_that_are_the_download_are_size_checked():
                     and not fetch._looks_like_dir_target(Path(targets[0]))
                     and not fetch._derives_its_target(spec)):
                 checked.add(version)
+    # TACE-OAM-L and TECE-OAM-RRA-1.0 joined 2026-11-27: their inference lines load the
+    # downloaded .pt itself, checked by a real download against size and sha256
     assert checked == {"Nequix-MP-1", "eSEN-30M-OAM", "EqV3-OMatMPtrjSalex",
-                       "EquFlashV2", "EquFlash-v1", "DPA-4.0.1-pro-MPtrj"}
+                       "EquFlashV2", "EquFlash-v1", "DPA-4.0.1-pro-MPtrj",
+                       "TACE-OAM-L", "TECE-OAM-RRA-1.0"}
 
 
 def test_a_missing_compiled_model_names_the_arch_and_the_compile_command(tmp_path: Path, monkeypatch):

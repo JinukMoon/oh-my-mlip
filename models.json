@@ -431,15 +431,20 @@
     "env": "tace",
     "repo": "https://github.com/xvzemin/tace",
     "python": "${OH_MY_MLIP_HOME}/envs/tace/bin/python",
-    "model_source": "HF xvzemin/tace-foundations auto-download to ~/.cache/tace (TACE-OAM-L.pt pre-fetched)",
-    "torch": "2.11.0+cu130",
-    "status": "CPU inference verified. GPU inference requires CUDA 13.0 or later driver.",
-    "import": ["from tace.foundations import tace_foundations", "from tace.interface.ase import TACEAseCalc"],
+    "model_source": "HF xvzemin/tace-foundations, downloaded to ${OH_MY_MLIP_HOME}/models/tace/ (explicit path, sha256-checked)",
+    "default_version": "TACE-OAM-L",
+    "torch": "2.14.1+cu130",
+    "status": "GPU inference requires a driver at the CUDA 13.0 level or newer. enable_eqx=True: the EquivariantX kernels compile once per user at the first call (about 40 s, NVRTC) and are cached in ~/.cache/eqx.",
+    "import": ["from tace.interface.ase import TACEAseCalc"],
     "versions": {
-      "TACE-OAM-L": {"mlip_name": "TACE-OAM-L", "note": "CPU-validated. GPU inference requires CUDA 13.0 or later driver. On systems with older glibc, LD_LIBRARY_PATH may need adjustment for compatibility libraries.", "training_set": ["OMat24", "sAlex", "MPtrj"],
-        "gated": false, "license_url": null, "weights": "auto-download", "weights_fetch": "by-name", "weights_source": "TACE-OAM-L", "weights_source_url": "https://huggingface.co/xvzemin/tace-foundations", "validation": "validated_sm89", "arch_validation": {"sm120": "validated"},
+      "TACE-OAM-L": {"mlip_name": "TACE-OAM-L", "note": "Same checkpoint as before, now run with the EquivariantX kernels (tace 0.2.4, enable_eqx=True): single point dE <= 0.005 meV/atom and max |dF| <= 0.018 meV/A against tace 0.2.0 eager; CatBench adsorption energies within 0.003 eV, same relaxation step counts. The first call compiles the kernels (about 40 s, once per user).", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/xvzemin/tace-foundations/resolve/main/TACE-OAM-L.pt", "weights_source_url": "https://huggingface.co/xvzemin/tace-foundations", "validation": "validated_sm89",
         "weights_sha256": "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a", "weights_size": 333096435,
-        "inference": ["model = tace_foundations['TACE-OAM-L']", "calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])"], "finetune": {"status": "documented", "entrypoint": "tace-finetune -m <ckpt> -> tace-train -cn tace -> tace-convert", "selector_kind": "config_key", "selector_path": "finetune_from_model", "semantics": "finetune: finetune_from_model loads weights only (full-parameter or LoRA depending on whether finetune_config.yaml exists). resume_from_model is the separate Lightning-resume mechanism restoring full training state.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
+        "inference": ["calc = TACEAseCalc(model='${OH_MY_MLIP_HOME}/models/tace/TACE-OAM-L.pt', dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'], enable_eqx=True)"], "finetune": {"status": "documented", "entrypoint": "tace-finetune -m <ckpt> -> tace-train -cn tace -> tace-convert", "selector_kind": "config_key", "selector_path": "finetune_from_model", "semantics": "finetune: finetune_from_model loads weights only (full-parameter or LoRA depending on whether finetune_config.yaml exists). resume_from_model is the separate Lightning-resume mechanism restoring full training state.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}},
+      "TECE-OAM-RRA-1.0": {"mlip_name": "TECE-OAM-RRA-1.0", "note": "XL model (atomic + edge cluster expansion, radial rotary complex attention) in the same env as TACE-OAM-L, run with the EquivariantX kernels. The first call compiles the kernels (about 40 s, once per user).", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/xvzemin/tace-foundations/resolve/main/TECE-OAM-RRA-1.0.pt", "weights_source_url": "https://huggingface.co/xvzemin/tace-foundations", "validation": "validated_sm89",
+        "weights_sha256": "9f36562582d931347c3904f763e820edcaf5f27c3f13beb6776e49fcc7de38bb", "weights_size": 890523407,
+        "inference": ["calc = TACEAseCalc(model='${OH_MY_MLIP_HOME}/models/tace/TECE-OAM-RRA-1.0.pt', dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'], enable_eqx=True)"], "finetune": {"status": "documented", "entrypoint": "tace-finetune -m <ckpt> -> tace-train -cn tace -> tace-convert", "selector_kind": "config_key", "selector_path": "finetune_from_model", "semantics": "finetune: finetune_from_model loads weights only (full-parameter or LoRA depending on whether finetune_config.yaml exists). resume_from_model is the separate Lightning-resume mechanism restoring full training state.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
   }
 }

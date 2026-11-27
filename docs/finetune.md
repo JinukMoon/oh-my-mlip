@@ -782,10 +782,17 @@ Best of the 20: no conversion needed. dataset.type: ase reads any file ase.io.re
 python3 $OMM/scripts/ft_run.py TACE-OAM-L --dataset <your-dataset> --out ft_tace-oam-l
 ```
 
+`TECE-OAM-RRA-1.0`:
+
+```bash
+python3 $OMM/scripts/ft_run.py TECE-OAM-RRA-1.0 --dataset <your-dataset> --out ft_tece-oam-rra-1.0
+```
+
 ### D. Per-variant support matrix
 
 | variant | status | runnable_as_installed | licence |
 |---|---|---|---|
 | `TACE-OAM-L` | documented | True | — |
+| `TECE-OAM-RRA-1.0` | documented | True | — |
 
 ---
