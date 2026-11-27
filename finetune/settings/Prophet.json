@@ -1,0 +1,11 @@
+{
+  "framework": "Prophet",
+  "pinned": "prophet-mlip @ git+https://github.com/kairosmaterial/prophet.git@dcfdc0b143978652d573630f1d2a6ce09e0c610a",
+  "entrypoint": "none for training; inference only: KairosCalculator(model_path=..., use_kernel=True, device='cuda')",
+  "stress": {
+    "supported": true,
+    "how_enabled": "inference only: KairosCalculator implements stress (prophet/calculator.py)"
+  },
+  "runnable_as_pinned": "not-supported",
+  "settings": []
+}

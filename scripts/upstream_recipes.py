@@ -194,6 +194,18 @@ UPSTREAM: dict[str, dict] = {
         note="Upstream documents neither the cache path nor the download URL — both come "
              "from the package's own url_dict.",
     ),
+    "Prophet": dict(
+        src="https://github.com/kairosmaterial/prophet",
+        pip=["pip install \"prophet-mlip[kernel] @ git+https://github.com/kairosmaterial/prophet.git\""],
+        req="Python >= 3.11, PyTorch >= 2.7",
+        fetch_src="https://huggingface.co/kairosmaterial/prophet",
+        fetch=["# Upstream: download the checkpoint and pass its path to KairosCalculator(model_path=...)",
+               "curl -L \"https://huggingface.co/kairosmaterial/prophet/resolve/main/prophet-oame-mbd.pt\" -o prophet-oame-mbd.pt",
+               "echo \"{sha}  prophet-oame-mbd.pt\" | sha256sum -c -"],
+        note="Not on PyPI. The [kernel] extra adds OpenEquivariance, which compiles its "
+             "kernels at the first call (it needs nvcc and the CUDA headers); "
+             "use_kernel=False runs on plain e3nn and also on CPU.",
+    ),
     "fairchemv1": dict(
         src="https://github.com/facebookresearch/fairchem",
         pip=["pip install fairchem-core"],

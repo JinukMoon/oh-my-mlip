@@ -125,7 +125,7 @@ FAMILY_DATASET_TARGET = {
     "AlphaNet": "alphanet",
     # not-supported upstream (registry status not-supported, refused at exit 2
     # before any dataset is built); listed so the table stays exhaustive.
-    "Eqnorm": "extxyz", "MatRIS": "extxyz",
+    "Eqnorm": "extxyz", "MatRIS": "extxyz", "Prophet": "extxyz",
 }
 
 # ft_run's own exit code for "registry says go, but this hub has no real

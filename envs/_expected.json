@@ -125,6 +125,10 @@
     "python": "3.11.14",
     "cu": "cu128"
   },
+  "prophet": {
+    "python": "3.11.13",
+    "cu": "cu126"
+  },
   "sevennet": {
     "python": "3.11.13",
     "cu": "cu126"

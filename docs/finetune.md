@@ -789,3 +789,30 @@ python3 $OMM/scripts/ft_run.py TACE-OAM-L --dataset <your-dataset> --out ft_tace
 | `TACE-OAM-L` | documented | True | — |
 
 ---
+
+## Prophet — env `prophet`
+
+### A. What upstream documents
+
+Upstream ([source](https://github.com/kairosmaterial/prophet)):
+
+_No fine-tuning command exists upstream — see block D for why._
+
+> **Note:** The public release is inference-only: the repo tree at the pinned commit dcfdc0b and on main (GitHub trees API) has no training script, CLI or config.
+
+### B. Dataset format
+
+n/a.
+
+### C. The command this hub generates
+
+`Prophet-OAME-MBD` -- **not-supported**. `ft_run.py Prophet-OAME-MBD` refuses (exit 2): public release is inference-only
+  - evidence: https://github.com/kairosmaterial/prophet (full repo tree at dcfdc0b and main, GitHub trees API)
+
+### D. Per-variant support matrix
+
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `Prophet-OAME-MBD` | not-supported | False | — |
+
+---

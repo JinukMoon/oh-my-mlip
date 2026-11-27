@@ -441,5 +441,21 @@
         "weights_sha256": "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a", "weights_size": 333096435,
         "inference": ["model = tace_foundations['TACE-OAM-L']", "calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])"], "finetune": {"status": "documented", "entrypoint": "tace-finetune -m <ckpt> -> tace-train -cn tace -> tace-convert", "selector_kind": "config_key", "selector_path": "finetune_from_model", "semantics": "finetune: finetune_from_model loads weights only (full-parameter or LoRA depending on whether finetune_config.yaml exists). resume_from_model is the separate Lightning-resume mechanism restoring full training state.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
+  },
+  "Prophet": {
+    "env": "prophet",
+    "repo": "https://github.com/kairosmaterial/prophet",
+    "python": "${OH_MY_MLIP_HOME}/envs/prophet/bin/python",
+    "model_source": "HF kairosmaterial/prophet (revision f9a54df8), downloaded to ${OH_MY_MLIP_HOME}/models/prophet/ (explicit path, sha256-checked)",
+    "torch": "2.7.1+cu126",
+    "status": "use_kernel=True: OpenEquivariance compiles its kernels once per user at the first call (about 25 s).",
+    "import": ["from prophet import KairosCalculator"],
+    "versions": {
+      "Prophet-OAME-MBD": {"mlip_name": "Prophet-OAME-MBD", "note": "Prophet (Kairos Materials), the Matbench Discovery checkpoint. Its total energies use another reference than the PBE-type models (Pt(111)+O2: -25.5 eV against about -72 eV), so compare reaction or adsorption energies computed with the same model only; CatBench computes the gas molecules with the model itself. Weights CC-BY-4.0; one training set (ELEMENTA) is CC-BY-NC-4.0 and part of the training data is not public.", "training_set": ["OMat24", "sAlex", "MPtrj", "ELEMENTA (CC-BY-NC-4.0)", "non-public data"],
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://huggingface.co/kairosmaterial/prophet/resolve/f9a54df874ba52b8b35e7d3f7f348b46e0135563/prophet-oame-mbd.pt", "weights_source_url": "https://huggingface.co/kairosmaterial/prophet", "validation": "gpu_pending",
+        "weights_sha256": "28b21122f4c6c1a7c5fe9bac8a0182edf9d24a7a65a72a9ca80b8d12d4620514", "weights_size": 250015145,
+        "finetune": {"status": "not-supported", "entrypoint": null, "selector_kind": null, "selector_path": null, "semantics": null, "runnable_as_installed": false, "blockers": ["no trainer, loss, dataset or optimizer code exists in the released package or the public repo (prophet/ holds only the calculator, graph and model modules)"], "licence": null, "reason": "public release is inference-only", "evidence": ["https://github.com/kairosmaterial/prophet (full repo tree at dcfdc0b and main, GitHub trees API)"]},
+        "inference": ["calc = KairosCalculator(model_path='${OH_MY_MLIP_HOME}/models/prophet/prophet-oame-mbd.pt', use_kernel=True, device='cuda')"]}
+    }
   }
 }
