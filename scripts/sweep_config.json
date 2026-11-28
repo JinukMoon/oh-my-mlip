@@ -19,6 +19,7 @@
     {"family": "EquFlash",     "env": "equflash",      "verify_model": "EquFlashV2",          "gated": false, "compile": false, "tier": "roster"},
     {"family": "MatRIS",       "env": "matris",        "verify_model": "MatRIS-10M-OAM",      "gated": false, "compile": false, "tier": "roster"},
     {"family": "TACE",         "env": "tace",          "verify_model": "TACE-OAM-L",          "gated": false, "compile": false, "tier": "roster"},
+    {"family": "MACE-SOYO",    "env": "mace_soyo",     "verify_model": "MACE-SOYO-OAM",       "gated": false, "compile": true,  "tier": "roster"},
     {"family": "EquiformerV3", "env": "equiformer_v3", "verify_model": "EqV3-OMatMPtrjSalex", "gated": false, "compile": false, "tier": "roster"},
     {"family": "fairchemv1",   "env": "fairchemv1",    "verify_model": "eSEN-30M-OAM",        "gated": true,  "compile": false, "tier": "gated"},
     {"family": "UMA",          "env": "uma",           "verify_model": "UMA-m-1p1-OC20",      "gated": true,  "compile": false, "tier": "gated"}

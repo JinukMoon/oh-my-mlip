@@ -194,6 +194,20 @@ UPSTREAM: dict[str, dict] = {
         note="Upstream documents neither the cache path nor the download URL — both come "
              "from the package's own url_dict.",
     ),
+    "MACE-SOYO": dict(
+        src="https://github.com/PrincessHakuryu/MACE-SOYO",
+        pip=["pip install -r requirements.txt   # from a clone, at the repository root; it ends with '.'"],
+        req="Python >= 3.12, < 3.15; PyTorch 2.12 recommended; an NVIDIA CUDA GPU (CPU is rejected)",
+        fetch_src="https://github.com/PrincessHakuryu/MACE-SOYO/releases/tag/v0.1",
+        fetch=["# Upstream: download the training checkpoint, then export an AOTI package on the GPU",
+               "curl -L \"https://github.com/PrincessHakuryu/MACE-SOYO/releases/download/v0.1/mace_soyo_oam.pth\" -o mace_soyo_oam.pth",
+               "echo \"{sha}  mace_soyo_oam.pth\" | sha256sum -c -",
+               "python -m mace_soyo.export.AOTI_export --ckpt-path mace_soyo_oam.pth --structure-file <example.xyz> \\",
+               "    --output-path model.pt2 --device cuda:0 --dtype float32"],
+        note="The .pt2 is not portable across GPU architectures: export once per arch. "
+             "The export needs nvcc. MACECalculator does not load this model; use "
+             "MACESoyoCalculator(package_path=..., head='salexmp').",
+    ),
     "fairchemv1": dict(
         src="https://github.com/facebookresearch/fairchem",
         pip=["pip install fairchem-core"],

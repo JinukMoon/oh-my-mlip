@@ -1478,3 +1478,58 @@ Check it works: `python3 $OMM/scripts/setup_verify.py TACE-OAM-L --json` (prints
 > **Note:** Looking up the foundation key is what downloads the model. Enable only one accelerator backend. torch.cuda.is_available() can return true on a host below the driver floor and fail later at use time, so check the driver and pass device='cpu' from the start if it is short.
 
 ---
+
+## MACE-SOYO — env `mace_soyo`
+
+pin: python 3.12.12 · torch==2.12.0+cu126 · variants: `MACE-SOYO-OAM`
+
+### A. install
+
+Upstream ([source](https://github.com/PrincessHakuryu/MACE-SOYO)) — requires: Python >= 3.12, < 3.15; PyTorch 2.12 recommended; an NVIDIA CUDA GPU (CPU is rejected):
+
+```bash
+pip install -r requirements.txt   # from a clone, at the repository root; it ends with '.'
+```
+
+Pinned combination:
+
+```bash
+conda env create -f $OMM/envs/mace_soyo.yml -p <prefix>
+#   equivalent explicit form:
+#     conda create -y -p <prefix> --override-channels -c conda-forge -c nvidia python=3.12.12 pip cuda-nvcc=12.6.* cuda-nvrtc-dev=12.6.85 cuda-driver-dev=12.6.77 libcublas-dev=12.6.4.1
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu126 torch==2.12.0+cu126 cuequivariance==0.12.0 cuequivariance-torch==0.12.0 cuequivariance-ops-cu12==0.12.0 cuequivariance-ops-torch-cu12==0.12.0 nvalchemi-toolkit-ops[torch]==0.4.1 warp-lang==1.13.0 torch-ema==0.3 torch-geometric==2.7.0 torch-sim-atomistic==0.6.1 ase==3.29.0 ase-db-backends==0.11.0 lmdb==2.3.0 h5py==3.16.0 tables==3.11.1 numpy==2.4.6 scipy==1.18.1 PyYAML==6.0.3 tqdm==4.70.1 opt_einsum_fx==0.1.4 cffi==2.1.1 ninja==1.13.0 mace-soyo @ git+https://github.com/PrincessHakuryu/MACE-SOYO.git@387b5114c974fb04b8aceffac82d1d8f10ea4ac0
+<prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
+```
+
+On sm120: **not supported** — torch 2.12.0+cu126 carries no sm120 kernels and no sibling recipe for sm120 has been built and checked. `install.sh` stops before installing.
+
+### B. weights
+
+Upstream acquisition ([source](https://github.com/PrincessHakuryu/MACE-SOYO/releases/tag/v0.1)):
+
+```bash
+# Upstream: download the training checkpoint, then export an AOTI package on the GPU
+curl -L "https://github.com/PrincessHakuryu/MACE-SOYO/releases/download/v0.1/mace_soyo_oam.pth" -o mace_soyo_oam.pth
+echo "180784bad2fdee6aec58dae2cdb0d581ad1c4f3d2272d2857bce6315ea43b82b  mace_soyo_oam.pth" | sha256sum -c -
+python -m mace_soyo.export.AOTI_export --ckpt-path mace_soyo_oam.pth --structure-file <example.xyz> \
+    --output-path model.pt2 --device cuda:0 --dtype float32
+```
+
+### C. ASE calculator
+
+`MACE-SOYO-OAM`
+
+```python
+from mace_soyo.inference.ase_calc import MACESoyoCalculator
+calc = MACESoyoCalculator(package_path='$OMM/models/compiled/${OMM_ARCH}/MACE-SOYO-OAM_${OMM_ARCH}.pt2', head='salexmp', device='cuda:0', use_d3=False)
+if getattr(calc, 'head', None) != 'salexmp': raise RuntimeError(f"MACE-SOYO-OAM: the calculator selected head {getattr(calc, 'head', None)!r}, not 'salexmp'; available: {getattr(calc, 'available_heads', None)}")
+atoms.calc = calc
+```
+
+Run: `<prefix>/bin/python script.py` — never `conda activate`.
+
+Check it works: `python3 $OMM/scripts/setup_verify.py MACE-SOYO-OAM --json` (prints energy + forces; exit 0 on success).
+
+> **Note:** The .pt2 is not portable across GPU architectures: export once per arch. The export needs nvcc. MACECalculator does not load this model; use MACESoyoCalculator(package_path=..., head='salexmp').
+
+---

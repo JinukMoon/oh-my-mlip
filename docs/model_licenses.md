@@ -31,7 +31,7 @@ Two licenses matter separately:
 Everything else below is permissive (MIT / Apache-2.0 / BSD-3-Clause), commercial
 use allowed.
 
-## Full table — 20 frameworks / 32 model variants
+## Full table — 21 frameworks / 33 model variants
 
 | Framework | Our variant(s) | GitHub | Code license | Weights license | Gated |
 |---|---|---|---|---|---|
@@ -55,6 +55,7 @@ use allowed.
 | **MatRIS** | MatRIS-10M-OAM | [HPC-AI-Team/MatRIS](https://github.com/HPC-AI-Team/MatRIS) | BSD-3-Clause | CC BY 4.0 on the hosting figshare record ([30475253](https://figshare.com/articles/30475253)); the repo and [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/matris-10m-oam) declare BSD-3-Clause (both permissive) | no |
 | **DPA4** | DPA-4.0.1-pro-MPtrj | [deepmodeling/deepmd-kit](https://github.com/deepmodeling/deepmd-kit) | **LGPL-3.0** | CC-BY-4.0 (the hosting figshare record [32647224](https://figshare.com/articles/32647224); also declared on [Matbench Discovery](https://matbench-discovery.materialsproject.org/models/dpa-4.0.1-pro-mptrj)) | no |
 | **TACE** | TACE-OAM-L | [xvzemin/tace](https://github.com/xvzemin/tace) | MIT | CC-BY-4.0 ([xvzemin/tace-foundations](https://huggingface.co/xvzemin/tace-foundations)) | no |
+| **MACE-SOYO** | MACE-SOYO-OAM | [PrincessHakuryu/MACE-SOYO](https://github.com/PrincessHakuryu/MACE-SOYO) | MIT | MIT (the checkpoint is a release asset of the MIT-licensed repository) | no |
 
 ¹ MatterSim: only the two open checkpoints (1M / 5M) are MIT; more advanced versions are gated behind Azure Quantum Elements (commercial Microsoft platform).
 Weights licenses are read from the record that hosts the checkpoint file oh-my-mlip downloads: the Hugging Face license tag, the Zenodo or figshare record's license, or the repository LICENSE when the file lives in the repository. Where another upstream declaration disagrees, the table gives both.
@@ -94,7 +95,7 @@ in this table are mirrored.
 
 | Safe for commercial use (permissive) | Restricted — check before commercial use |
 |---|---|
-| MACE-MPA-0, NequIP⁴, Allegro⁴, Nequix, ORB, MatterSim (open), CHGNet, Eqnorm, EquiformerV3, PET, MatRIS⁴, TACE⁴, UMA¹, eSEN¹, DeePMD/DPA²,⁴ | **GRACE** (non-commercial), **MACE-MH-1** (non-commercial), **EquFlash** (non-commercial code; weight declarations conflict), **AlphaNet** (GPL-3.0 code; weight declarations conflict), **SevenNet** (weights license not stated) |
+| MACE-MPA-0, MACE-SOYO, NequIP⁴, Allegro⁴, Nequix, ORB, MatterSim (open), CHGNet, Eqnorm, EquiformerV3, PET, MatRIS⁴, TACE⁴, UMA¹, eSEN¹, DeePMD/DPA²,⁴ | **GRACE** (non-commercial), **MACE-MH-1** (non-commercial), **EquFlash** (non-commercial code; weight declarations conflict), **AlphaNet** (GPL-3.0 code; weight declarations conflict), **SevenNet** (weights license not stated) |
 
 ¹ UMA and eSEN: commercial use allowed under Meta's FAIR Chemistry License (UMA) and OMat24 License (eSEN), but the weights are gated and Meta's Acceptable Use Policy applies; the FAIR Chemistry License also requires compliance with applicable laws, including trade control laws.
 ² DeePMD / DPA4: LGPL-3.0 — commercial use of the library is allowed; copyleft applies only if you modify the library itself.
