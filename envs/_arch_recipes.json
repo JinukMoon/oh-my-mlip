@@ -31,6 +31,10 @@
       "status": "candidate",
       "reason": "sibling recipe not yet built and verified on sm120; base build passed"
     },
+    "dpa41": {
+      "recipe": null,
+      "reason": "not yet built and checked on sm120 (deepmd-kit is built from source here; no sm120 run)"
+    },
     "eqnorm": {
       "recipe": "eqnorm.cu128"
     },

@@ -195,7 +195,7 @@ def test_every_flag_knob_lands_on_a_setting_of_a_matching_type():
              "scheduler": "str", "precision": "str", "include_stress": "bool", "ema": "bool"}
     # settings a builder takes the flag's value for although upstream types them otherwise
     builder_exceptions = {("TACE", "dataset.train_dataloader"), ("TACE", "loss.loss_property"),
-                          ("CHGNet", "targets"), ("GRACE", "loss.stress"), ("DPA4", "numb_epoch"),
+                          ("CHGNet", "targets"), ("GRACE", "loss.stress"), ("DPA4", "numb_epoch"), ("DPA41", "numb_epoch"),
                           ("NequIP", "include stress (training_module.loss._target_: nequip.train.EnergyForceStressLoss)"),
                           ("Allegro", "include stress (training_module.loss._target_: nequip.train.EnergyForceStressLoss)")}
     tokens = {"int": {"int", "integer"}, "float": {"float"}, "str": {"str", "string"}, "bool": {"bool", "boolean"}}

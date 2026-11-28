@@ -99,6 +99,7 @@ CKPT_GLOBS = {
     "SevenNet": ["checkpoint_best.pth"],
     "DeePMD": ["model.ckpt-*.pt"],
     "DPA4": ["model.ckpt-*.pt"],
+    "DPA41": ["model.ckpt-*.pt"],
     "GRACE": ["seed/*/final_model/saved_model.pb"],
     "PET": ["model-ft.pt"],
     "NequIP": ["checkpoints/last.ckpt"],

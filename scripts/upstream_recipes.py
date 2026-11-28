@@ -301,6 +301,19 @@ UPSTREAM: dict[str, dict] = {
              "evicting libfabric. Built against torch cu130 — below a CUDA-13-class driver, "
              "run on CPU.",
     ),
+    "DPA41": dict(
+        src="https://github.com/deepmodeling/deepmd-kit",
+        pip=["DP_ENABLE_TENSORFLOW=0 DP_ENABLE_PYTORCH=1 pip install \"deepmd-kit @ git+https://github.com/deepmodeling/deepmd-kit@1ded5d2429467fb16cb1d6c3d3059fac881f82a7\" e3nn==0.6.0"],
+        req="Python 3.11, PyTorch with CUDA (the Matbench Discovery submission ran torch 2.13 + cu132; this hub pins 2.11 + cu130)",
+        fetch_src="https://matbench-discovery.materialsproject.org/models/dpa-4.1-air-oam",
+        fetch=["# Upstream: download the checkpoint (a torch zip) and keep the .pt name; a symlink",
+               "# or another suffix fails ('Cannot detect the backend')",
+               "curl -L \"https://ndownloader.figshare.com/files/70537293\" -o dpa-4.1-air-oam.pt",
+               "echo \"{sha}  dpa-4.1-air-oam.pt\" | sha256sum -c -"],
+        note="Not the deepmd-kit release in the dpa4 env: 3.2.0b0 fails to load DPA-4.1 and "
+             "this commit fails to load DPA-4.0.1. DP(model=..., freeze=True) writes a .pt2 "
+             "next to the checkpoint, so it fails where the checkpoint is read-only.",
+    ),
     "TACE": dict(
         src="https://tace.readthedocs.io/en/latest/install/install.html",
         pip=["pip install tace",

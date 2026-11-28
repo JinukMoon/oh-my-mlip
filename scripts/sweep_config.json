@@ -15,6 +15,7 @@
     {"family": "AlphaNet",     "env": "alphanet",      "verify_model": "AlphaNet-v1-OMA",     "gated": false, "compile": false, "tier": "roster"},
     {"family": "DeePMD",       "env": "deepmd",        "verify_model": "DPA-3.1-3M-FT",       "gated": false, "compile": false, "tier": "roster"},
     {"family": "DPA4",         "env": "dpa4",          "verify_model": "DPA-4.0.1-pro-MPtrj", "gated": false, "compile": false, "tier": "roster"},
+    {"family": "DPA41",        "env": "dpa41",         "verify_model": "DPA-4.1-Air-OAM",     "gated": false, "compile": false, "tier": "roster"},
     {"family": "PET",          "env": "pet",           "verify_model": "PET-OAM-XL",          "gated": false, "compile": false, "tier": "roster"},
     {"family": "EquFlash",     "env": "equflash",      "verify_model": "EquFlashV2",          "gated": false, "compile": false, "tier": "roster"},
     {"family": "MatRIS",       "env": "matris",        "verify_model": "MatRIS-10M-OAM",      "gated": false, "compile": false, "tier": "roster"},

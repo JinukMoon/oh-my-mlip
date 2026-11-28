@@ -249,7 +249,7 @@ def test_checkpoint_globs_come_from_the_shipped_ft_run_and_bundles_are_hashed_wh
 # owner's report, 2026-09-14, matching the SHIPPED ft_run.FAMILY_CHECKPOINT_GLOBS).
 EXPECTED_CKPT = {
     "MACE": "MACE-OMAT-0.model", "SevenNet": "checkpoint_best.pth", "DeePMD": "model.ckpt-100.pt",
-    "DPA4": "model.ckpt-100.pt", "GRACE": "seed/1/final_model/saved_model.pb", "PET": "model-ft.pt",
+    "DPA4": "model.ckpt-100.pt", "DPA41": "model.ckpt-100.pt", "GRACE": "seed/1/final_model/saved_model.pb", "PET": "model-ft.pt",
     "NequIP": "checkpoints/last.ckpt", "Allegro": "checkpoints/last.ckpt",
     "MatterSim": "results/best_model.pth", "TACE": "checkpoints_epoch/last.ckpt",
     "CHGNet": "chgnet_ft/bestE_epoch10_e1_f1.pth.tar",
@@ -352,7 +352,7 @@ def test_shipped_ft_run_glob_table_agrees_with_the_fine_tune_owner_report():
     globs = table["globs"]
     first = {
         "MACE": "{version}.model", "SevenNet": "checkpoint_best.pth", "DeePMD": "model.ckpt-*.pt",
-        "DPA4": "model.ckpt-*.pt", "GRACE": "seed/*/final_model/saved_model.pb", "PET": "model-ft.pt",
+        "DPA4": "model.ckpt-*.pt", "DPA41": "model.ckpt-*.pt", "GRACE": "seed/*/final_model/saved_model.pb", "PET": "model-ft.pt",
         "NequIP": "checkpoints/last.ckpt", "Allegro": "checkpoints/last.ckpt",
         "MatterSim": "results/best_model.pth", "TACE": "checkpoints_epoch/last.ckpt",
         "CHGNet": "chgnet_ft/bestE_*.pth.tar",

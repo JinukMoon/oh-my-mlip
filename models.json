@@ -441,5 +441,22 @@
         "weights_sha256": "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a", "weights_size": 333096435,
         "inference": ["model = tace_foundations['TACE-OAM-L']", "calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])"], "finetune": {"status": "documented", "entrypoint": "tace-finetune -m <ckpt> -> tace-train -cn tace -> tace-convert", "selector_kind": "config_key", "selector_path": "finetune_from_model", "semantics": "finetune: finetune_from_model loads weights only (full-parameter or LoRA depending on whether finetune_config.yaml exists). resume_from_model is the separate Lightning-resume mechanism restoring full training state.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
+  },
+  "DPA41": {
+    "env": "dpa41",
+    "repo": "https://github.com/deepmodeling/deepmd-kit",
+    "python": "${OH_MY_MLIP_HOME}/envs/dpa41/bin/python",
+    "model_source": "${OH_MY_MLIP_HOME}/models/dpa41/dpa-4.1-air-oam.pt (figshare file 70537293, the Matbench Discovery DPA-4.1-Air-OAM checkpoint)",
+    "torch": "2.11.0+cu130",
+    "note": "deepmd-kit built from commit 1ded5d2 in its own env: that version loads DPA-4.1 but not DPA-4.0.1, and the dpa4 env's 3.2.0b0 loads DPA-4.0.1 but not DPA-4.1. GPU inference needs a CUDA 13.0 or later driver.",
+    "import": ["from deepmd.calculator import DP"],
+    "versions": {
+      "DPA-4.1-Air-OAM": {"mlip_name": "DPA-4.1-Air-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"],
+        "note": "The light DPA-4.1 model (about 1.4 GB of GPU memory at 148 atoms). Loaded directly, without freeze=True: freezing writes a .pt2 next to the checkpoint.",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://figshare.com/ndownloader/files/70537293", "weights_source_url": "https://figshare.com/ndownloader/files/70537293", "validation": "validated_sm89",
+        "weights_sha256": "ab429ffd751220406d4fa0baada3526f4cc9c81f8d159bafe45ec17a8855a5af", "weights_size": 20714551,
+        "finetune": {"status": "documented", "entrypoint": "dp --pt train input.json --finetune <ckpt>", "selector_kind": "cli_flag", "selector_path": "--finetune", "semantics": "finetune: --finetune <ckpt> loads weights (fitting net re-initialized unless --use-pretrain-script or a matching model section is given). dpa-4.1-air-oam.pt is single-task (dp --pt show ... model-branch raises 'requires a multitask model') -- omit --model-branch.", "runnable_as_installed": false, "blockers": ["deepmd-kit at 1ded5d2 fails on the first training step of a DPA-4.1 fine-tune on GPU: the SeZM neighbor-graph builder (pt/model/model/sezm_model.py build_neighbor_list -> dpmodel/utils/region.py phys2inter) gets the cell on cpu and the coordinates on cuda (RuntimeError: Expected all tensors to be on the same device ... wrapper_CUDA_bmm); seen 2026-11-28 with ft_run --max-steps 100 on the demo set. Inference is not affected."], "note": "dpdata==1.1.0 is pinned in the environment for dataset preparation.", "licence": null, "reason": null},
+        "inference": ["calc = DP(model='${OH_MY_MLIP_HOME}/models/dpa41/dpa-4.1-air-oam.pt')"]}
+    }
   }
 }

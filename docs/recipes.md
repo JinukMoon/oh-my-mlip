@@ -1478,3 +1478,59 @@ Check it works: `python3 $OMM/scripts/setup_verify.py TACE-OAM-L --json` (prints
 > **Note:** Looking up the foundation key is what downloads the model. Enable only one accelerator backend. torch.cuda.is_available() can return true on a host below the driver floor and fail later at use time, so check the driver and pass device='cpu' from the start if it is short.
 
 ---
+
+## DPA41 — env `dpa41`
+
+pin: python 3.11.15 · torch==2.11.0+cu130 · variants: `DPA-4.1-Air-OAM`
+
+### A. install
+
+Upstream ([source](https://github.com/deepmodeling/deepmd-kit)) — requires: Python 3.11, PyTorch with CUDA (the Matbench Discovery submission ran torch 2.13 + cu132; this hub pins 2.11 + cu130):
+
+```bash
+DP_ENABLE_TENSORFLOW=0 DP_ENABLE_PYTORCH=1 pip install "deepmd-kit @ git+https://github.com/deepmodeling/deepmd-kit@1ded5d2429467fb16cb1d6c3d3059fac881f82a7" e3nn==0.6.0
+```
+
+Pinned combination:
+
+```bash
+bash $OMM/envs/dpa41.build.sh <prefix>      # single conda solve impossible -> the sidecar owns the build
+#   what the sidecar actually runs:
+#     conda create -y --prefix <prefix> --override-channels -c conda-forge -c nvidia \
+#     python=3.11.15 pip "cuda-nvcc=13.0.*" "cuda-cudart-dev=13.0.96" "cuda-nvrtc-dev=13.0.88" ase=3.28.0
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 torch==2.11.0+cu130
+#     <prefix>/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu130 \
+#     "deepmd-kit @ git+https://github.com/deepmodeling/deepmd-kit@1ded5d2429467fb16cb1d6c3d3059fac881f82a7" e3nn==0.6.0 mpich==5.0.1 dpdata==1.1.0
+<prefix>/bin/pip install catbench==1.1.7    # every env: D3 dispersion + adsorption benchmarking
+```
+
+On sm120: **not supported** — not yet built and checked on sm120 (deepmd-kit is built from source here; no sm120 run). `install.sh` stops before installing.
+
+### B. weights
+
+Upstream acquisition ([source](https://matbench-discovery.materialsproject.org/models/dpa-4.1-air-oam)):
+
+```bash
+# Upstream: download the checkpoint (a torch zip) and keep the .pt name; a symlink
+# or another suffix fails ('Cannot detect the backend')
+curl -L "https://ndownloader.figshare.com/files/70537293" -o dpa-4.1-air-oam.pt
+echo "ab429ffd751220406d4fa0baada3526f4cc9c81f8d159bafe45ec17a8855a5af  dpa-4.1-air-oam.pt" | sha256sum -c -
+```
+
+### C. ASE calculator
+
+`DPA-4.1-Air-OAM`
+
+```python
+from deepmd.calculator import DP
+calc = DP(model='$OMM/models/dpa41/dpa-4.1-air-oam.pt')
+atoms.calc = calc
+```
+
+Run: `<prefix>/bin/python script.py` — never `conda activate`.
+
+Check it works: `python3 $OMM/scripts/setup_verify.py DPA-4.1-Air-OAM --json` (prints energy + forces; exit 0 on success).
+
+> **Note:** Not the deepmd-kit release in the dpa4 env: 3.2.0b0 fails to load DPA-4.1 and this commit fails to load DPA-4.0.1. DP(model=..., freeze=True) writes a .pt2 next to the checkpoint, so it fails where the checkpoint is read-only.
+
+---

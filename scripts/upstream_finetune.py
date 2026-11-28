@@ -473,6 +473,34 @@ UPSTREAM_FT: dict[str, dict] = {
              "for dpa4) is required at run time on Windows Subsystem for Linux (WSL); on "
              "native Linux this may not be needed.",
     ),
+    "DPA41": dict(
+        status="documented",
+        entrypoint="dp --pt train input.json --finetune <ckpt>",
+        src="https://docs.deepmodeling.com/projects/deepmd/en/latest/train/finetuning.html",
+        cmd=["dp --pt train input.json --finetune "
+             "\"$OH_MY_MLIP_HOME/models/dpa41/dpa-4.1-air-oam.pt\" --use-pretrain-script"],
+        config=["{",
+                "  \"model\": {\"type_map\": [\"...\"], \"descriptor\": {}, \"fitting_net\": {}},",
+                "  \"training\": {\"training_data\": {\"systems\": [\"../data/data_0\"], \"batch_size\": 1},",
+                "                \"numb_steps\": 100000}",
+                "}"],
+        data_format="Identical to DPA4 / DeePMD: the deepmd 'system' npy layout, converted "
+                     "from extxyz via dpdata (dpdata==1.1.0 in envs/dpa41.yml) or "
+                     "scripts/ft_dataset.py's numpy writer.",
+        foundation="--finetune <path>, as for DPA4. dpa-4.1-air-oam.pt is SINGLE-TASK "
+                    "(dp --pt show ... model-branch raises 'requires a multitask model'): "
+                    "omit --model-branch.",
+        semantics="Same as DPA4: --finetune loads weights only; --use-pretrain-script pulls "
+                   "the model section from the checkpoint.",
+        selector_kind="cli_flag",
+        selector_path="--finetune",
+        runnable_as_installed=False,
+        blockers=["deepmd-kit at 1ded5d2 fails on the first training step of a DPA-4.1 fine-tune on GPU: the SeZM neighbor-graph builder (pt/model/model/sezm_model.py build_neighbor_list -> dpmodel/utils/region.py phys2inter) gets the cell on cpu and the coordinates on cuda (RuntimeError: Expected all tensors to be on the same device ... wrapper_CUDA_bmm); seen 2026-11-28 with ft_run --max-steps 100 on the demo set. Inference is not affected."],
+        licence=None,
+        note="deepmd-kit at 1ded5d2 (this env) loads DPA-4.1 but not DPA-4.0.1, so this "
+             "family always runs under the dpa41 interpreter; the CLI surface and the "
+             "hub builder are DPA4's.",
+    ),
     "UMA": dict(
         status="documented",
         entrypoint="fairchem -c <template>.yaml",

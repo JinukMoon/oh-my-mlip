@@ -60,4 +60,5 @@ How to read the columns:
 | MatRIS-10M-OAM | MatRIS | auto-download | no | candidate | [GitHub](https://github.com/HPC-AI-Team/MatRIS){ .md-button .omm-repo } |
 | DPA-4.0.1-pro-MPtrj | DPA4 | on-demand-hf | no | candidate | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
 | TACE-OAM-L | TACE | auto-download | no | candidate | [GitHub](https://github.com/xvzemin/tace){ .md-button .omm-repo } |
+| DPA-4.1-Air-OAM | DPA41 | on-demand-hf | no | unsupported | [GitHub](https://github.com/deepmodeling/deepmd-kit){ .md-button .omm-repo } |
 <!-- STATUS_TABLE_DETAILED_END -->
