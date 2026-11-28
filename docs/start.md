@@ -63,7 +63,7 @@ Two kinds of model need one more thing, and your agent handles both:
 - **UMA and eSEN are gated.** Accept the license on the model's Hugging Face
   page, then run `hf auth login` in your own terminal
   ([Gated models](gated_models.md)).
-- **NequIP and Allegro are compiled for your GPU** during install; to use them on
+- **NequIP, Allegro and MACE-SOYO are compiled for your GPU** during install; to use them on
   a different GPU, compile them there
   ([GPU-architecture compilation](arch_first_run_compile.md)).
 
