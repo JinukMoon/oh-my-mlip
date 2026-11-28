@@ -81,6 +81,10 @@
     "python": "3.11.13",
     "cu": "cu128"
   },
+  "mace_soyo": {
+    "python": "3.12.12",
+    "cu": "cu126"
+  },
   "matris": {
     "python": "3.11.15",
     "cu": "cu130"

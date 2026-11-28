@@ -875,6 +875,32 @@ UPSTREAM_FT: dict[str, dict] = {
         evidence=["https://github.com/yzchen08/eqnorm/blob/main/README.md",
                   "https://github.com/yzchen08/eqnorm (full repo tree, GitHub trees API)"],
     ),
+    "MACE-SOYO": dict(
+        status="documented",
+        entrypoint="torchrun --nproc_per_node=<gpus> run_ddp.py --config <cfg>.yml --output-dir <dir>",
+        src="https://github.com/PrincessHakuryu/MACE-SOYO",
+        cmd=["torchrun --standalone --nproc_per_node=1 run_ddp.py --config <config>.yml --output-dir <dir>"],
+        config=["finetune: true", "finetune_path: mace_soyo_oam.pth", "resume: false",
+                "# datasets: one entry per target head (.aselmdb train_path/valid_path, an E0 YAML);",
+                "# finetune_head selects the source head of a multihead checkpoint"],
+        data_format="ASE LMDB (.aselmdb) shards; mace_soyo.utils.load_data converts "
+                     "ASE-readable files. Every head needs a prepared E0 YAML "
+                     "(mace_soyo.utils.sample_aselmdb --fit-e0); training does not fit E0.",
+        foundation="finetune_path: <checkpoint>.pth in the YAML config, with finetune: true and resume: false.",
+        semantics="finetune: true keeps the shared backbone and initialises each target "
+                   "readout from a checkpoint head, with a new optimizer and schedule. "
+                   "resume: true + resume_path is the separate continuation mechanism.",
+        selector_kind="config_key",
+        selector_path="finetune_path (+ finetune_head per dataset entry)",
+        runnable_as_installed=False,
+        blockers=["run_ddp.py and config/ are repo-only -- not in the installed mace-soyo "
+                  "package; needs a clone at the pinned commit",
+                  "the hub has no MACE-SOYO command builder yet (aselmdb conversion, per-head "
+                  "E0 YAML, config rendering)"],
+        licence=None,
+        note="Upstream README, sections Training and Fine-tuning, at 387b511.",
+        evidence=["https://github.com/PrincessHakuryu/MACE-SOYO/blob/387b5114c974fb04b8aceffac82d1d8f10ea4ac0/README.md"],
+    ),
     "PET": dict(
         status="documented",
         entrypoint="mtt train options-ft.yaml -o model-ft.pt",

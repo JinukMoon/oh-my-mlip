@@ -1,0 +1,11 @@
+{
+  "framework": "MACE-SOYO",
+  "pinned": "mace-soyo @ git+https://github.com/PrincessHakuryu/MACE-SOYO.git@387b5114c974fb04b8aceffac82d1d8f10ea4ac0",
+  "entrypoint": "torchrun --nproc_per_node=N run_ddp.py --config <config>.yml --output-dir <dir> (repo root; run_ddp.py is not in the installed package)",
+  "stress": {
+    "supported": true,
+    "how_enabled": "E:F:S loss weights in config.yml (README: the OAM model used 1:1:1)"
+  },
+  "runnable_as_pinned": "not-runnable",
+  "settings": []
+}

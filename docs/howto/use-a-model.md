@@ -84,7 +84,7 @@ from catbench.dispersion import DispersionCorrection
 calc = DispersionCorrection().apply(calc)
 ```
 
-## NequIP and Allegro
+## NequIP, Allegro and MACE-SOYO
 
 Their calculators load a model compiled for your GPU architecture during
 install. To prepare jobs for a different GPU, pass its architecture:

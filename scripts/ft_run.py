@@ -126,6 +126,8 @@ FAMILY_DATASET_TARGET = {
     # not-supported upstream (registry status not-supported, refused at exit 2
     # before any dataset is built); listed so the table stays exhaustive.
     "Eqnorm": "extxyz", "MatRIS": "extxyz",
+    # MACE-SOYO trains on .aselmdb shards; no hub builder yet (registry blocker, exit 3).
+    "MACE-SOYO": "aselmdb",
 }
 
 # ft_run's own exit code for "registry says go, but this hub has no real

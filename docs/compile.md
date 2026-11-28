@@ -18,7 +18,7 @@ Install NequIP and check it runs on my GPU.
 ```
 
 ```text
-I moved to a different GPU. Recompile NequIP and Allegro for it.
+I moved to a different GPU. Recompile NequIP, Allegro and MACE-SOYO for it.
 ```
 
 ## NequIP and Allegro
@@ -67,6 +67,32 @@ include the import, so your scripts need no change.
 
 The first load of a NequIP model builds OpenEquivariance's kernels once and
 caches them; later loads are fast.
+
+## MACE-SOYO
+
+`MACESoyoCalculator` loads an AOTInductor package (`.pt2`) exported for one GPU
+architecture, not the released training checkpoint. During install,
+`scripts/prepare_mace_soyo_weights.py` downloads `mace_soyo_oam.pth` from the
+upstream GitHub release into `models/mace_soyo/` (checked against its size and
+sha256) and exports it with upstream's `mace_soyo.export.AOTI_export` (several
+minutes) into:
+
+```
+models/compiled/<arch>/MACE-SOYO-OAM_<arch>.pt2     # e.g. sm89/MACE-SOYO-OAM_sm89.pt2
+```
+
+The node and edge bounds are left unbounded, so one package serves gas molecules
+and slabs. On a host without a GPU the checkpoint is downloaded and the export is
+left for a GPU node (the script prints the command).
+
+??? note "Run it yourself"
+
+    ```bash
+    SOYO_PY=$(python -c 'from oh_my_mlip import resolve; print(resolve("MACE-SOYO")["python"])')
+    "$SOYO_PY" scripts/prepare_mace_soyo_weights.py --target-root models/mace_soyo
+    ```
+
+    Run from the repository root; add `--dry-run` to print the command only.
 
 ## SevenNet
 

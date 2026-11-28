@@ -60,7 +60,7 @@ Benchmark MACE, SevenNet and UMA on adsorption energies for CO2 reduction on Cu,
     | `--d3` | add D3 dispersion (`_D3` is appended to the model name) |
     | `--calc-num N` | calculator instances per model, all loaded at once (default 3): GPU memory grows with N, so use 1 for large models on a small GPU |
     | `--slurm --emit-only --partition <p>` | write SLURM job scripts without running them |
-    | `--arch sm86` | pick the NequIP/Allegro build for a different GPU |
+    | `--arch sm86` | pick the arch-pinned build (NequIP, Allegro, MACE-SOYO) for a different GPU |
     | `--catbench-version <v>` | refuse to run under any other catbench version |
 
     The SLURM header sets only the job name, partition, log files, one task and

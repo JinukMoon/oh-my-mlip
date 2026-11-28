@@ -31,7 +31,7 @@ python3 scripts/setup_verify.py MACE-MPA-0 --json   # energy + forces on the GPU
 | Loading `UMA-m-1p1-*` ends with no error message (exit code 137) | the 11.2 GB checkpoint does not fit in host RAM | use a machine with 32 GB or more, or a `UMA-s-*` model |
 | HTTP 401 or 403 when downloading UMA or eSEN | license not accepted, or the token belongs to another account | accept the license and run `hf auth login`; see [Gated models](gated_models.md) |
 | `EOFError: Ran out of input` or "... does not exist" when a model loads | an empty or partial weight file from an interrupted download | remove the leftovers under `models/<framework>/` and run again; the weights are fetched again |
-| NequIP or Allegro fails to load on a different GPU | the compiled `.pt2` is for another GPU architecture | compile for this GPU; see [Accelerators](compile.md) |
+| NequIP, Allegro or MACE-SOYO fails to load on a different GPU | the compiled `.pt2` is for another GPU architecture | compile for this GPU; see [Accelerators](compile.md) |
 | pip times out on `pypi.nvidia.com` | that host is unreachable from your network | `python3 scripts/install_nvidia_wheels.py <env>` installs the same `nvidia-*` wheels from pypi.org; then run `./install.sh <env>` again |
 | D3 is unavailable | no `nvcc` (CUDA toolkit) | install a CUDA toolkit and run `install.sh` again; the models themselves still run |
 

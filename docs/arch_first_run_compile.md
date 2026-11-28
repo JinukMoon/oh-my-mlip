@@ -3,7 +3,7 @@
 Two kinds of artifact are tied to the GPU they were built on, so oh-my-mlip builds
 them on your machine instead of downloading them:
 
-- the compiled NequIP and Allegro models (`.pt2`), built during install;
+- the compiled models of the arch-pinned families (NequIP, Allegro, MACE-SOYO; `.pt2`), built during install;
 - the CUDA kernel for CatBench's D3 dispersion correction, built on first use.
 
 ## Ask your LLM
@@ -26,12 +26,12 @@ The architecture is the GPU's CUDA compute capability, written `sm<major><minor>
 `8.9` = `sm89`). A model compiled for one architecture is not guaranteed to run on
 another.
 
-## NequIP and Allegro models
+## Arch-pinned models (NequIP, Allegro, MACE-SOYO)
 
-During install, `scripts/prepare_nequip_weights.py` and
-`scripts/prepare_allegro_weights.py` compile each checkpoint for the GPU in the
-machine into `models/compiled/<arch>/`. See [Accelerators](compile.md) for the
-compile options.
+During install, `scripts/prepare_nequip_weights.py`,
+`scripts/prepare_allegro_weights.py` and `scripts/prepare_mace_soyo_weights.py`
+compile each checkpoint for the GPU in the machine into `models/compiled/<arch>/`.
+See [Accelerators](compile.md) for the compile options.
 
 At run time `resolve()` fills in the architecture: it detects the current GPU
 with `nvidia-smi` and puts that arch into the calculator line's

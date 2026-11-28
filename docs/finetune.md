@@ -789,3 +789,38 @@ python3 $OMM/scripts/ft_run.py TACE-OAM-L --dataset <your-dataset> --out ft_tace
 | `TACE-OAM-L` | documented | True | — |
 
 ---
+
+## MACE-SOYO — env `mace_soyo`
+
+### A. What upstream documents
+
+Upstream ([source](https://github.com/PrincessHakuryu/MACE-SOYO)):
+
+```bash
+torchrun --standalone --nproc_per_node=1 run_ddp.py --config <config>.yml --output-dir <dir>
+```
+
+> **Note:** Upstream README, sections Training and Fine-tuning, at 387b511.
+
+### B. Dataset format
+
+ASE LMDB (.aselmdb) shards; mace_soyo.utils.load_data converts ASE-readable files. Every head needs a prepared E0 YAML (mace_soyo.utils.sample_aselmdb --fit-e0); training does not fit E0.
+
+### C. The command this hub generates
+
+`MACE-SOYO-OAM`:
+
+```bash
+# BLOCKED -- ft_run.py exits 3 until:
+#   - run_ddp.py and config/ are repo-only -- not in the installed mace-soyo package; needs a clone at the pinned commit
+#   - the hub has no MACE-SOYO command builder yet (aselmdb conversion, per-head E0 YAML, config rendering)
+python3 $OMM/scripts/ft_run.py MACE-SOYO-OAM --dataset <your-dataset> --out ft_mace-soyo-oam
+```
+
+### D. Per-variant support matrix
+
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `MACE-SOYO-OAM` | documented | False | — |
+
+---

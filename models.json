@@ -441,5 +441,24 @@
         "weights_sha256": "448ff14c92d0fe29b8f038e98ffad02bccfc77012d85cc29cc2e7a7a8b1e4a5a", "weights_size": 333096435,
         "inference": ["model = tace_foundations['TACE-OAM-L']", "calc = TACEAseCalc(model=model, dtype='float32', device='cuda', fidelity_idx=0, target_property=['energy','forces','stress'])"], "finetune": {"status": "documented", "entrypoint": "tace-finetune -m <ckpt> -> tace-train -cn tace -> tace-convert", "selector_kind": "config_key", "selector_path": "finetune_from_model", "semantics": "finetune: finetune_from_model loads weights only (full-parameter or LoRA depending on whether finetune_config.yaml exists). resume_from_model is the separate Lightning-resume mechanism restoring full training state.", "runnable_as_installed": true, "blockers": [], "licence": null, "reason": null}}
     }
+  },
+  "MACE-SOYO": {
+    "env": "mace_soyo",
+    "repo": "https://github.com/PrincessHakuryu/MACE-SOYO",
+    "python": "${OH_MY_MLIP_HOME}/envs/mace_soyo/bin/python",
+    "model_source": "${OH_MY_MLIP_HOME}/models/compiled/<arch>/ (AOTInductor .pt2 exported on the user's GPU from the GitHub release checkpoint by scripts/prepare_mace_soyo_weights.py)",
+    "torch": "2.12.0+cu126",
+    "note": "Architecture-pinned: inference loads an AOTInductor .pt2 exported for the host GPU's architecture (once per arch, several minutes, by scripts/prepare_mace_soyo_weights.py, which install.sh runs). CUDA only.",
+    "import": ["from mace_soyo.inference.ase_calc import MACESoyoCalculator"],
+    "versions": {
+      "MACE-SOYO-OAM": {"mlip_name": "MACE-SOYO-OAM", "training_set": ["OMat24", "sAlex", "MPtrj"], "arch_pinned": true,
+        "note": "MACE-SOYO (a modified MACE-MH-1 architecture), the Matbench Discovery OAM checkpoint, head 'salexmp' (the head all its reported OAM results use; the other head is 'omat_pbe'). Code and checkpoint MIT.",
+        "gated": false, "license_url": null, "weights": "on-demand-hf", "weights_fetch": "url", "weights_source": "https://github.com/PrincessHakuryu/MACE-SOYO/releases/download/v0.1/mace_soyo_oam.pth", "weights_source_url": "https://github.com/PrincessHakuryu/MACE-SOYO/releases/tag/v0.1", "validation": "validated_sm89",
+        "weights_sha256": "180784bad2fdee6aec58dae2cdb0d581ad1c4f3d2272d2857bce6315ea43b82b", "weights_size": 25960795,
+        "finetune": {"status": "documented", "entrypoint": "torchrun --nproc_per_node=<gpus> run_ddp.py --config <cfg>.yml --output-dir <dir>", "selector_kind": "config_key", "selector_path": "finetune_path (+ finetune_head per dataset entry)", "semantics": "finetune: true keeps the shared backbone and initialises each target readout from a checkpoint head, with a new optimizer and schedule; resume: true + resume_path is the separate continuation mechanism.", "runnable_as_installed": false, "blockers": ["run_ddp.py and config/ are repo-only -- not in the installed mace-soyo package; needs a clone at the pinned commit", "the hub has no MACE-SOYO command builder yet (aselmdb conversion, per-head E0 YAML, config rendering)"], "licence": null, "reason": null},
+        "inference": ["calc = MACESoyoCalculator(package_path='${OH_MY_MLIP_HOME}/models/compiled/${OMM_ARCH}/MACE-SOYO-OAM_${OMM_ARCH}.pt2', head='salexmp', device='cuda:0', use_d3=False)",
+          "if getattr(calc, 'head', None) != 'salexmp': raise RuntimeError(f\"MACE-SOYO-OAM: the calculator selected head {getattr(calc, 'head', None)!r}, not 'salexmp'; available: {getattr(calc, 'available_heads', None)}\")"],
+        "selector": {"kwarg": "head", "value": "salexmp", "choices": ["omat_pbe", "salexmp"], "choices_source": "the heads the MACE-SOYO-OAM AOTI package lists (MACESoyoCalculator prints them at load; mace-soyo 387b511)"}}
+    }
   }
 }

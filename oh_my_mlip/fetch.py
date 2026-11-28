@@ -81,7 +81,7 @@ def ensure_weights(
     """
     resolved = spec if spec is not None else registry.resolve(model, version=version)
 
-    # NequIP/Allegro inference points at per-GPU compiled .pt2 outputs, not the
+    # NequIP/Allegro/MACE-SOYO inference points at per-GPU compiled .pt2 outputs, not the
     # downloadable source checkpoint zip. Those are produced by the compile path
     # -- nothing here can download one, but a missing one must be named: torch's
     # own loader only says "failed to initialize zip archive: file open failed",
@@ -93,7 +93,7 @@ def ensure_weights(
             raise FetchError(
                 f"{resolved.get('model', model)}/{resolved.get('version') or version}: no NVIDIA GPU was found "
                 f"on this host (nvidia-smi is missing or lists no GPU), so there is no GPU architecture to "
-                f"compile for, and NequIP / Allegro run on a GPU only. Install the NVIDIA driver, or run on a "
+                f"compile for, and {resolved.get('model', model)} runs on a GPU only. Install the NVIDIA driver, or run on a "
                 f"GPU host; to write a job for another host, pass its architecture (--arch sm86, ...)."
             )
         if missing:
@@ -104,7 +104,7 @@ def ensure_weights(
                 f"{resolved.get('model', model)}/{resolved.get('version') or version}: "
                 f"no model compiled for {arch} on this machine.\n"
                 f"  expected: {missing[0]}\n"
-                f"  NequIP and Allegro load a model compiled for one GPU architecture. "
+                f"  {resolved.get('model', model)} loads a model compiled for one GPU architecture. "
                 f"Compile it here (it uses this machine's GPU):\n"
                 f"    {resolved.get('python', '<env python>')} {home}/scripts/prepare_{env}_weights.py "
                 f"--target-root {home}/models/{env}\n"

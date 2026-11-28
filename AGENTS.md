@@ -122,7 +122,7 @@ for this.
      lines that were checked; an edited line is an unchecked model. The inference
      line creates `calc`; then `atoms.calc = calc`. Run the script with
      `spec["python"]`, never a guessed `python` or `conda activate`.
-3. **GPU-architecture-specific models** (`arch_pinned: true`: NequIP, Allegro)
+3. **GPU-architecture-specific models** (`arch_pinned: true`: NequIP, Allegro, MACE-SOYO)
    load a model compiled for one GPU architecture. `resolve()` detects the
    current GPU and fills the `models/compiled/<arch>/` path; `resolve(model,
    arch="sm86")` writes a job for a different GPU, whose compiled file must exist
@@ -334,7 +334,7 @@ check prints a source. HTTP 401 or 403 on the fetch means the license or access
 request is not approved yet for that account: show the `license_url` again and
 do not retry in a loop. Full flow: `docs/gated_models.md`.
 
-## 6. GPU-specific compilation (D3 kernel, NequIP/Allegro models)
+## 6. GPU-specific compilation (D3 kernel, arch-pinned models)
 
 Some artifacts only work on the GPU architecture they were built for, so they are
 built on the user's machine:
@@ -346,6 +346,11 @@ built on the user's machine:
   NequIP uses `--modifiers enable_OpenEquivariance`; Allegro uses
   `--modifiers enable_CuEquivarianceContracter`. For another GPU architecture,
   run the prepare script on a machine with that GPU.
+- **MACE-SOYO** (`arch_pinned: true`): during install,
+  `scripts/prepare_mace_soyo_weights.py` downloads the release checkpoint, checks
+  its size and sha256 and exports an AOTInductor `.pt2` with upstream's
+  `mace_soyo.export.AOTI_export` for the current GPU into `models/compiled/<arch>/`.
+  Without a GPU it downloads only and exits 4 (deferred), like the NequIP script.
 - **D3 kernel**: `install.sh` and `scripts/adopt_env.py` build catbench's
   `pair_d3.so` once per env with `scripts/build_d3.py`, using the env's own
   `nvcc`, `ninja` and conda compiler, so the bare interpreter never compiles it.
@@ -380,7 +385,7 @@ built on the user's machine:
       hand-built interpreter path.
 - [ ] Calculator lines pasted unchanged; script run with `spec["python"]`.
 - [ ] `env_run` applied; notes respected.
-- [ ] For NequIP/Allegro, the compiled model exists for the GPU the job runs on.
+- [ ] For arch-pinned models (NequIP, Allegro, MACE-SOYO), the compiled model exists for the GPU the job runs on.
 - [ ] For gated models, token presence checked and `license_url` given; no token
       or gated weight written into any file.
 - [ ] `source "$OH_MY_MLIP_HOME/env.sh" &&` in the same command that runs the model.
@@ -593,7 +598,7 @@ Follow `docs/host_requirements.md` "HPC clusters". In short:
   until the install ends. If it was cut, run the same command again (finished
   envs are skipped; an interrupted env asks for `--rebuild <env>`).
 - After each env, read `envs/<env>/.omm_prefetch.json`: a variant marked
-  `failed` may not load on an offline GPU node. For NequIP and Allegro, run the
+  `failed` may not load on an offline GPU node. For NequIP, Allegro and MACE-SOYO, run the
   compile command the install printed as the first step of the GPU job.
 
 ## 10. Recipes — from request to plan, approval, run and evidence
