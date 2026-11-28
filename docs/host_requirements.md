@@ -146,7 +146,7 @@ compute) in batch jobs.
   result is in `envs/<env>/.omm_prefetch.json`; a variant listed as failed there
   may not load on a node without internet. Gated models need your Hugging Face
   login before the install ([Hugging Face token](hf_token.md)).
-- **NequIP and Allegro** load a model compiled for one GPU architecture, and the
+- **NequIP, Allegro and MACE-SOYO** load a model compiled for one GPU architecture, and the
   compile needs that GPU. On a login node without a GPU, the install downloads the
   model packages and prints the compile command; run it first in a GPU job (no
   internet needed there).
@@ -188,7 +188,7 @@ compute) in batch jobs.
   recipe for older GPUs (for example copied from another machine, or built
   before the sibling recipes existed). `./install.sh --status <env>` says which
   recipe this GPU needs; `./install.sh --rebuild <env>` rebuilds it.
-- **A different GPU than the one you installed on:** NequIP and Allegro load a
+- **A different GPU than the one you installed on:** NequIP, Allegro and MACE-SOYO load a
   model compiled for a specific GPU architecture. See
   [GPU-architecture compilation](arch_first_run_compile.md).
 - **Loading `UMA-m-1p1-*` dies with no error message:** the checkpoint (11.2 GB)
