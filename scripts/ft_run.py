@@ -109,7 +109,7 @@ FT_DATASET = _SCRIPTS_DIR / "ft_dataset.py"
 FAMILY_DATASET_TARGET = {
     "MACE": "mace", "SevenNet": "sevennet", "NequIP": "nequip", "Allegro": "allegro",
     "GRACE": "grace", "MatterSim": "mattersim", "PET": "pet", "TACE": "tace",
-    "DeePMD": "deepmd", "DPA4": "deepmd",
+    "DeePMD": "deepmd", "DPA4": "deepmd", "DPA41": "deepmd",
     "CHGNet": "chgnet",
     # ORB: the prestage writes the ASE sqlite db finetune.py reads.
     "ORB": "extxyz",
@@ -153,6 +153,7 @@ SEED_CONTROL = {
                          "DpLoaderSet); descriptor/fitting_net init seeds come from the checkpoint's "
                          "own model section under --use-pretrain-script"),
     "DPA4": ("native", "training.seed (deepmd-kit 3.2.0b0, same pt/entrypoints/main.py plumbing as DeePMD)"),
+    "DPA41": ("native", "training.seed (deepmd-kit 1ded5d2, same pt/entrypoints/main.py plumbing as DeePMD)"),
     "GRACE": ("native", "top-level `seed` (tensorpotential 0.5.3 gracemaker.py: args_yaml['seed'] seeds "
                         "tf/np and names the seed/<seed>/ output dir)"),
     "PET": ("native", "top-level `seed` (metatrain 2026.1 options.yaml: seeds torch / numpy / random / "
@@ -430,7 +431,7 @@ def live_recheck_blockers(family: str, blockers: list[str], python_bin: str) -> 
 def builder_handles_blocker(family: str, blocker: str) -> bool:
     """True when the family's builder itself performs the fix a registry
     blocker asks for, so the blocker never applies on any host."""
-    if family in ("DeePMD", "DPA4") and "symlink" in blocker.lower():
+    if family in ("DeePMD", "DPA4", "DPA41") and "symlink" in blocker.lower():
         return True  # build_deepmd() performs this symlink itself
     if family == "UMA" and "configs/uma/finetune" in blocker:
         return True  # build_uma()'s prestage fetches those templates at the installed fairchem version
@@ -816,7 +817,7 @@ def build_deepmd(ctx: Context) -> CommandSpec:
     # Resolved settings (user > official fine-tuning value > upstream default), by the
     # native names of each family's settings file: DeePMD nests them (training.*,
     # learning_rate.*, loss.*); DPA4's file lists the same argcheck keys unnested.
-    dpa4 = ctx.family == "DPA4"
+    dpa4 = ctx.family in ("DPA4", "DPA41")  # DPA41: the same settings layout, newer deepmd-kit
 
     def setting(deepmd_name: str, dpa4_name: str):
         return ctx.settings.get(dpa4_name if dpa4 else deepmd_name)
@@ -2486,6 +2487,7 @@ BUILDERS = {
     "SevenNet": build_sevennet,
     "DeePMD": build_deepmd,
     "DPA4": build_deepmd,
+    "DPA41": build_deepmd,
     "GRACE": build_grace,
     "PET": build_pet,
     "NequIP": build_nequip_framework,
@@ -2529,6 +2531,7 @@ FAMILY_CHECKPOINT_GLOBS = {
     "SevenNet": ["checkpoint_best.pth"],
     "DeePMD": ["model.ckpt-*.pt"],
     "DPA4": ["model.ckpt-*.pt"],
+    "DPA41": ["model.ckpt-*.pt"],
     "GRACE": ["seed/*/final_model/saved_model.pb"],
     "PET": ["model-ft.pt"],
     "NequIP": ["checkpoints/last.ckpt"],

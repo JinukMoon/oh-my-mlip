@@ -287,7 +287,7 @@ def _ctx(version: str, tmp_path: Path, **kw) -> "ft_run.Context":
     out.mkdir(parents=True, exist_ok=True)
     paths = {"train": str(out / "data" / "train.xyz"), "valid": str(out / "data" / "valid.xyz")}
     # No user knobs, except what deepmd-kit has no default for: training length and learning rate
-    knobs = {"max_steps": 100, "lr": 0.001} if family in ("DeePMD", "DPA4") else {}
+    knobs = {"max_steps": 100, "lr": 0.001} if family in ("DeePMD", "DPA4", "DPA41") else {}
     resolved_settings, settings_origins = ft_settings.resolve_settings(family, user_knobs=knobs)
     return ft_run.Context(family=family, version=version, finetune=finetune, resolved=resolved, out=out,
                           epochs=2, batch_size=2, device=kw.get("device", "cuda"), dataset_paths=paths,
@@ -508,7 +508,7 @@ def test_family_checkpoint_globs_designate_one_checkpoint(tmp_path):
         "TACE": ["checkpoints_epoch/TACE-0-3.ckpt"],
         "MatterSim": ["results/last_model.pth"],
         "CHGNet": ["chgnet_ft/epoch0_e1_f2.pth.tar", "chgnet_ft/bestF_epoch0_e1_f2.pth.tar"],
-        "DeePMD": ["dpa-3.1-3m-ft.pt", "input.json"], "DPA4": ["dpa-4.0.1-pro-mptrj.pt"],
+        "DeePMD": ["dpa-3.1-3m-ft.pt", "input.json"], "DPA4": ["dpa-4.0.1-pro-mptrj.pt"], "DPA41": ["dpa-4.1-air-oam.pt"],
         "GRACE": ["seed/0/checkpoints/checkpoint.index"], "PET": ["model-ft.ckpt"],
         # fairchem also keeps per-step checkpoints and a resume.yaml next to final/
         "UMA": ["runs/ft/checkpoints/step_1000/inference_ckpt.pt", "runs/ft/checkpoints/final/resume.yaml"],

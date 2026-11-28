@@ -789,3 +789,37 @@ python3 $OMM/scripts/ft_run.py TACE-OAM-L --dataset <your-dataset> --out ft_tace
 | `TACE-OAM-L` | documented | True | — |
 
 ---
+
+## DPA41 — env `dpa41`
+
+### A. What upstream documents
+
+Upstream ([source](https://docs.deepmodeling.com/projects/deepmd/en/latest/train/finetuning.html)):
+
+```bash
+dp --pt train input.json --finetune "$OH_MY_MLIP_HOME/models/dpa41/dpa-4.1-air-oam.pt" --use-pretrain-script
+```
+
+> **Note:** deepmd-kit at 1ded5d2 (this env) loads DPA-4.1 but not DPA-4.0.1, so this family always runs under the dpa41 interpreter; the CLI surface and the hub builder are DPA4's.
+
+### B. Dataset format
+
+Identical to DPA4 / DeePMD: the deepmd 'system' npy layout, converted from extxyz via dpdata (dpdata==1.1.0 in envs/dpa41.yml) or scripts/ft_dataset.py's numpy writer.
+
+### C. The command this hub generates
+
+`DPA-4.1-Air-OAM`:
+
+```bash
+# BLOCKED -- ft_run.py exits 3 until:
+#   - deepmd-kit at 1ded5d2 fails on the first training step of a DPA-4.1 fine-tune on GPU: the SeZM neighbor-graph builder (pt/model/model/sezm_model.py build_neighbor_list -> dpmodel/utils/region.py phys2inter) gets the cell on cpu and the coordinates on cuda (RuntimeError: Expected all tensors to be on the same device ... wrapper_CUDA_bmm); seen 2026-11-28 with ft_run --max-steps 100 on the demo set. Inference is not affected.
+python3 $OMM/scripts/ft_run.py DPA-4.1-Air-OAM --dataset <your-dataset> --out ft_dpa-4.1-air-oam
+```
+
+### D. Per-variant support matrix
+
+| variant | status | runnable_as_installed | licence |
+|---|---|---|---|
+| `DPA-4.1-Air-OAM` | documented | False | — |
+
+---

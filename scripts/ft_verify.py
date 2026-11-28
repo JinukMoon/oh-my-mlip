@@ -480,6 +480,7 @@ atoms.calc = ORBCalculator(orbff, device="{device}")
 ''',
 }
 _LOADER_TEMPLATE["DPA4"] = _LOADER_TEMPLATE["DeePMD"]
+_LOADER_TEMPLATE["DPA41"] = _LOADER_TEMPLATE["DeePMD"]
 _LOADER_TEMPLATE["Allegro"] = _LOADER_TEMPLATE["NequIP"]
 
 

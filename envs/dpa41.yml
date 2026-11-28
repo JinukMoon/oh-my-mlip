@@ -1,0 +1,42 @@
+# build_status: clean
+# build_note: deepmd-kit for DPA-4.1 is built from a git commit; envs/dpa41.build.sh owns the build so the CUDA 13 toolkit of this env is the one its C++ op links against.
+# oh-my-mlip env recipe: DPA41 (deepmd-kit at the commit that loads DPA-4.1)
+#
+# Pins: python 3.11.15 / torch 2.11.0+cu130 / deepmd-kit at 1ded5d2.
+#
+#   - A separate env from `dpa4`: deepmd-kit 3.2.0b0 (the dpa4 env) fails to load
+#     a DPA-4.1 checkpoint (TypeError in float()), and deepmd-kit at 1ded5d2
+#     fails to load DPA-4.0.1 ("supports dpa4_ener, sezm_ener, or property
+#     fitting, but got ener").
+#   - deepmd-kit is built from source with its PyTorch op only
+#     (DP_ENABLE_TENSORFLOW=0, DP_ENABLE_PYTORCH=1) and build isolation ON
+#     (--no-build-isolation fails: "Cannot import 'backend.dp_backend'").
+#   - The build must see THIS env's CUDA 13 toolkit (CUDA_HOME=<prefix>). With a
+#     system CUDA 12 found first, libdeepmd_op_pt.so links libnvrtc.so.12 and
+#     fails at import under a clean LD_LIBRARY_PATH ("deepmd-kit package is
+#     inconsistent with PyTorch Runtime"). The sidecar sets it; the pip list
+#     below is the same set it installs.
+#   - catbench is NOT in this recipe's pip block: install.sh installs it as a
+#     post-create step (`pip install catbench==1.1.7`, WITH deps).
+name: dpa41
+channels:
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - python=3.11.15
+  - pip
+  # CUDA 13.0 toolkit: nvcc, runtime and nvrtc headers/libraries for the deepmd op
+  # build and the D3 kernel
+  - cuda-nvcc=13.0.*
+  - cuda-cudart-dev=13.0.96
+  - cuda-nvrtc-dev=13.0.88
+  - ase=3.28.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu130
+      - torch==2.11.0+cu130
+      - deepmd-kit @ git+https://github.com/deepmodeling/deepmd-kit@1ded5d2429467fb16cb1d6c3d3059fac881f82a7
+      - e3nn==0.6.0
+      # deepmd-kit load_mpi_library() needs the mpich PIP package (Python metadata).
+      - mpich==5.0.1
+      - dpdata==1.1.0
